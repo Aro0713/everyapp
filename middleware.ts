@@ -1,8 +1,8 @@
-// middleware.ts (ROOT)
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 const DEFAULT_LANG = "en";
+
 const EU_LANGS = new Set([
   "bg","hr","cs","da","nl","en","et","fi","fr","de","el","hu",
   "ga","it","lv","lt","mt","pl","pt","ro","sk","sl","es","sv",
@@ -18,27 +18,40 @@ const COUNTRY_TO_LANG: Record<string, string> = {
 
 function pickFromAcceptLanguage(header: string | null) {
   if (!header) return null;
-  const base = header.split(",")[0]?.trim().toLowerCase().split("-")[0];
-  return EU_LANGS.has(base) ? base : null;
+  const base = header.split(",")[0]?.toLowerCase().split("-")[0];
+  return base && EU_LANGS.has(base) ? base : null;
 }
 
 export function middleware(req: NextRequest) {
+  // ❗️ABSOLUTNY early-exit
+  if (req.method !== "GET") {
+    return NextResponse.next();
+  }
+
   const res = NextResponse.next();
 
   const cookieLang = req.cookies.get("lang")?.value;
-  if (cookieLang && EU_LANGS.has(cookieLang)) return res;
+  if (cookieLang && EU_LANGS.has(cookieLang)) {
+    return res;
+  }
 
-  const geoCountry = (req as any).geo?.country;
-  const geoLang = geoCountry ? COUNTRY_TO_LANG[geoCountry] : null;
+  // ⚠️ geo – maksymalnie defensywnie
+  let geoLang: string | null = null;
+  try {
+    const geo = (req as any)?.geo;
+    const country = geo?.country;
+    if (country && COUNTRY_TO_LANG[country]) {
+      geoLang = COUNTRY_TO_LANG[country];
+    }
+  } catch {
+    geoLang = null;
+  }
 
   const acceptLang = pickFromAcceptLanguage(
     req.headers.get("accept-language")
   );
 
-  const chosen =
-    (geoLang && EU_LANGS.has(geoLang) && geoLang) ||
-    acceptLang ||
-    DEFAULT_LANG;
+  const chosen = geoLang || acceptLang || DEFAULT_LANG;
 
   res.cookies.set("lang", chosen, {
     path: "/",
@@ -50,5 +63,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api|_next|.*\\..*).*)"],
+  matcher: ["/"],
 };
