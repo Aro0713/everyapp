@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DEFAULT_LANG, isLangKey, t } from "@/utils/i18n";
 import type { LangKey } from "@/utils/translations";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
@@ -19,37 +19,75 @@ export default function Home() {
 
   const year = String(new Date().getFullYear());
 
- return (
-  <main className="min-h-screen bg-[#F7F7F5] text-gray-900">
-    {/* Language switcher – fixed, nie wpływa na layout */}
-    <div className="fixed right-4 top-4 z-50">
-  <div className="rounded-2xl border border-white/10 bg-white/60 px-2 py-1 shadow-lg backdrop-blur">
-    <LanguageSwitcher currentLang={lang} />
-  </div>
-  </div>
+  const features = useMemo(
+    () => [
+      { title: "featPostCallTitle", desc: "featPostCallDesc" },
+      { title: "featCalendarTitle", desc: "featCalendarDesc" },
+      { title: "featSmsTitle", desc: "featSmsDesc" },
+      { title: "featVoiceAiTitle", desc: "featVoiceAiDesc" },
+      { title: "featEffectivenessTitle", desc: "featEffectivenessDesc" },
+      { title: "featOpportunitiesMapTitle", desc: "featOpportunitiesMapDesc" },
+    ],
+    []
+  );
+
+  const steps = useMemo(
+    () => [
+      { k: "step1Title", d: "step1Desc" },
+      { k: "step2Title", d: "step2Desc" },
+      { k: "step3Title", d: "step3Desc" },
+      { k: "step4Title", d: "step4Desc" },
+    ],
+    []
+  );
+
+  return (
+    <main className="min-h-screen bg-[#F7F7F5] text-gray-900">
+      {/* Language switcher */}
+      <div className="fixed right-4 top-4 z-50">
+        <div className="rounded-2xl border border-white/10 bg-white/60 px-2 py-1 shadow-lg backdrop-blur">
+          <LanguageSwitcher currentLang={lang} />
+        </div>
+      </div>
 
       {/* HERO */}
       <section className="relative overflow-hidden bg-[#0B1F3A] text-white">
-        {/* delikatny gradient – nadal ten sam kolor brandu */}
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/5 via-transparent to-black/10" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/5 via-transparent to-black/15" />
+        <div className="mx-auto grid max-w-6xl gap-10 px-6 py-20 md:grid-cols-12 md:py-28">
+          {/* Left */}
+          <div className="md:col-span-7">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-white/80">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#C8A24A]" />
+              {t(lang, "heroBadge")}
+            </div>
 
-        <div className="mx-auto max-w-6xl px-6 py-24 md:py-28">
-          <div className="max-w-3xl">
-            <h1 className="text-4xl md:text-6xl font-extrabold leading-tight tracking-tight">
+            <h1 className="mt-5 text-4xl font-extrabold leading-tight tracking-tight md:text-6xl">
               {t(lang, "brandName")}
             </h1>
 
-            <p className="mt-4 text-xl md:text-2xl font-semibold text-[#C8A24A]">
+            <p className="mt-4 text-xl font-semibold text-[#C8A24A] md:text-2xl">
               {t(lang, "heroTagline")}
             </p>
 
-            <p className="mt-2 text-sm text-white/60">
-              {t(lang, "heroByline")}
+            <p className="mt-6 max-w-2xl text-base leading-relaxed text-white/85 md:text-lg">
+              {t(lang, "heroDescStrong")}
             </p>
 
-            <p className="mt-6 text-base md:text-lg leading-relaxed text-white/85">
-              {t(lang, "heroDesc")}
-            </p>
+            {/* Mini-benefits */}
+            <div className="mt-8 grid gap-3 sm:grid-cols-3">
+              {[
+                { k: "heroProof1" },
+                { k: "heroProof2" },
+                { k: "heroProof3" },
+              ].map((it) => (
+                <div
+                  key={it.k}
+                  className="rounded-2xl border border-white/10 bg-white/5 p-4"
+                >
+                  <p className="text-sm font-semibold">{t(lang, it.k as any)}</p>
+                </div>
+              ))}
+            </div>
 
             <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center">
               <a
@@ -60,88 +98,458 @@ export default function Home() {
               </a>
 
               <a
-                href="#jak-dziala"
+                href="#funkcje"
                 className="inline-flex items-center justify-center rounded-xl border border-white/30 px-7 py-3.5 font-semibold text-white/95 transition hover:bg-white/10"
               >
-                {t(lang, "ctaHowItWorks")}
+                {t(lang, "ctaSeeFeatures")}
               </a>
+
+              <a
+                href="mailto:kontakt@everywhere.psa?subject=EveryAPP%20Wycena"
+                className="inline-flex items-center justify-center rounded-xl px-2 py-3.5 text-sm font-semibold text-white/80 transition hover:text-white"
+              >
+                {t(lang, "ctaPricing")}
+              </a>
+            </div>
+
+            <p className="mt-4 text-xs text-white/55">{t(lang, "heroFootnote")}</p>
+          </div>
+
+          {/* Right - UI mock */}
+          <div className="md:col-span-5">
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-xl backdrop-blur">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold">{t(lang, "mockTitle")}</p>
+                <span className="rounded-full bg-[#C8A24A]/15 px-2 py-1 text-xs text-[#C8A24A]">
+                  {t(lang, "mockLive")}
+                </span>
+              </div>
+
+              <div className="mt-4 rounded-2xl bg-black/20 p-4">
+                <p className="text-xs text-white/60">{t(lang, "mockCallEnded")}</p>
+                <p className="mt-1 text-sm font-semibold">{t(lang, "mockQuestion")}</p>
+
+                <div className="mt-4 grid gap-2">
+                  {[
+                    "mockBtn1",
+                    "mockBtn2",
+                    "mockBtn3",
+                    "mockBtn4",
+                  ].map((k) => (
+                    <div
+                      key={k}
+                      className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/90"
+                    >
+                      {t(lang, k as any)}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                  <p className="text-xs text-white/60">{t(lang, "mockNext")}</p>
+                  <p className="mt-1 text-sm font-semibold">
+                    {t(lang, "mockCalendarLine")}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                {["mockStat1", "mockStat2"].map((k) => (
+                  <div
+                    key={k}
+                    className="rounded-2xl border border-white/10 bg-white/5 p-4"
+                  >
+                    <p className="text-xs text-white/60">{t(lang, "mockStatsLabel")}</p>
+                    <p className="mt-1 text-sm font-semibold">{t(lang, k as any)}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-4 text-xs text-white/55">
+              {t(lang, "mockDisclaimer")}
             </div>
           </div>
         </div>
       </section>
 
-      {/* DLACZEGO */}
-      <section className="mx-auto max-w-6xl px-6 py-16 md:py-20">
-        <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight">
-          {t(lang, "whyTitle")}
-        </h2>
+      {/* LOGOS / INTEGRATIONS STRIP */}
+      <section className="mx-auto max-w-6xl px-6 py-10">
+        <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
+          <p className="text-xs font-semibold text-gray-500">{t(lang, "integrationsBadge")}</p>
+          <div className="mt-4 grid gap-3 md:grid-cols-5">
+            {["Google Calendar", "SMS", "VoIP/SIP", "WWW + UTM", "Eksport ogłoszeń"].map((x) => (
+              <div
+                key={x}
+                className="rounded-2xl border border-gray-100 bg-[#F7F7F5] px-4 py-3 text-sm font-semibold text-gray-800"
+              >
+                {x}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+      {/* LISTINGS EXPORT + ANALYTICS */}
+<section id="ogloszenia" className="mx-auto max-w-6xl px-6 py-14 md:py-18">
+  <div className="grid gap-8 md:grid-cols-12 md:items-start">
+    <div className="md:col-span-6">
+      <h2 className="text-3xl font-extrabold tracking-tight md:text-4xl">
+        {t(lang, "listingsTitle")}
+      </h2>
+      <p className="mt-3 max-w-xl text-gray-600 leading-relaxed">
+        {t(lang, "listingsDesc")}
+      </p>
 
-        <div className="mt-10 grid gap-8 md:grid-cols-3">
-          {[
-            { title: "whyCard1Title", desc: "whyCard1Desc" },
-            { title: "whyCard2Title", desc: "whyCard2Desc" },
-            { title: "whyCard3Title", desc: "whyCard3Desc" },
-          ].map((c) => (
-            <div
-              key={c.title}
-              className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow"
-            >
-              <h3 className="text-lg font-semibold">
-                {t(lang, c.title as any)}
-              </h3>
-              <p className="mt-2 text-gray-600 leading-relaxed">
-                {t(lang, c.desc as any)}
+      <div className="mt-8 grid gap-3 sm:grid-cols-2">
+        {["listingsBullet1", "listingsBullet2", "listingsBullet3", "listingsBullet4"].map((k) => (
+          <div key={k} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <p className="text-sm font-semibold">{t(lang, k as any)}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    <div className="md:col-span-6">
+      <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
+        <p className="text-sm font-semibold">{t(lang, "listingCardTitle")}</p>
+
+        <div className="mt-4 rounded-2xl bg-[#F7F7F5] p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs text-gray-500">{t(lang, "listingCardLabel")}</p>
+              <p className="mt-1 text-base font-semibold text-gray-900">
+                {t(lang, "listingCardName")}
               </p>
+              <p className="mt-1 text-sm text-gray-600">
+                {t(lang, "listingCardMeta")}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
+              <p className="text-xs text-gray-500">{t(lang, "listingCardExport")}</p>
+              <p className="mt-1 text-sm font-semibold">{t(lang, "listingCardExportValue")}</p>
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            {["listingStat1", "listingStat2", "listingStat3"].map((k) => (
+              <div key={k} className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
+                <p className="text-xs text-gray-500">{t(lang, "listingStatLabel")}</p>
+                <p className="mt-1 text-sm font-semibold">{t(lang, k as any)}</p>
+              </div>
+            ))}
+          </div>
+
+          <p className="mt-4 text-xs text-gray-500">{t(lang, "listingCardFootnote")}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+      {/* FEATURES */}
+      <section id="funkcje" className="mx-auto max-w-6xl px-6 py-14 md:py-18">
+        <h2 className="text-3xl font-extrabold tracking-tight md:text-4xl">
+          {t(lang, "featuresTitle")}
+        </h2>
+        <p className="mt-3 max-w-3xl text-gray-600 leading-relaxed">
+          {t(lang, "featuresSubtitle")}
+        </p>
+
+        <div className="mt-10 grid gap-6 md:grid-cols-3">
+          {features.map((f) => (
+            <div
+              key={f.title}
+              className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow"
+            >
+              <h3 className="text-lg font-semibold">{t(lang, f.title as any)}</h3>
+              <p className="mt-2 text-gray-600 leading-relaxed">
+                {t(lang, f.desc as any)}
+              </p>
+
+              <div className="mt-5 rounded-2xl bg-[#F7F7F5] p-4 text-sm text-gray-700">
+                {t(lang, "featuresNote")}
+              </div>
             </div>
           ))}
         </div>
       </section>
+          {/* SMS FLOWS (BUYER vs SELLER) */}
+<section id="sms-flow" className="bg-white">
+  <div className="mx-auto max-w-6xl px-6 py-16 md:py-20">
+    <h2 className="text-3xl font-extrabold tracking-tight md:text-4xl">
+      {t(lang, "smsFlowsTitle")}
+    </h2>
+    <p className="mt-3 max-w-3xl text-gray-600 leading-relaxed">
+      {t(lang, "smsFlowsDesc")}
+    </p>
 
-      {/* JAK DZIAŁA */}
+    <div className="mt-10 grid gap-6 md:grid-cols-2">
+      {/* Buyer */}
+      <div className="rounded-3xl border border-gray-200 bg-[#F7F7F5] p-6 shadow-sm">
+        <p className="text-sm font-semibold">{t(lang, "smsBuyerTitle")}</p>
+        <p className="mt-2 text-sm text-gray-700 leading-relaxed">{t(lang, "smsBuyerDesc")}</p>
+
+        <div className="mt-5 grid gap-2">
+          {["smsBuyerStep1", "smsBuyerStep2", "smsBuyerStep3"].map((k) => (
+            <div key={k} className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm">
+              {t(lang, k as any)}
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-5 rounded-2xl border border-gray-200 bg-white p-4">
+          <p className="text-xs text-gray-500">{t(lang, "smsRangeLabel")}</p>
+          <p className="mt-1 text-sm font-semibold">{t(lang, "smsRangeExample")}</p>
+          <p className="mt-2 text-xs text-gray-500">{t(lang, "smsRangeFootnote")}</p>
+        </div>
+      </div>
+
+      {/* Seller */}
+      <div className="rounded-3xl border border-gray-200 bg-[#F7F7F5] p-6 shadow-sm">
+        <p className="text-sm font-semibold">{t(lang, "smsSellerTitle")}</p>
+        <p className="mt-2 text-sm text-gray-700 leading-relaxed">{t(lang, "smsSellerDesc")}</p>
+
+        <div className="mt-5 grid gap-2">
+          {["smsSellerStep1", "smsSellerStep2", "smsSellerStep3"].map((k) => (
+            <div key={k} className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm">
+              {t(lang, k as any)}
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-5 rounded-2xl border border-gray-200 bg-white p-4">
+          <p className="text-xs text-gray-500">{t(lang, "smsAuthorityLabel")}</p>
+          <p className="mt-1 text-sm font-semibold">{t(lang, "smsAuthorityExample")}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+      {/* HOW IT WORKS */}
       <section id="jak-dziala" className="bg-white">
         <div className="mx-auto max-w-6xl px-6 py-16 md:py-20">
-          <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight">
+          <h2 className="text-3xl font-extrabold tracking-tight md:text-4xl">
             {t(lang, "howTitle")}
           </h2>
+          <p className="mt-3 max-w-3xl text-gray-600 leading-relaxed">
+            {t(lang, "howSubtitle")}
+          </p>
 
-          <div className="mt-12 grid gap-6 md:grid-cols-4">
-            {[
-              t(lang, "howStep1"),
-              t(lang, "howStep2"),
-              t(lang, "howStep3"),
-              t(lang, "howStep4"),
-            ].map((text, index) => (
+          <div className="mt-10 grid gap-6 md:grid-cols-4">
+            {steps.map((s, idx) => (
               <div
-                key={`how-step-${index}`}
-                className="rounded-2xl border border-gray-200 bg-[#F7F7F5] p-6 shadow-sm transition hover:shadow"
+                key={s.k}
+                className="rounded-3xl border border-gray-200 bg-[#F7F7F5] p-6 shadow-sm transition hover:shadow"
               >
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0B1F3A] font-bold text-[#C8A24A]">
-                  {index + 1}
+                  {idx + 1}
                 </div>
-                <p className="mt-4 font-medium leading-snug">{text}</p>
+                <p className="mt-4 text-base font-semibold">{t(lang, s.k as any)}</p>
+                <p className="mt-2 text-sm text-gray-700 leading-relaxed">{t(lang, s.d as any)}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+            {/* VERIFIED MEETINGS (GEO) */}
+<section id="geo" className="mx-auto max-w-6xl px-6 py-14 md:py-18">
+  <div className="grid gap-8 md:grid-cols-12 md:items-center">
+    <div className="md:col-span-7">
+      <h2 className="text-3xl font-extrabold tracking-tight md:text-4xl">
+        {t(lang, "geoTitle")}
+      </h2>
+      <p className="mt-3 max-w-3xl text-gray-600 leading-relaxed">
+        {t(lang, "geoDesc")}
+      </p>
+
+      <div className="mt-8 grid gap-3 sm:grid-cols-2">
+        {["geoBullet1", "geoBullet2", "geoBullet3", "geoBullet4"].map((k) => (
+          <div key={k} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <p className="text-sm font-semibold">{t(lang, k as any)}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    <div className="md:col-span-5">
+      <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
+        <p className="text-sm font-semibold">{t(lang, "geoMockTitle")}</p>
+
+        <div className="mt-4 rounded-2xl bg-[#0B1F3A] p-5 text-white">
+          <p className="text-xs text-white/70">{t(lang, "geoMockHint")}</p>
+          <p className="mt-2 text-sm font-semibold">{t(lang, "geoMockQuestion")}</p>
+
+          <div className="mt-4 grid gap-2">
+            {["geoMockBtn1", "geoMockBtn2", "geoMockBtn3"].map((k) => (
+              <div key={k} className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm">
+                {t(lang, k as any)}
+              </div>
+            ))}
+          </div>
+
+          <p className="mt-4 text-xs text-white/60">{t(lang, "geoMockFootnote")}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{/* OPPORTUNITY MAP */}
+<section id="mapa" className="bg-white">
+  <div className="mx-auto max-w-6xl px-6 py-16 md:py-20">
+    <h2 className="text-3xl font-extrabold tracking-tight md:text-4xl">
+      {t(lang, "mapTitle")}
+    </h2>
+    <p className="mt-3 max-w-3xl text-gray-600 leading-relaxed">
+      {t(lang, "mapDesc")}
+    </p>
+
+    <div className="mt-10 grid gap-6 md:grid-cols-12 md:items-start">
+      <div className="md:col-span-7">
+        <div className="rounded-3xl border border-gray-200 bg-[#F7F7F5] p-6 shadow-sm">
+          <p className="text-sm font-semibold">{t(lang, "mapLegendTitle")}</p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            {["mapLegendGreen", "mapLegendBlue", "mapLegendRed"].map((k) => (
+              <div key={k} className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold">
+                {t(lang, k as any)}
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            {["mapCard1", "mapCard2", "mapCard3", "mapCard4"].map((k) => (
+              <div key={k} className="rounded-2xl border border-gray-200 bg-white p-4">
+                <p className="text-sm font-semibold">{t(lang, k as any)}</p>
+                <p className="mt-1 text-xs text-gray-500">{t(lang, "mapCardHint")}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="md:col-span-5">
+        <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
+          <p className="text-sm font-semibold">{t(lang, "mapMockTitle")}</p>
+          <div className="mt-4 rounded-2xl bg-[#0B1F3A] p-5 text-white">
+            <p className="text-xs text-white/70">{t(lang, "mapMockHint")}</p>
+            <div className="mt-4 grid gap-2">
+              {["mapMockItem1", "mapMockItem2", "mapMockItem3"].map((k) => (
+                <div key={k} className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm">
+                  {t(lang, k as any)}
+                </div>
+              ))}
+            </div>
+          </div>
+          <p className="mt-3 text-xs text-gray-500">{t(lang, "mapFootnote")}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+      {/* TRUST / SECURITY */}
+      <section className="mx-auto max-w-6xl px-6 py-16 md:py-18">
+        <div className="grid gap-6 md:grid-cols-12">
+          <div className="md:col-span-7">
+            <h2 className="text-3xl font-extrabold tracking-tight md:text-4xl">
+              {t(lang, "trustTitle")}
+            </h2>
+            <p className="mt-3 max-w-3xl text-gray-600 leading-relaxed">
+              {t(lang, "trustDesc")}
+            </p>
+
+            <div className="mt-8 grid gap-3 sm:grid-cols-2">
+              {["trustBullet1", "trustBullet2", "trustBullet3", "trustBullet4"].map((k) => (
+                <div
+                  key={k}
+                  className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
+                >
+                  <p className="text-sm font-semibold">{t(lang, k as any)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="md:col-span-5">
+            <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
+              <p className="text-sm font-semibold">{t(lang, "metricsTitle")}</p>
+              <p className="mt-2 text-sm text-gray-600 leading-relaxed">
+                {t(lang, "metricsDesc")}
+              </p>
+
+              <div className="mt-6 grid gap-3">
+                {[
+                  "metricsRow1",
+                  "metricsRow2",
+                  "metricsRow3",
+                  "metricsRow4",
+                ].map((k) => (
+                  <div
+                    key={k}
+                    className="flex items-center justify-between rounded-2xl bg-[#F7F7F5] px-4 py-3"
+                  >
+                    <span className="text-sm font-semibold text-gray-800">
+                      {t(lang, k as any)}
+                    </span>
+                    <span className="text-xs text-gray-500">{t(lang, "metricsRealtime")}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <p className="mt-3 text-xs text-gray-500">{t(lang, "trustFootnote")}</p>
           </div>
         </div>
       </section>
 
       {/* CTA */}
       <section id="demo" className="bg-[#0B1F3A] text-white">
-        <div className="mx-auto max-w-6xl px-6 py-16 md:py-20 text-center">
-          <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight">
-            {t(lang, "cta2Title")}
-          </h2>
+        <div className="mx-auto max-w-6xl px-6 py-16 md:py-20">
+          <div className="grid gap-10 md:grid-cols-12 md:items-center">
+            <div className="md:col-span-7">
+              <h2 className="text-3xl font-extrabold tracking-tight md:text-4xl">
+                {t(lang, "cta2Title")}
+              </h2>
+              <p className="mt-4 max-w-2xl text-white/80 leading-relaxed">
+                {t(lang, "cta2Desc")}
+              </p>
 
-          <p className="mx-auto mt-4 max-w-2xl text-white/80 leading-relaxed">
-            {t(lang, "cta2Desc")}
-          </p>
+              <div className="mt-8 flex flex-col gap-4 sm:flex-row">
+                <a
+                  href="mailto:kontakt@everywhere.psa?subject=EveryAPP%20Demo"
+                  className="inline-flex items-center justify-center rounded-2xl bg-[#C8A24A] px-9 py-4 font-semibold text-[#0B1F3A] shadow-sm transition hover:-translate-y-0.5 hover:opacity-95 active:translate-y-0"
+                >
+                  {t(lang, "cta2Button")}
+                </a>
 
-          <a
-            href="mailto:kontakt@everywhere.psa?subject=EveryAPP%20Demo"
-            className="mt-8 inline-flex items-center justify-center rounded-2xl bg-[#C8A24A] px-9 py-4 font-semibold text-[#0B1F3A] shadow-sm transition hover:-translate-y-0.5 hover:opacity-95 active:translate-y-0"
-          >
-            {t(lang, "cta2Button")}
-          </a>
+                <a
+                  href="#"
+                  className="inline-flex items-center justify-center rounded-2xl border border-white/30 px-9 py-4 font-semibold text-white/95 transition hover:bg-white/10"
+                >
+                  {t(lang, "cta2Secondary")}
+                </a>
+              </div>
+
+              <p className="mt-4 text-xs text-white/55">{t(lang, "cta2Footnote")}</p>
+            </div>
+
+            <div className="md:col-span-5">
+              <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+                <p className="text-sm font-semibold">{t(lang, "ctaBoxTitle")}</p>
+                <p className="mt-2 text-sm text-white/75 leading-relaxed">
+                  {t(lang, "ctaBoxDesc")}
+                </p>
+                <div className="mt-5 grid gap-2">
+                  {["ctaBoxBullet1", "ctaBoxBullet2", "ctaBoxBullet3"].map((k) => (
+                    <div key={k} className="rounded-2xl bg-white/5 px-4 py-3 text-sm">
+                      {t(lang, k as any)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 

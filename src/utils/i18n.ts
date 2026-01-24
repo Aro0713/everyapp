@@ -1,10 +1,14 @@
-// src/utils/i18n.ts
-import { EU_LANGS, translations, type LangKey, type TranslationKey } from "./translations";
+import {
+  SUPPORTED_LANGS,
+  type LangKey,
+  type TranslationKey,
+  translations,
+} from "@/utils/translations";
 
-export const DEFAULT_LANG: LangKey = "en";
+export const DEFAULT_LANG: LangKey = "pl";
 
-export function isLangKey(v: string | undefined | null): v is LangKey {
-  return typeof v === "string" && (EU_LANGS as readonly string[]).includes(v);
+export function isLangKey(v: unknown): v is LangKey {
+  return typeof v === "string" && (SUPPORTED_LANGS as readonly string[]).includes(v);
 }
 
 export function t(
@@ -12,7 +16,16 @@ export function t(
   key: TranslationKey,
   vars?: Record<string, string | number>
 ): string {
-  const raw = translations[key][lang] ?? translations[key][DEFAULT_LANG];
+  const entry = translations[key];
+
+  if (!entry) {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn(`[i18n] Missing translation key: ${String(key)}`);
+    }
+    return String(key);
+  }
+
+  const raw = entry[lang] ?? entry[DEFAULT_LANG] ?? String(key);
 
   if (!vars) return raw;
 

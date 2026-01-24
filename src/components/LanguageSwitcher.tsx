@@ -1,4 +1,15 @@
-import { EU_LANGS, type LangKey } from "@/utils/translations";
+import { SUPPORTED_LANGS as EU_LANGS, type LangKey } from "@/utils/translations";
+
+const LANG_LABEL: Record<LangKey, string> = {
+  pl: "PL",
+  en: "EN",
+  de: "DE",
+  cs: "CZ",
+  sk: "SK",
+  ua: "UA",
+  lt: "LT",
+  vi: "VI",
+};
 
 export default function LanguageSwitcher({
   currentLang,
@@ -29,15 +40,15 @@ export default function LanguageSwitcher({
           focus:outline-none focus:ring-2 focus:ring-[#C8A24A]/40
           transition
         "
+        aria-label="Language"
       >
         {EU_LANGS.map((lang) => (
           <option key={lang} value={lang}>
-            {lang.toUpperCase()}
+            {LANG_LABEL[lang]}
           </option>
         ))}
       </select>
 
-      {/* Chevron */}
       <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-gray-500">
         <svg
           width="14"
@@ -56,4 +67,3 @@ export default function LanguageSwitcher({
     </div>
   );
 }
-
