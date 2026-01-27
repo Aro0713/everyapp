@@ -40,24 +40,49 @@ export default function Home() {
     ],
     []
   );
+  const [isTopDark, setIsTopDark] = useState(true);
+
+useEffect(() => {
+  const onScroll = () => setIsTopDark(window.scrollY < 80);
+  onScroll();
+  window.addEventListener("scroll", onScroll, { passive: true });
+  return () => window.removeEventListener("scroll", onScroll);
+}, []);
 
   return (
-    <main className="min-h-screen bg-[#F7F7F5] text-gray-900">
-      {/* Language switcher */}
-      <div className="fixed right-4 top-4 z-50">
-        <div className="rounded-2xl border border-white/10 bg-white/60 px-2 py-1 shadow-lg backdrop-blur">
-          <LanguageSwitcher currentLang={lang} />
-        </div>
-      </div>
+    <main className="min-h-screen bg-ew-bg text-ew-primary">
+      <div className="fixed right-4 top-4 z-50 flex items-center gap-3 rounded-2xl px-2 py-2">
+  <a
+  href="/login"
+  className={
+    "inline-flex items-center justify-center rounded-2xl px-4 py-2 text-sm font-semibold shadow-lg transition " +
+    (isTopDark
+      ? "border border-white/20 bg-white/10 text-white backdrop-blur hover:bg-white/15"
+      : "border border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10")
+  }
+>
+  {t(lang, "ctaLogin")}
+</a>
+
+<div
+  className={
+    "rounded-2xl px-2 py-1 shadow-lg backdrop-blur " +
+    (isTopDark ? "border border-white/20 bg-white/10" : "border border-gray-200 bg-white")
+  }
+>
+  <LanguageSwitcher currentLang={lang} />
+</div>
+</div>
+
 
       {/* HERO */}
-      <section className="relative overflow-hidden bg-[#0B1F3A] text-white">
+      <section className="relative overflow-hidden bg-ew-primary text-white">
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/5 via-transparent to-black/15" />
         <div className="mx-auto grid max-w-6xl gap-10 px-6 py-20 md:grid-cols-12 md:py-28">
           {/* Left */}
           <div className="md:col-span-7">
             <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-white/80">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#C8A24A]" />
+              <span className="h-1.5 w-1.5 rounded-full bg-ew-accent" />
               {t(lang, "heroBadge")}
             </div>
 
@@ -65,7 +90,7 @@ export default function Home() {
               {t(lang, "brandName")}
             </h1>
 
-            <p className="mt-4 text-xl font-semibold text-[#C8A24A] md:text-2xl">
+            <p className="mt-4 text-xl font-semibold text-ew-accent md:text-2xl">
               {t(lang, "heroTagline")}
             </p>
 
@@ -92,7 +117,7 @@ export default function Home() {
             <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center">
               <a
                 href="#demo"
-                className="inline-flex items-center justify-center rounded-xl bg-[#C8A24A] px-7 py-3.5 font-semibold text-[#0B1F3A] shadow-sm transition hover:-translate-y-0.5 hover:opacity-95 active:translate-y-0"
+               className="inline-flex items-center justify-center rounded-xl bg-ew-accent px-7 py-3.5 font-semibold text-ew-primary shadow-sm transition hover:-translate-y-0.5 hover:opacity-95 active:translate-y-0"
               >
                 {t(lang, "ctaDemo")}
               </a>
@@ -105,8 +130,8 @@ export default function Home() {
               </a>
 
               <a
-                href="mailto:kontakt@everywhere.psa?subject=EveryAPP%20Wycena"
-                className="inline-flex items-center justify-center rounded-xl px-2 py-3.5 text-sm font-semibold text-white/80 transition hover:text-white"
+                href="mailto:kontakt@everyapp.pl?subject=EveryAPP%20Wycena"
+                className="inline-flex items-center justify-center rounded-xl px-0 py-3.5 text-sm font-semibold text-white/80 transition hover:text-white"
               >
                 {t(lang, "ctaPricing")}
               </a>
@@ -120,7 +145,7 @@ export default function Home() {
             <div className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-xl backdrop-blur">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold">{t(lang, "mockTitle")}</p>
-                <span className="rounded-full bg-[#C8A24A]/15 px-2 py-1 text-xs text-[#C8A24A]">
+                <span className="rounded-full bg-ew-accent/15 px-2 py-1 text-xs text-ew-accent">
                   {t(lang, "mockLive")}
                 </span>
               </div>
@@ -174,21 +199,36 @@ export default function Home() {
       </section>
 
       {/* LOGOS / INTEGRATIONS STRIP */}
-      <section className="mx-auto max-w-6xl px-6 py-10">
-        <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-          <p className="text-xs font-semibold text-gray-500">{t(lang, "integrationsBadge")}</p>
-          <div className="mt-4 grid gap-3 md:grid-cols-5">
-            {["Google Calendar", "SMS", "VoIP/SIP", "WWW + UTM", "Eksport ogłoszeń"].map((x) => (
-              <div
-                key={x}
-                className="rounded-2xl border border-gray-100 bg-[#F7F7F5] px-4 py-3 text-sm font-semibold text-gray-800"
-              >
-                {x}
-              </div>
-            ))}
-          </div>
+    <section className="mx-auto max-w-6xl px-6 py-12">
+  <div className="rounded-3xl border border-gray-200 bg-white p-8 shadow-sm">
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-xs font-semibold uppercase tracking-wide text-ew-accent">
+        {t(lang, "integrationsBadge")}
+      </p>
+      <p className="text-sm text-gray-500">
+        {t(lang, "integrationsSubtitle")}
+      </p>
+    </div>
+
+    <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+      {[
+        "integrationCalendar",
+        "integrationSms",
+        "integrationVoip",
+        "integrationWebUtm",
+        "integrationExport",
+      ].map((k) => (
+        <div
+          key={k}
+          className="flex items-center justify-center rounded-2xl border border-gray-200 bg-ew-accent/10 px-4 py-4 text-sm font-semibold text-ew-primary transition hover:bg-ew-accent/15"
+        >
+          {t(lang, k as any)}
         </div>
-      </section>
+      ))}
+    </div>
+  </div>
+</section>
+
       {/* LISTINGS EXPORT + ANALYTICS */}
 <section id="ogloszenia" className="mx-auto max-w-6xl px-6 py-14 md:py-18">
   <div className="grid gap-8 md:grid-cols-12 md:items-start">
@@ -213,7 +253,7 @@ export default function Home() {
       <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
         <p className="text-sm font-semibold">{t(lang, "listingCardTitle")}</p>
 
-        <div className="mt-4 rounded-2xl bg-[#F7F7F5] p-5">
+        <div className="mt-4 rounded-2xl bg-ew-accent/10 p-5">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-xs text-gray-500">{t(lang, "listingCardLabel")}</p>
@@ -267,9 +307,9 @@ export default function Home() {
                 {t(lang, f.desc as any)}
               </p>
 
-              <div className="mt-5 rounded-2xl bg-[#F7F7F5] p-4 text-sm text-gray-700">
-                {t(lang, "featuresNote")}
-              </div>
+              <div className="mt-5 rounded-2xl bg-ew-accent/10 p-4 text-sm text-ew-primary/90">
+              {t(lang, "featuresNote")}
+            </div>
             </div>
           ))}
         </div>
@@ -286,7 +326,7 @@ export default function Home() {
 
     <div className="mt-10 grid gap-6 md:grid-cols-2">
       {/* Buyer */}
-      <div className="rounded-3xl border border-gray-200 bg-[#F7F7F5] p-6 shadow-sm">
+      <div className="rounded-3xl border border-gray-200 bg-ew-accent/10 p-6 shadow-sm">
         <p className="text-sm font-semibold">{t(lang, "smsBuyerTitle")}</p>
         <p className="mt-2 text-sm text-gray-700 leading-relaxed">{t(lang, "smsBuyerDesc")}</p>
 
@@ -306,7 +346,7 @@ export default function Home() {
       </div>
 
       {/* Seller */}
-      <div className="rounded-3xl border border-gray-200 bg-[#F7F7F5] p-6 shadow-sm">
+      <div className="rounded-3xl border border-gray-200 bg-ew-accent/10 p-6 shadow-sm">
         <p className="text-sm font-semibold">{t(lang, "smsSellerTitle")}</p>
         <p className="mt-2 text-sm text-gray-700 leading-relaxed">{t(lang, "smsSellerDesc")}</p>
 
@@ -341,9 +381,9 @@ export default function Home() {
             {steps.map((s, idx) => (
               <div
                 key={s.k}
-                className="rounded-3xl border border-gray-200 bg-[#F7F7F5] p-6 shadow-sm transition hover:shadow"
+                className="rounded-3xl border border-gray-200 bg-ew-accent/10 p-6 shadow-sm transition hover:shadow"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0B1F3A] font-bold text-[#C8A24A]">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-ew-primary font-bold text-white">
                   {idx + 1}
                 </div>
                 <p className="mt-4 text-base font-semibold">{t(lang, s.k as any)}</p>
@@ -377,7 +417,7 @@ export default function Home() {
       <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
         <p className="text-sm font-semibold">{t(lang, "geoMockTitle")}</p>
 
-        <div className="mt-4 rounded-2xl bg-[#0B1F3A] p-5 text-white">
+        <div className="mt-4 rounded-2xl bg-ew-primary p-5 text-white">
           <p className="text-xs text-white/70">{t(lang, "geoMockHint")}</p>
           <p className="mt-2 text-sm font-semibold">{t(lang, "geoMockQuestion")}</p>
 
@@ -407,7 +447,7 @@ export default function Home() {
 
     <div className="mt-10 grid gap-6 md:grid-cols-12 md:items-start">
       <div className="md:col-span-7">
-        <div className="rounded-3xl border border-gray-200 bg-[#F7F7F5] p-6 shadow-sm">
+        <div className="rounded-3xl border border-gray-200 bg-ew-accent/10 p-6 shadow-sm">
           <p className="text-sm font-semibold">{t(lang, "mapLegendTitle")}</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             {["mapLegendGreen", "mapLegendBlue", "mapLegendRed"].map((k) => (
@@ -431,7 +471,7 @@ export default function Home() {
       <div className="md:col-span-5">
         <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
           <p className="text-sm font-semibold">{t(lang, "mapMockTitle")}</p>
-          <div className="mt-4 rounded-2xl bg-[#0B1F3A] p-5 text-white">
+          <div className="mt-4 rounded-2xl bg-ew-primary p-5 text-white">
             <p className="text-xs text-white/70">{t(lang, "mapMockHint")}</p>
             <div className="mt-4 grid gap-2">
               {["mapMockItem1", "mapMockItem2", "mapMockItem3"].map((k) => (
@@ -487,7 +527,7 @@ export default function Home() {
                 ].map((k) => (
                   <div
                     key={k}
-                    className="flex items-center justify-between rounded-2xl bg-[#F7F7F5] px-4 py-3"
+                    className="flex items-center justify-between rounded-2xl bg-ew-accent/10 px-4 py-3"
                   >
                     <span className="text-sm font-semibold text-gray-800">
                       {t(lang, k as any)}
@@ -504,7 +544,7 @@ export default function Home() {
       </section>
 
       {/* CTA */}
-      <section id="demo" className="bg-[#0B1F3A] text-white">
+      <section id="demo" className="bg-ew-primary text-white">
         <div className="mx-auto max-w-6xl px-6 py-16 md:py-20">
           <div className="grid gap-10 md:grid-cols-12 md:items-center">
             <div className="md:col-span-7">
@@ -517,8 +557,8 @@ export default function Home() {
 
               <div className="mt-8 flex flex-col gap-4 sm:flex-row">
                 <a
-                  href="mailto:kontakt@everywhere.psa?subject=EveryAPP%20Demo"
-                  className="inline-flex items-center justify-center rounded-2xl bg-[#C8A24A] px-9 py-4 font-semibold text-[#0B1F3A] shadow-sm transition hover:-translate-y-0.5 hover:opacity-95 active:translate-y-0"
+                  href="mailto:kontakt@everyapp.pl?subject=EveryAPP%20Demo"
+                 className="inline-flex items-center justify-center rounded-2xl bg-ew-accent px-9 py-4 font-semibold text-ew-primary shadow-sm transition hover:-translate-y-0.5 hover:opacity-95 active:translate-y-0"
                 >
                   {t(lang, "cta2Button")}
                 </a>
@@ -554,7 +594,7 @@ export default function Home() {
       </section>
 
       {/* FOOTER */}
-      <footer className="bg-[#F7F7F5]">
+      <footer className="bg-ew-bg">
         <div className="mx-auto max-w-6xl px-6 py-10 text-sm text-gray-600">
           {t(lang, "footerRights", { year })}
         </div>
