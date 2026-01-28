@@ -17,14 +17,12 @@ export default function RegisterPage() {
   const [phone, setPhone] = useState("");
   const [inviteCode, setInviteCode] = useState("");
   type RegisterMode = "create_office" | "join_office";
-
     const [mode, setMode] = useState<RegisterMode>("join_office");
     const [officeName, setOfficeName] = useState("");
-
     const [officeQuery, setOfficeQuery] = useState("");
     const [officeResults, setOfficeResults] = useState<Array<{ id: string; name: string }>>([]);
     const [selectedOfficeId, setSelectedOfficeId] = useState("");
-
+    const [isOfficeOpen, setIsOfficeOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [ok, setOk] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,20 +35,17 @@ useEffect(() => {
 
 useEffect(() => {
   let alive = true;
-  const q = officeQuery.trim();
 
-  // tylko w join_office ma sens
   if (mode !== "join_office") {
     setOfficeResults([]);
+    setIsOfficeOpen(false);
     return;
   }
 
-  // min 2 znaki
-  if (q.length < 2) {
-    setOfficeResults([]);
-    return;
-  }
+  // jeśli dropdown jest zamknięty, nie pobieramy
+  if (!isOfficeOpen) return;
 
+  const q = officeQuery.trim();
   const tmr = setTimeout(async () => {
     try {
       const res = await fetch(`/api/offices/search?q=${encodeURIComponent(q)}`);
@@ -63,14 +58,13 @@ useEffect(() => {
       if (!alive) return;
       setOfficeResults([]);
     }
-  }, 250);
+  }, 200);
 
   return () => {
     alive = false;
     clearTimeout(tmr);
   };
-}, [officeQuery, mode]);
-
+}, [officeQuery, mode, isOfficeOpen]);
   
  async function onSubmit(e: React.FormEvent) {
   e.preventDefault();
@@ -312,29 +306,35 @@ useEffect(() => {
                                 {t(lang, "registerOfficeSearch")}
                             </label>
                             <input
-                                id="officeSearch"
-                                type="text"
-                                value={officeQuery}
-                                onChange={(e) => {
+                            id="officeSearch"
+                            type="text"
+                            value={officeQuery}
+                            onFocus={() => setIsOfficeOpen(true)}
+                            onClick={() => setIsOfficeOpen(true)}
+                            onChange={(e) => {
                                 setOfficeQuery(e.target.value);
                                 setSelectedOfficeId("");
-                                // (opcjonalnie) czyść wyniki podczas pisania, żeby nie migały stare
-                                // setOfficeResults([]);
-                                }}
-                                placeholder={t(lang, "registerOfficeSearchPlaceholder")}
-                                className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
+                                setIsOfficeOpen(true);
+                            }}
+                            placeholder={t(lang, "registerOfficeSearchPlaceholder")}
+                            className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
                             />
 
-                            {officeResults.length > 0 && (
-                                <div className="absolute z-20 mt-2 w-full max-h-56 overflow-auto rounded-2xl border border-gray-200 bg-white shadow-lg">
-                                {officeResults.map((o) => (
+                          {isOfficeOpen && (
+                            <div className="absolute z-20 mt-2 w-full max-h-56 overflow-auto rounded-2xl border border-gray-200 bg-white shadow-lg">
+                                {officeResults.length === 0 ? (
+                                <div className="px-4 py-3 text-sm text-gray-500">
+                                    {t(lang, "registerOfficeSearchNoResults")}
+                                </div>
+                                ) : (
+                                officeResults.map((o) => (
                                     <button
                                     key={o.id}
                                     type="button"
                                     onClick={() => {
                                         setSelectedOfficeId(o.id);
                                         setOfficeQuery(o.name);
-                                        setOfficeResults([]);
+                                        setIsOfficeOpen(false);
                                     }}
                                     className={`block w-full px-4 py-3 text-left text-sm hover:bg-ew-accent/10 ${
                                         selectedOfficeId === o.id ? "bg-ew-accent/10 font-semibold" : ""
@@ -342,9 +342,11 @@ useEffect(() => {
                                     >
                                     {o.name}
                                     </button>
-                                ))}
-                                </div>
+                                ))
+                                )}
+                            </div>
                             )}
+
 
                             <p className="mt-2 text-xs text-gray-500">
                                 {t(lang, "registerOfficeSearchHint")}

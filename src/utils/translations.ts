@@ -2019,6 +2019,16 @@ registerErrorOfficePick: {
   lt: "Pasirinkite biurą arba įveskite kvietimo kodą",
   vi: "Chọn văn phòng hoặc nhập mã mời",
 },
+registerOfficeSearchNoResults: {
+  pl: "Brak wyników",
+  en: "No results",
+  de: "Keine Ergebnisse",
+  cs: "Žádné výsledky",
+  sk: "Žiadne výsledky",
+  ua: "Немає результатів",
+  lt: "Nėra rezultatų",
+  vi: "Không có kết quả",
+},
 
 } as const);
 

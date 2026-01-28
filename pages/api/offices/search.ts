@@ -6,11 +6,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const q = String(req.query.q ?? "").trim();
 
-  // minimalna długość żeby nie dało się enumerować wszystkiego jednym kliknięciem
-  if (q.length < 2) return res.status(200).json({ offices: [] });
-
   const client = await pool.connect();
   try {
+    // pusta fraza => lista startowa (top 20)
+    const pattern = q.length === 0 ? "%" : `%${q}%`;
+
     const { rows } = await client.query(
       `
       SELECT id, name, office_type, parent_office_id
@@ -19,7 +19,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ORDER BY name ASC
       LIMIT 20
       `,
-      [`%${q}%`]
+      [pattern]
     );
 
     return res.status(200).json({ offices: rows });
