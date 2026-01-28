@@ -61,7 +61,7 @@ useEffect(() => {
       setOfficeResults([]);
     }
   }, 200);
-
+  
   return () => {
     alive = false;
     clearTimeout(tmr);
