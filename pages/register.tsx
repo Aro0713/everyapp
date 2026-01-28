@@ -30,37 +30,7 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [lang, setLang] = useState<LangKey>(DEFAULT_LANG);
 
-  useEffect(() => {
-    const c = getCookie("lang");
-    if (isLangKey(c)) setLang(c);
-  }, []);
-  useEffect(() => {
-  let alive = true;
-  const q = officeQuery.trim();
-
-  if (mode !== "join_office") return; // szukamy biur tylko w trybie join
-  if (q.length < 2) {
-    setOfficeResults([]);
-    return;
-  }
-
-  const tmr = setTimeout(async () => {
-    try {
-      const res = await fetch(`/api/offices/search?q=${encodeURIComponent(q)}`);
-      const data = await res.json().catch(() => ({}));
-      if (!alive) return;
-      setOfficeResults(Array.isArray((data as any)?.offices) ? (data as any).offices : []);
-    } catch {
-      if (!alive) return;
-      setOfficeResults([]);
-    }
-  }, 250);
-
-  return () => {
-    alive = false;
-    clearTimeout(tmr);
-  };
-}, [officeQuery, mode]);
+const q = officeQuery.trim();
 
  async function onSubmit(e: React.FormEvent) {
   e.preventDefault();
