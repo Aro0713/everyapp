@@ -30,8 +30,7 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [lang, setLang] = useState<LangKey>(DEFAULT_LANG);
 
-const q = officeQuery.trim();
-
+  
  async function onSubmit(e: React.FormEvent) {
   e.preventDefault();
   setError(null);
@@ -264,89 +263,93 @@ const q = officeQuery.trim();
                         </div>
                         )}
 
-                                {mode === "join_office" && (
-                <>
-                    <div>
-                    <label className="block text-sm font-semibold" htmlFor="officeSearch">
-                        {t(lang, "registerOfficeSearch")}
-                    </label>
-                    <input
-                        id="officeSearch"
-                        type="text"
-                        value={officeQuery}
-                        onChange={(e) => {
-                        setOfficeQuery(e.target.value);
-                        setSelectedOfficeId(""); // reset wyboru, gdy user zmienia query
-                        }}
-                        placeholder={t(lang, "registerOfficeSearchPlaceholder")}
-                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
-                    />
+                                            {mode === "join_office" && (
+                        <>
+                            <div className="relative">
+                            <label className="block text-sm font-semibold" htmlFor="officeSearch">
+                                {t(lang, "registerOfficeSearch")}
+                            </label>
+                            <input
+                                id="officeSearch"
+                                type="text"
+                                value={officeQuery}
+                                onChange={(e) => {
+                                setOfficeQuery(e.target.value);
+                                setSelectedOfficeId("");
+                                }}
+                                placeholder={t(lang, "registerOfficeSearchPlaceholder")}
+                                className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
+                            />
 
-                    {officeResults.length > 0 && (
-                        <div className="mt-3 max-h-56 overflow-auto rounded-2xl border border-gray-200 bg-white">
-                        {officeResults.map((o) => (
-                            <button
-                            key={o.id}
-                            type="button"
-                            onClick={() => setSelectedOfficeId(o.id)}
-                            className={`block w-full px-4 py-3 text-left text-sm hover:bg-ew-accent/10 ${
-                                selectedOfficeId === o.id ? "bg-ew-accent/10 font-semibold" : ""
-                            }`}
-                            >
-                            {o.name}
-                            </button>
-                        ))}
+                            {officeResults.length > 0 && (
+                                <div className="absolute z-20 mt-2 w-full max-h-56 overflow-auto rounded-2xl border border-gray-200 bg-white shadow-lg">
+                                {officeResults.map((o) => (
+                                    <button
+                                    key={o.id}
+                                    type="button"
+                                    onClick={() => {
+                                        setSelectedOfficeId(o.id);
+                                        setOfficeQuery(o.name);
+                                        setOfficeResults([]);
+                                    }}
+                                    className={`block w-full px-4 py-3 text-left text-sm hover:bg-ew-accent/10 ${
+                                        selectedOfficeId === o.id ? "bg-ew-accent/10 font-semibold" : ""
+                                    }`}
+                                    >
+                                    {o.name}
+                                    </button>
+                                ))}
+                                </div>
+                            )}
+
+                            <p className="mt-2 text-xs text-gray-500">
+                                {t(lang, "registerOfficeSearchHint")}
+                            </p>
+                            </div>
+
+                            <div>
+                            <label className="block text-sm font-semibold" htmlFor="inviteCode">
+                                {t(lang, "registerInvite")}
+                            </label>
+                            <input
+                                id="inviteCode"
+                                type="text"
+                                value={inviteCode}
+                                onChange={(e) => setInviteCode(e.target.value)}
+                                placeholder={t(lang, "registerInvitePlaceholder")}
+                                className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
+                            />
+                            <p className="mt-2 text-xs text-gray-500">
+                                {t(lang, "registerInviteHint")}
+                            </p>
+                            </div>
+                        </>
+                        )}
+
+                        {error && (
+                        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                            {error}
                         </div>
-                    )}
+                        )}
 
-                    <p className="mt-2 text-xs text-gray-500">
-                        {t(lang, "registerOfficeSearchHint")}
-                    </p>
-                    </div>
+                        {ok && (
+                        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                            {t(lang, "registerOk")}
+                        </div>
+                        )}
 
-                    <div>
-                    <label className="block text-sm font-semibold" htmlFor="inviteCode">
-                        {t(lang, "registerInvite")}
-                    </label>
-                    <input
-                        id="inviteCode"
-                        type="text"
-                        value={inviteCode}
-                        onChange={(e) => setInviteCode(e.target.value)}
-                        placeholder={t(lang, "registerInvitePlaceholder")}
-                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
-                    />
-                    <p className="mt-2 text-xs text-gray-500">
-                        {t(lang, "registerInviteHint")}
-                    </p>
-                    </div>
-                </>
-                )}
+                        <button
+                        type="submit"
+                        disabled={loading}
+                        className="inline-flex w-full items-center justify-center rounded-2xl bg-ew-accent px-6 py-3.5 text-sm font-semibold text-ew-primary shadow-sm transition hover:-translate-y-0.5 hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                        {loading ? t(lang, "registerSubmitting") : t(lang, "registerSubmit")}
+                        </button>
 
+                        <p className="text-xs text-gray-500">
+                        {t(lang, "registerLegal")}
+                        </p>
 
-                  {error && (
-                    <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                      {error}
-                    </div>
-                  )}
-
-                  {ok && (
-                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                      {t(lang, "registerOk")}
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="inline-flex w-full items-center justify-center rounded-2xl bg-ew-accent px-6 py-3.5 text-sm font-semibold text-ew-primary shadow-sm transition hover:-translate-y-0.5 hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {loading ? t(lang, "registerSubmitting") : t(lang, "registerSubmit")}
-                  </button>
-
-                  <p className="text-xs text-gray-500">
-                    {t(lang, "registerLegal")}
-                  </p>
                 </form>
               </div>
 
