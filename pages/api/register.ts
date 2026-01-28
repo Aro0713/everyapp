@@ -26,11 +26,7 @@ function slugifyBase(input: string, maxLen = 8) {
     .replace(/ł/g, "l")
     .replace(/Ł/g, "L");
 
-  const cleaned = ascii
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "")
-    .trim();
-
+  const cleaned = ascii.toLowerCase().replace(/[^a-z0-9]+/g, "").trim();
   const base = cleaned.slice(0, maxLen);
   return base || "office";
 }
@@ -43,17 +39,13 @@ async function generateInviteCode(client: any, officeName: string) {
   const base = slugifyBase(officeName, 8);
 
   for (let i = 0; i < 25; i++) {
-    const code = `${base}${random4()}`.toUpperCase(); // np. ARKLABUD4821
-    const exists = await client.query(
-      `SELECT 1 FROM offices WHERE invite_code = $1 LIMIT 1`,
-      [code]
-    );
+    const code = `${base}${random4()}`.toUpperCase();
+    const exists = await client.query(`SELECT 1 FROM offices WHERE invite_code = $1 LIMIT 1`, [code]);
     if (exists.rowCount === 0) return code;
   }
 
   // fallback: 6 cyfr jeśli pechowo kolizje
-  const code = `${base}${String(Math.floor(Math.random() * 1000000)).padStart(6, "0")}`.toUpperCase();
-  return code;
+  return `${base}${String(Math.floor(Math.random() * 1000000)).padStart(6, "0")}`.toUpperCase();
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -102,15 +94,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const inviteCode = await generateInviteCode(client, officeName);
 
-      // create office (main)
+      // create office (main) - safe on conflict
       const officeRes = await client.query(
         `
         INSERT INTO offices (name, invite_code, office_type, parent_office_id)
         VALUES ($1, $2, 'main', NULL)
+        ON CONFLICT (invite_code) DO NOTHING
         RETURNING id, invite_code
         `,
         [officeName, inviteCode]
       );
+
+      if (officeRes.rowCount === 0) {
+        await client.query("ROLLBACK");
+        return res.status(409).json({ error: "INVITE_CODE_CONFLICT" });
+      }
+
       const officeId = officeRes.rows[0].id as string;
 
       // creator becomes OWNER + ACTIVE
@@ -130,7 +129,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ok: true,
         mode,
         officeId,
-        inviteCode: inviteCode,
+        inviteCode,
         status: "active",
         role: "owner",
       });
@@ -166,17 +165,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // membership pending (requires approval)
     await client.query(
-  `
-  INSERT INTO memberships (user_id, office_id, role, status)
-  VALUES ($1, $2, 'agent', 'pending')
-  ON CONFLICT (user_id, office_id) DO NOTHING
-  `,
-  [userId, officeId]
-);
+      `
+      INSERT INTO memberships (user_id, office_id, role, status)
+      VALUES ($1, $2, 'agent', 'pending')
+      ON CONFLICT (user_id, office_id) DO NOTHING
+      `,
+      [userId, officeId]
+    );
 
     await client.query("COMMIT");
     return res.status(200).json({ ok: true, mode, status: "pending", officeId });
   } catch (e: any) {
+    console.error("REGISTER_API_ERROR", e);
     await client.query("ROLLBACK");
     return res.status(500).json({ error: "SERVER_ERROR", detail: String(e?.message ?? e) });
   } finally {
