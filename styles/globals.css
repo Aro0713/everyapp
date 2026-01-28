@@ -3,7 +3,8 @@
 @tailwind utilities;
 
 :root {
-  --ew-primary: 45 62 85;   /* #2D3E55 */
-  --ew-accent: 130 161 213; /* #82A1D5 */
-  --ew-bg: 255 255 255;     /* #FFFFFF */
+  --ew-primary: 43 60 90;   /* #2B3C5A */
+  --ew-accent: 119 156 211;/* #779CD3 */
+  --ew-bg: 255 255 255;    /* #FFFFFF */
 }
+
