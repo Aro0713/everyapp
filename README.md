@@ -1,36 +1,104 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# EveryAPP
 
-## Getting Started
+**EveryAPP** to nowoczesna platforma operacyjna (SaaS) dla agentów i zespołów sprzedażowych, zaprojektowana do **realnego zwiększania efektywności pracy**, eliminacji strat czasowych oraz automatyzacji procesów po rozmowach z klientami.
 
-First, run the development server:
+Projekt łączy **panel operacyjny**, **technologie głosowe** oraz **agentów AI**, tworząc spójne środowisko pracy agenta.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+---
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 🎯 Problem rynkowy
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+W zespołach sprzedażowych (szczególnie w nieruchomościach i usługach):
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- agenci tracą czas na ręczne notatki po rozmowach,
+- dane z rozmów są nieustrukturyzowane i giną,
+- CRM-y są ciężkie, reaktywne i nie wspierają pracy „tu i teraz”,
+- brak realnej analityki jakości rozmów i działań agenta.
 
-## Learn More
+**Efekt:** niska produktywność, brak skalowalności zespołów, utracone leady.
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 🚀 Rozwiązanie: EveryAPP
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+EveryAPP działa jako **operacyjna warstwa nad CRM-em**:
 
-## Deploy on Vercel
+- jeden panel pracy agenta,
+- automatyczne działania po rozmowach,
+- analiza i strukturyzacja informacji przez AI,
+- koncentracja na *flow pracy*, nie na administracji.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🔑 Kluczowe funkcje
+
+**Dostępne / MVP**
+- Panel agenta (dashboard operacyjny)
+- Zarządzanie ofertami, klientami, zespołem
+- Wielojęzyczny interfejs
+- Bezpieczna rejestracja użytkowników i biur
+
+**W budowie / roadmap**
+- 🎙️ nagrywanie rozmów głosowych
+- 📝 automatyczna transkrypcja rozmów
+- 🤖 agent AI analizujący notatki i intencje klienta
+- ⚙️ automatyzacje post-call (zadania, follow-upy)
+- 📊 analityka jakości pracy agenta i zespołu
+
+---
+
+## 🧠 Przewagi konkurencyjne
+
+- **AI-first** – system projektowany od początku pod agentów AI
+- **Real-time operations** – wsparcie pracy agenta w trakcie i po rozmowie
+- **Lekkość i wydajność** – nowoczesny stack (Next.js, Edge)
+- **Modularność** – możliwość wdrożeń branżowych i white-label
+- **Integracyjność** – możliwość pracy jako warstwa nad istniejącymi CRM-ami
+
+---
+
+## 🌍 Rynek i skalowalność
+
+- zespoły sprzedażowe (real estate, usługi, doradztwo)
+- agenci indywidualni i biura
+- model SaaS (subskrypcje per użytkownik / zespół)
+- potencjał ekspansji międzynarodowej (multi-language, cloud-native)
+
+---
+
+## 📈 Status projektu
+
+- produkt w fazie **aktywnie rozwijanego MVP**
+- działający panel operacyjny
+- infrastruktura produkcyjna (Vercel, PostgreSQL)
+- gotowość do dalszej rozbudowy AI i voice
+
+---
+
+## 🗺️ Roadmap (wysoki poziom)
+
+- [x] Panel operacyjny agenta
+- [x] Rejestracja użytkowników i biur
+- [ ] Voice recording & transcription
+- [ ] Agent AI (analiza rozmów)
+- [ ] Automatyzacje post-call
+- [ ] Analityka zespołowa
+- [ ] Integracje z zewnętrznymi CRM
+
+---
+
+## 🤝 Współpraca / Inwestycje
+
+EveryAPP jest projektem przygotowanym do:
+- rozmów inwestorskich,
+- pilotaży z partnerami branżowymi,
+- dalszego skalowania produktu.
+
+## 🏗️ Autor i wykonawca
+
+EveryAPP jest projektowany i rozwijany przez **ALS sp. z o.o.** – firma specjalizująca się w systemach SaaS, automatyzacji procesów oraz rozwiązaniach opartych o AI.
+
+🌐 www.alsolution.pl
+
+
+© EveryAPP
