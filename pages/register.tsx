@@ -29,6 +29,47 @@ export default function RegisterPage() {
   const [ok, setOk] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lang, setLang] = useState<LangKey>(DEFAULT_LANG);
+  
+useEffect(() => {
+  const c = getCookie("lang");
+  if (isLangKey(c)) setLang(c);
+}, []);
+
+useEffect(() => {
+  let alive = true;
+  const q = officeQuery.trim();
+
+  // tylko w join_office ma sens
+  if (mode !== "join_office") {
+    setOfficeResults([]);
+    return;
+  }
+
+  // min 2 znaki
+  if (q.length < 2) {
+    setOfficeResults([]);
+    return;
+  }
+
+  const tmr = setTimeout(async () => {
+    try {
+      const res = await fetch(`/api/offices/search?q=${encodeURIComponent(q)}`);
+      const data = await res.json().catch(() => ({}));
+      if (!alive) return;
+
+      const offices = Array.isArray((data as any)?.offices) ? (data as any).offices : [];
+      setOfficeResults(offices);
+    } catch {
+      if (!alive) return;
+      setOfficeResults([]);
+    }
+  }, 250);
+
+  return () => {
+    alive = false;
+    clearTimeout(tmr);
+  };
+}, [officeQuery, mode]);
 
   
  async function onSubmit(e: React.FormEvent) {
@@ -276,6 +317,8 @@ export default function RegisterPage() {
                                 onChange={(e) => {
                                 setOfficeQuery(e.target.value);
                                 setSelectedOfficeId("");
+                                // (opcjonalnie) czyść wyniki podczas pisania, żeby nie migały stare
+                                // setOfficeResults([]);
                                 }}
                                 placeholder={t(lang, "registerOfficeSearchPlaceholder")}
                                 className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
