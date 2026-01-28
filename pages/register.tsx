@@ -20,7 +20,9 @@ export default function RegisterPage() {
     const [mode, setMode] = useState<RegisterMode>("join_office");
     const [officeName, setOfficeName] = useState("");
     const [officeQuery, setOfficeQuery] = useState("");
-    const [officeResults, setOfficeResults] = useState<Array<{ id: string; name: string }>>([]);
+    type OfficeResult = { id: string; name: string; code: string };
+    const [officeResults, setOfficeResults] = useState<OfficeResult[]>([]);
+    const [officeCode, setOfficeCode] = useState(""); // <-- NOWE
     const [selectedOfficeId, setSelectedOfficeId] = useState("");
     const [isOfficeOpen, setIsOfficeOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -312,9 +314,10 @@ useEffect(() => {
                             onFocus={() => setIsOfficeOpen(true)}
                             onClick={() => setIsOfficeOpen(true)}
                             onChange={(e) => {
-                                setOfficeQuery(e.target.value);
-                                setSelectedOfficeId("");
-                                setIsOfficeOpen(true);
+                            setOfficeQuery(e.target.value);
+                            setSelectedOfficeId("");
+                            setInviteCode("");      // ← TUTAJ, dokładnie tu
+                            setIsOfficeOpen(true);
                             }}
                             placeholder={t(lang, "registerOfficeSearchPlaceholder")}
                             className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
@@ -332,10 +335,13 @@ useEffect(() => {
                                     key={o.id}
                                     type="button"
                                     onClick={() => {
-                                        setSelectedOfficeId(o.id);
-                                        setOfficeQuery(o.name);
-                                        setIsOfficeOpen(false);
+                                    setSelectedOfficeId(o.id);
+                                    setOfficeQuery(o.name);
+                                    setOfficeCode(o.code);       // ✅ AUTO
+                                    setInviteCode(o.code);       // opcja: jeśli inviteCode ma być kodem biura
+                                    setIsOfficeOpen(false);
                                     }}
+
                                     className={`block w-full px-4 py-3 text-left text-sm hover:bg-ew-accent/10 ${
                                         selectedOfficeId === o.id ? "bg-ew-accent/10 font-semibold" : ""
                                     }`}
@@ -361,7 +367,7 @@ useEffect(() => {
                                 id="inviteCode"
                                 type="text"
                                 value={inviteCode}
-                                onChange={(e) => setInviteCode(e.target.value)}
+                                readOnly={!!selectedOfficeId}
                                 placeholder={t(lang, "registerInvitePlaceholder")}
                                 className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
                             />
