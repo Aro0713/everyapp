@@ -78,7 +78,6 @@ export default function PanelPage() {
       { key: "panelNavListings" },
       { key: "panelNavBuyers" },
       { key: "panelNavClients" },
-      // ✅ EstiBOT znika — tu będzie później Voice/AI
       { key: "panelNavTeam" },
       { key: "panelNavOfficeDeals" },
       { key: "panelNavEmployees" },

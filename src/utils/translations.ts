@@ -2661,6 +2661,93 @@ panelSidebarHintDesc: {
   lt: "Eikite į pagrindinį arba atsijunkite.",
   vi: "Về trang chủ hoặc đăng xuất.",
 },
+panelNavPrimaryMarket: {
+  pl: "Rynek pierwotny",
+  en: "Primary market",
+  de: "Primärmarkt",
+  cs: "Primární trh",
+  sk: "Primárny trh",
+  ua: "Первинний ринок",
+  lt: "Pirminė rinka",
+  vi: "Thị trường sơ cấp",
+},
+
+panelNavBoard: {
+  pl: "Tablica",
+  en: "Board",
+  de: "Board",
+  cs: "Nástěnka",
+  sk: "Nástenka",
+  ua: "Дошка",
+  lt: "Lenta",
+  vi: "Bảng",
+},
+
+panelNavUsers: {
+  pl: "Użytkownicy systemu",
+  en: "System users",
+  de: "Systembenutzer",
+  cs: "Uživatelé systému",
+  sk: "Používatelia systému",
+  ua: "Користувачі системи",
+  lt: "Sistemos naudotojai",
+  vi: "Người dùng hệ thống",
+},
+
+panelNavLeaderboard: {
+  pl: "Leaderboard",
+  en: "Leaderboard",
+  de: "Rangliste",
+  cs: "Žebříček",
+  sk: "Rebríček",
+  ua: "Рейтинг",
+  lt: "Reitingas",
+  vi: "Bảng xếp hạng",
+},
+
+panelNavDownloads: {
+  pl: "Pliki do pobrania",
+  en: "Downloads",
+  de: "Downloads",
+  cs: "Ke stažení",
+  sk: "Na stiahnutie",
+  ua: "Завантаження",
+  lt: "Atsisiuntimai",
+  vi: "Tải xuống",
+},
+
+panelNavQueries: {
+  pl: "Zapytania od klientów",
+  en: "Client inquiries",
+  de: "Kundenanfragen",
+  cs: "Dotazy klientů",
+  sk: "Dopyty klientov",
+  ua: "Запити клієнтів",
+  lt: "Klientų užklausos",
+  vi: "Yêu cầu khách hàng",
+},
+
+panelNavReports: {
+  pl: "Statystyki i raporty",
+  en: "Statistics & reports",
+  de: "Statistiken und Berichte",
+  cs: "Statistiky a reporty",
+  sk: "Štatistiky a reporty",
+  ua: "Статистика та звіти",
+  lt: "Statistika ir ataskaitos",
+  vi: "Thống kê và báo cáo",
+},
+
+panelNavMenuSettings: {
+  pl: "Dostosuj menu",
+  en: "Customize menu",
+  de: "Menü anpassen",
+  cs: "Přizpůsobit menu",
+  sk: "Prispôsobiť menu",
+  ua: "Налаштувати меню",
+  lt: "Tinkinti meniu",
+  vi: "Tùy chỉnh меню",
+},
 
 } as const);
 
