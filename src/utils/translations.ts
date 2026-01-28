@@ -1899,6 +1899,127 @@ registerErrorInvite: { pl: "Wpisz kod biura.", en: "Enter the office code.", de:
 registerErrorInviteInvalid: { pl: "Nieprawidłowy kod biura.", en: "Invalid office code.", de: "Ungültiger Büro-Code.", cs: "Neplatný kód kanceláře.", sk: "Neplatný kód kancelárie.", ua: "Невірний код офісу.", lt: "Neteisingas biuro kodas.", vi: "Mã văn phòng không hợp lệ." },
 registerErrorGeneric: { pl: "Coś poszło nie tak. Spróbuj ponownie.", en: "Something went wrong. Please try again.", de: "Etwas ist schiefgelaufen. Bitte erneut versuchen.", cs: "Něco se pokazilo. Zkuste to znovu.", sk: "Niečo sa pokazilo. Skúste znova.", ua: "Щось пішло не так. Спробуйте ще раз.", lt: "Kažkas nepavyko. Bandykite dar kartą.", vi: "Có lỗi xảy ra. Vui lòng thử lại." },
 
+registerModeLabel: {
+  pl: "Wybierz sposób rejestracji",
+  en: "Choose registration type",
+  de: "Registrierungsart wählen",
+  cs: "Vyberte způsob registrace",
+  sk: "Vyberte spôsob registrácie",
+  ua: "Виберіть спосіб реєстрації",
+  lt: "Pasirinkite registracijos būdą",
+  vi: "Chọn hình thức đăng ký",
+},
+
+registerModeCreateOffice: {
+  pl: "Tworzę biuro",
+  en: "Create an office",
+  de: "Büro erstellen",
+  cs: "Vytvořit kancelář",
+  sk: "Vytvoriť kanceláriu",
+  ua: "Створюю офіс",
+  lt: "Sukurti biurą",
+  vi: "Tạo văn phòng",
+},
+
+registerModeJoinOffice: {
+  pl: "Dołączam do biura",
+  en: "Join an office",
+  de: "Einem Büro beitreten",
+  cs: "Připojit se ke kanceláři",
+  sk: "Pripojiť sa ku kancelárii",
+  ua: "Приєднуюсь до офісу",
+  lt: "Prisijungti prie biuro",
+  vi: "Tham gia văn phòng",
+},
+
+registerOfficeName: {
+  pl: "Nazwa biura",
+  en: "Office name",
+  de: "Büroname",
+  cs: "Název kanceláře",
+  sk: "Názov kancelárie",
+  ua: "Назва офісу",
+  lt: "Biuro pavadinimas",
+  vi: "Tên văn phòng",
+},
+
+registerOfficeNamePlaceholder: {
+  pl: "Np. Biuro Arkadiusz Łabuda",
+  en: "e.g. Arkadiusz Labuda Office",
+  de: "z. B. Büro Arkadiusz Łabuda",
+  cs: "Např. Kancelář Arkadiusz Łabuda",
+  sk: "Napr. Kancelária Arkadiusz Łabuda",
+  ua: "Напр. Офіс Arkadiusz Łabuda",
+  lt: "Pvz. Arkadiusz Labuda biuras",
+  vi: "Ví dụ: Văn phòng Arkadiusz Labuda",
+},
+
+registerOfficeNameHint: {
+  pl: "Po utworzeniu biura otrzymasz kod zaproszenia dla agentów.",
+  en: "After creating the office, you will receive an invite code for agents.",
+  de: "Nach dem Erstellen des Büros erhalten Sie einen Einladungscode für Agenten.",
+  cs: "Po vytvoření kanceláře obdržíte pozvánkový kód pro agenty.",
+  sk: "Po vytvorení kancelárie dostanete pozývací kód pre agentov.",
+  ua: "Після створення офісу ви отримаєте код запрошення для агентів.",
+  lt: "Sukūrus biurą gausite kvietimo kodą agentams.",
+  vi: "Sau khi tạo văn phòng, bạn sẽ nhận được mã mời cho nhân viên.",
+},
+
+registerOfficeSearch: {
+  pl: "Wyszukaj biuro",
+  en: "Search for an office",
+  de: "Büro suchen",
+  cs: "Vyhledat kancelář",
+  sk: "Vyhľadať kanceláriu",
+  ua: "Пошук офісу",
+  lt: "Ieškoti biuro",
+  vi: "Tìm kiếm văn phòng",
+},
+
+registerOfficeSearchPlaceholder: {
+  pl: "Zacznij wpisywać nazwę biura",
+  en: "Start typing the office name",
+  de: "Beginnen Sie mit der Eingabe des Büronamens",
+  cs: "Začněte psát název kanceláře",
+  sk: "Začnite písať názov kancelárie",
+  ua: "Почніть вводити назву офісу",
+  lt: "Pradėkite rašyti biuro pavadinimą",
+  vi: "Bắt đầu nhập tên văn phòng",
+},
+
+registerOfficeSearchHint: {
+  pl: "Twoje zgłoszenie trafi do akceptacji administratora biura.",
+  en: "Your request will be sent to the office administrator for approval.",
+  de: "Ihre Anfrage wird zur Genehmigung an den Büroadministrator gesendet.",
+  cs: "Vaše žádost bude odeslána správci kanceláře ke schválení.",
+  sk: "Vaša žiadosť bude odoslaná administrátorovi kancelárie na schválenie.",
+  ua: "Ваш запит буде надіслано адміністратору офісу для підтвердження.",
+  lt: "Jūsų prašymas bus perduotas biuro administratoriui patvirtinti.",
+  vi: "Yêu cầu của bạn sẽ được gửi đến quản trị viên văn phòng để phê duyệt.",
+},
+
+registerErrorOfficeName: {
+  pl: "Podaj nazwę biura",
+  en: "Please enter the office name",
+  de: "Bitte geben Sie den Büronamen ein",
+  cs: "Zadejte název kanceláře",
+  sk: "Zadajte názov kancelárie",
+  ua: "Введіть назву офісу",
+  lt: "Įveskite biuro pavadinimą",
+  vi: "Vui lòng nhập tên văn phòng",
+},
+
+registerErrorOfficePick: {
+  pl: "Wybierz biuro lub podaj kod zaproszenia",
+  en: "Select an office or enter an invite code",
+  de: "Wählen Sie ein Büro oder geben Sie einen Einladungscode ein",
+  cs: "Vyberte kancelář nebo zadejte pozvánkový kód",
+  sk: "Vyberte kanceláriu alebo zadajte pozývací kód",
+  ua: "Оберіть офіс або введіть код запрошення",
+  lt: "Pasirinkite biurą arba įveskite kvietimo kodą",
+  vi: "Chọn văn phòng hoặc nhập mã mời",
+},
+
 } as const);
 
 export type TranslationKey = keyof typeof translations;

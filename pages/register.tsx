@@ -12,68 +12,115 @@ function getCookie(name: string) {
 }
 
 export default function RegisterPage() {
+  const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
+  type RegisterMode = "create_office" | "join_office";
+
+    const [mode, setMode] = useState<RegisterMode>("join_office");
+    const [officeName, setOfficeName] = useState("");
+
+    const [officeQuery, setOfficeQuery] = useState("");
+    const [officeResults, setOfficeResults] = useState<Array<{ id: string; name: string }>>([]);
+    const [selectedOfficeId, setSelectedOfficeId] = useState("");
+
+  const [loading, setLoading] = useState(false);
+  const [ok, setOk] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [lang, setLang] = useState<LangKey>(DEFAULT_LANG);
 
   useEffect(() => {
     const c = getCookie("lang");
     if (isLangKey(c)) setLang(c);
   }, []);
+  useEffect(() => {
+  let alive = true;
+  const q = officeQuery.trim();
 
-  const [email, setEmail] = useState("");
-  const [fullName, setFullName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [inviteCode, setInviteCode] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [ok, setOk] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  if (mode !== "join_office") return; // szukamy biur tylko w trybie join
+  if (q.length < 2) {
+    setOfficeResults([]);
+    return;
+  }
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setOk(false);
-
-    const em = email.trim().toLowerCase();
-    const ic = inviteCode.trim();
-
-    if (!em || !em.includes("@")) {
-      setError(t(lang, "registerErrorEmail"));
-      return;
-    }
-    if (!ic) {
-      setError(t(lang, "registerErrorInvite"));
-      return;
-    }
-
-    setLoading(true);
+  const tmr = setTimeout(async () => {
     try {
-      const res = await fetch("/api/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: em,
-          fullName: fullName.trim(),
-          phone: phone.trim(),
-          inviteCode: ic,
-        }),
-      });
-
+      const res = await fetch(`/api/offices/search?q=${encodeURIComponent(q)}`);
       const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        // mapowanie najważniejszych błędów
-        const code = data?.error;
-        if (code === "INVALID_INVITE_CODE") return setError(t(lang, "registerErrorInviteInvalid"));
-        if (code === "INVALID_EMAIL") return setError(t(lang, "registerErrorEmail"));
-        return setError(t(lang, "registerErrorGeneric"));
-      }
-
-      setOk(true);
+      if (!alive) return;
+      setOfficeResults(Array.isArray((data as any)?.offices) ? (data as any).offices : []);
     } catch {
-      setError(t(lang, "registerErrorGeneric"));
-    } finally {
-      setLoading(false);
+      if (!alive) return;
+      setOfficeResults([]);
+    }
+  }, 250);
+
+  return () => {
+    alive = false;
+    clearTimeout(tmr);
+  };
+}, [officeQuery, mode]);
+
+ async function onSubmit(e: React.FormEvent) {
+  e.preventDefault();
+  setError(null);
+  setOk(false);
+
+  const em = email.trim().toLowerCase();
+
+  if (!em || !em.includes("@")) {
+    setError(t(lang, "registerErrorEmail"));
+    return;
+  }
+
+  if (mode === "create_office") {
+    if (!officeName.trim()) {
+      setError(t(lang, "registerErrorOfficeName"));
+      return;
+    }
+  } else {
+    const ic = inviteCode.trim();
+    if (!ic && !selectedOfficeId) {
+      setError(t(lang, "registerErrorOfficePick"));
+      return;
     }
   }
+
+  setLoading(true);
+  try {
+    const res = await fetch("/api/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: em,
+        fullName: fullName.trim(),
+        phone: phone.trim(),
+        mode,
+        officeName: mode === "create_office" ? officeName.trim() : undefined,
+        inviteCode: mode === "join_office" ? inviteCode.trim() : undefined,
+        officeId: mode === "join_office" ? selectedOfficeId : undefined,
+      }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      const code = (data as any)?.error;
+      if (code === "INVALID_INVITE_CODE") return setError(t(lang, "registerErrorInviteInvalid"));
+      if (code === "INVALID_EMAIL") return setError(t(lang, "registerErrorEmail"));
+      if (code === "MISSING_OFFICE_NAME") return setError(t(lang, "registerErrorOfficeName"));
+      return setError(t(lang, "registerErrorGeneric"));
+    }
+
+    setOk(true);
+  } catch {
+    setError(t(lang, "registerErrorGeneric"));
+  } finally {
+    setLoading(false);
+  }
+}
+
 
   return (
     <>
@@ -147,6 +194,45 @@ export default function RegisterPage() {
             <div className="md:col-span-6">
               <div className="rounded-3xl border border-gray-200 bg-white p-8 shadow-sm">
                 <form onSubmit={onSubmit} className="space-y-5">
+                    <div className="rounded-2xl border border-gray-200 bg-ew-accent/5 p-4">
+                        <p className="text-sm font-semibold">{t(lang, "registerModeLabel")}</p>
+
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                            <button
+                            type="button"
+                            onClick={() => {
+                                setMode("create_office");
+                                setInviteCode("");
+                                setOfficeQuery("");
+                                setOfficeResults([]);
+                                setSelectedOfficeId("");
+                            }}
+                            className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
+                                mode === "create_office"
+                                ? "border-ew-accent bg-white"
+                                : "border-gray-200 bg-white/70 hover:bg-white"
+                            }`}
+                            >
+                            {t(lang, "registerModeCreateOffice")}
+                            </button>
+
+                            <button
+                            type="button"
+                            onClick={() => {
+                                setMode("join_office");
+                                setOfficeName("");
+                            }}
+                            className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
+                                mode === "join_office"
+                                ? "border-ew-accent bg-white"
+                                : "border-gray-200 bg-white/70 hover:bg-white"
+                            }`}
+                            >
+                            {t(lang, "registerModeJoinOffice")}
+                            </button>
+                        </div>
+                        </div>
+
                   <div>
                     <label className="block text-sm font-semibold" htmlFor="email">
                       {t(lang, "registerEmail")}
@@ -189,23 +275,84 @@ export default function RegisterPage() {
                       className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
                     />
                   </div>
+                            {mode === "create_office" && (
+                        <div>
+                            <label className="block text-sm font-semibold" htmlFor="officeName">
+                            {t(lang, "registerOfficeName")}
+                            </label>
+                            <input
+                            id="officeName"
+                            type="text"
+                            value={officeName}
+                            onChange={(e) => setOfficeName(e.target.value)}
+                            placeholder={t(lang, "registerOfficeNamePlaceholder")}
+                            className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
+                            />
+                            <p className="mt-2 text-xs text-gray-500">
+                            {t(lang, "registerOfficeNameHint")}
+                            </p>
+                        </div>
+                        )}
 
-                  <div>
-                    <label className="block text-sm font-semibold" htmlFor="inviteCode">
-                      {t(lang, "registerInvite")}
+                                {mode === "join_office" && (
+                <>
+                    <div>
+                    <label className="block text-sm font-semibold" htmlFor="officeSearch">
+                        {t(lang, "registerOfficeSearch")}
                     </label>
                     <input
-                      id="inviteCode"
-                      type="text"
-                      value={inviteCode}
-                      onChange={(e) => setInviteCode(e.target.value)}
-                      placeholder={t(lang, "registerInvitePlaceholder")}
-                      className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
+                        id="officeSearch"
+                        type="text"
+                        value={officeQuery}
+                        onChange={(e) => {
+                        setOfficeQuery(e.target.value);
+                        setSelectedOfficeId(""); // reset wyboru, gdy user zmienia query
+                        }}
+                        placeholder={t(lang, "registerOfficeSearchPlaceholder")}
+                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
+                    />
+
+                    {officeResults.length > 0 && (
+                        <div className="mt-3 max-h-56 overflow-auto rounded-2xl border border-gray-200 bg-white">
+                        {officeResults.map((o) => (
+                            <button
+                            key={o.id}
+                            type="button"
+                            onClick={() => setSelectedOfficeId(o.id)}
+                            className={`block w-full px-4 py-3 text-left text-sm hover:bg-ew-accent/10 ${
+                                selectedOfficeId === o.id ? "bg-ew-accent/10 font-semibold" : ""
+                            }`}
+                            >
+                            {o.name}
+                            </button>
+                        ))}
+                        </div>
+                    )}
+
+                    <p className="mt-2 text-xs text-gray-500">
+                        {t(lang, "registerOfficeSearchHint")}
+                    </p>
+                    </div>
+
+                    <div>
+                    <label className="block text-sm font-semibold" htmlFor="inviteCode">
+                        {t(lang, "registerInvite")}
+                    </label>
+                    <input
+                        id="inviteCode"
+                        type="text"
+                        value={inviteCode}
+                        onChange={(e) => setInviteCode(e.target.value)}
+                        placeholder={t(lang, "registerInvitePlaceholder")}
+                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
                     />
                     <p className="mt-2 text-xs text-gray-500">
-                      {t(lang, "registerInviteHint")}
+                        {t(lang, "registerInviteHint")}
                     </p>
-                  </div>
+                    </div>
+                </>
+                )}
+
 
                   {error && (
                     <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
