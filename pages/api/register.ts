@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { pool } from "@/lib/db";
+import bcrypt from "bcryptjs";
 
 type RegisterMode = "create_office" | "join_office";
 
@@ -7,13 +8,9 @@ type RegisterBody = {
   email: string;
   fullName?: string;
   phone?: string;
-
+  password?: string;
   mode: RegisterMode;
-
-  // mode=create_office
   officeName?: string;
-
-  // mode=join_office
   inviteCode?: string;
   officeId?: string;
 };
@@ -40,7 +37,10 @@ async function generateInviteCode(client: any, officeName: string) {
 
   for (let i = 0; i < 25; i++) {
     const code = `${base}${random4()}`.toUpperCase();
-    const exists = await client.query(`SELECT 1 FROM offices WHERE invite_code = $1 LIMIT 1`, [code]);
+    const exists = await client.query(
+      `SELECT 1 FROM offices WHERE invite_code = $1 LIMIT 1`,
+      [code]
+    );
     if (exists.rowCount === 0) return code;
   }
 
@@ -58,30 +58,45 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const phone = (body.phone ?? "").trim();
   const mode = body.mode;
 
+  // --- basic validation first (no bcrypt before sanity checks) ---
   if (!email || !email.includes("@")) return res.status(400).json({ error: "INVALID_EMAIL" });
   if (mode !== "create_office" && mode !== "join_office") {
     return res.status(400).json({ error: "INVALID_MODE" });
+  }
+
+  // --- password required for both create_office & join_office (account creation) ---
+  const password = String(body.password ?? "").trim();
+  if (password.length < 8) {
+    return res.status(400).json({ error: "WEAK_PASSWORD" });
   }
 
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
 
+    // Prevent account takeover: do NOT upsert password by email.
+    // If email exists => reject registration.
+    const existsRes = await client.query(`SELECT 1 FROM users WHERE email = $1 LIMIT 1`, [email]);
+    if ((existsRes.rowCount ?? 0) > 0) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "EMAIL_ALREADY_EXISTS" });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
     // 1) auth_user_id placeholder (docelowo z Auth providera)
     const authUserId = `local:${email}`;
 
-    // 2) upsert user
+    // 2) create user
     const userRes = await client.query(
       `
-      INSERT INTO users (auth_user_id, email, full_name, phone)
-      VALUES ($1, $2, $3, $4)
-      ON CONFLICT (email) DO UPDATE
-        SET full_name = EXCLUDED.full_name,
-            phone = EXCLUDED.phone
+      INSERT INTO users (auth_user_id, email, full_name, phone, password_hash)
+      VALUES ($1, $2, $3, $4, $5)
       RETURNING id
       `,
-      [authUserId, email, fullName || null, phone || null]
+      [authUserId, email, fullName || null, phone || null, passwordHash]
     );
+
     const userId = userRes.rows[0].id as string;
 
     // 3) mode handling

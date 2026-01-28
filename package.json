@@ -11,6 +11,7 @@
   "dependencies": {
     "@types/pg": "^8.16.0",
     "@vercel/analytics": "^1.6.1",
+    "bcryptjs": "^3.0.3",
     "next": "16.1.2",
     "pg": "^8.17.2",
     "react": "19.2.3",

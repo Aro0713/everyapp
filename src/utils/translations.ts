@@ -2029,6 +2029,71 @@ registerOfficeSearchNoResults: {
   lt: "Nėra rezultatų",
   vi: "Không có kết quả",
 },
+registerPassword: {
+  pl: "Hasło",
+  en: "Password",
+  de: "Passwort",
+  cs: "Heslo",
+  sk: "Heslo",
+  ua: "Пароль",
+  lt: "Slaptažodis",
+  vi: "Mật khẩu",
+},
+
+registerPasswordPlaceholder: {
+  pl: "Minimum 8 znaków",
+  en: "At least 8 characters",
+  de: "Mindestens 8 Zeichen",
+  cs: "Minimálně 8 znaků",
+  sk: "Minimálne 8 znakov",
+  ua: "Мінімум 8 символів",
+  lt: "Mažiausiai 8 simboliai",
+  vi: "Ít nhất 8 ký tự",
+},
+
+registerPassword2: {
+  pl: "Powtórz hasło",
+  en: "Repeat password",
+  de: "Passwort wiederholen",
+  cs: "Zopakujte heslo",
+  sk: "Zopakujte heslo",
+  ua: "Повторіть пароль",
+  lt: "Pakartokite slaptažodį",
+  vi: "Nhập lại mật khẩu",
+},
+
+registerPassword2Placeholder: {
+  pl: "Wpisz hasło ponownie",
+  en: "Enter the password again",
+  de: "Passwort erneut eingeben",
+  cs: "Zadejte heslo znovu",
+  sk: "Zadajte heslo znova",
+  ua: "Введіть пароль ще раз",
+  lt: "Įveskite slaptažodį dar kartą",
+  vi: "Nhập lại mật khẩu",
+},
+
+registerErrorPasswordTooShort: {
+  pl: "Hasło musi mieć co najmniej 8 znaków",
+  en: "Password must be at least 8 characters long",
+  de: "Das Passwort muss mindestens 8 Zeichen lang sein",
+  cs: "Heslo musí mít alespoň 8 znaků",
+  sk: "Heslo musí mať aspoň 8 znakov",
+  ua: "Пароль повинен містити щонайменше 8 символів",
+  lt: "Slaptažodis turi būti bent 8 simbolių ilgio",
+  vi: "Mật khẩu phải có ít nhất 8 ký tự",
+},
+
+registerErrorPasswordMismatch: {
+  pl: "Hasła nie są takie same",
+  en: "Passwords do not match",
+  de: "Die Passwörter stimmen nicht überein",
+  cs: "Hesla se neshodují",
+  sk: "Heslá sa nezhodujú",
+  ua: "Паролі не співпадають",
+  lt: "Slaptažodžiai nesutampa",
+  vi: "Mật khẩu không khớp",
+},
 
 } as const);
 

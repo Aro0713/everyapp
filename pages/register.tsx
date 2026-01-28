@@ -29,7 +29,9 @@ export default function RegisterPage() {
   const [ok, setOk] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lang, setLang] = useState<LangKey>(DEFAULT_LANG);
-  
+  const [password, setPassword] = useState("");
+  const [password2, setPassword2] = useState("");
+
 useEffect(() => {
   const c = getCookie("lang");
   if (isLangKey(c)) setLang(c);
@@ -92,6 +94,14 @@ useEffect(() => {
       return;
     }
   }
+    if (password.length < 8) {
+    setError(t(lang, "registerErrorPasswordTooShort"));
+    return;
+    }
+    if (password !== password2) {
+    setError(t(lang, "registerErrorPasswordMismatch"));
+    return;
+    }
 
   setLoading(true);
   try {
@@ -102,11 +112,12 @@ useEffect(() => {
         email: em,
         fullName: fullName.trim(),
         phone: phone.trim(),
+        password, // <-- NOWE
         mode,
         officeName: mode === "create_office" ? officeName.trim() : undefined,
         inviteCode: mode === "join_office" ? inviteCode.trim() : undefined,
         officeId: mode === "join_office" ? selectedOfficeId : undefined,
-      }),
+        }),
     });
 
     const data = await res.json().catch(() => ({}));
@@ -282,6 +293,36 @@ useEffect(() => {
                       className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
                     />
                   </div>
+                  <div>
+                    <label className="block text-sm font-semibold" htmlFor="password">
+                        {t(lang, "registerPassword")}
+                    </label>
+                    <input
+                        id="password"
+                        type="password"
+                        autoComplete="new-password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder={t(lang, "registerPasswordPlaceholder")}
+                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
+                    />
+                    </div>
+
+                    <div>
+                    <label className="block text-sm font-semibold" htmlFor="password2">
+                        {t(lang, "registerPassword2")}
+                    </label>
+                    <input
+                        id="password2"
+                        type="password"
+                        autoComplete="new-password"
+                        value={password2}
+                        onChange={(e) => setPassword2(e.target.value)}
+                        placeholder={t(lang, "registerPassword2Placeholder")}
+                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
+                    />
+                    </div>
+
                             {mode === "create_office" && (
                         <div>
                             <label className="block text-sm font-semibold" htmlFor="officeName">
