@@ -177,7 +177,8 @@ useEffect(() => {
           <div className="grid gap-8 md:grid-cols-12 md:items-start">
             {/* Left info */}
             <div className="md:col-span-6">
-              <div className="rounded-3xl border border-gray-200 bg-white p-8 shadow-sm">
+              <div className="relative overflow-visible rounded-3xl border border-gray-200 bg-white p-8 shadow-sm">
+
                 <p className="text-xs font-semibold uppercase tracking-wide text-ew-accent">
                   {t(lang, "registerInfoBadge")}
                 </p>
@@ -202,7 +203,7 @@ useEffect(() => {
 
             {/* Right form */}
             <div className="md:col-span-6">
-              <div className="rounded-3xl border border-gray-200 bg-white p-8 shadow-sm">
+              <div className="relative overflow-visible rounded-3xl border border-gray-200 bg-white p-8 shadow-sm">
                 <form onSubmit={onSubmit} className="space-y-5">
                     <div className="rounded-2xl border border-gray-200 bg-ew-accent/5 p-4">
                         <p className="text-sm font-semibold">{t(lang, "registerModeLabel")}</p>
