@@ -4,7 +4,6 @@ import Link from "next/link";
 import { DEFAULT_LANG, isLangKey, t } from "@/utils/i18n";
 import type { LangKey } from "@/utils/translations";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
-import { useRouter } from "next/router";
 import CalendarPage from "./calendar";
 
 function getCookie(name: string) {
@@ -13,15 +12,15 @@ function getCookie(name: string) {
   return m ? decodeURIComponent(m[2]) : null;
 }
 
-type PanelView = "dashboard" | "calendar";
+type PanelView = "dashboard" | "calendar"; // na razie te dwa, potem dopisujesz kolejne
 
 type NavItem = {
   key: string;
-  href?: string;
-  view?: PanelView;   // jeśli używasz view
-  active?: boolean;
+  view: PanelView;          // obowiązkowe: identyfikator widoku
+  subKey?: string;          // opcjonalny podtytuł do topbara
   badge?: string;
 };
+
 
 
 function clsx(...xs: Array<string | false | null | undefined>) {
@@ -71,9 +70,8 @@ function StatPill({
 export default function PanelPage() {
   const [lang, setLang] = useState<LangKey>(DEFAULT_LANG);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const router = useRouter();
-  type PanelView = "dashboard" | "calendar";
   const [activeView, setActiveView] = useState<PanelView>("dashboard");
+
 
   useEffect(() => {
     const c = getCookie("lang");
@@ -82,25 +80,18 @@ export default function PanelPage() {
 
 const nav = useMemo<NavItem[]>(
   () => [
-    { key: "panelNavDashboard", view: "dashboard" },
-    { key: "panelNavCalendar", view: "calendar" },
-    { key: "panelNavListings" },
-    { key: "panelNavBuyers" },
-    { key: "panelNavClients" },
-    { key: "panelNavTeam" },
-    { key: "panelNavOfficeDeals" },
-    { key: "panelNavEmployees" },
-    { key: "panelNavPrimaryMarket" },
-    { key: "panelNavBoard" },
-    { key: "panelNavUsers" },
-    { key: "panelNavLeaderboard" },
-    { key: "panelNavDownloads" },
-    { key: "panelNavQueries" },
-    { key: "panelNavReports" },
-    { key: "panelNavMenuSettings" },
+    { key: "panelNavDashboard", view: "dashboard", subKey: "panelHeaderSub" },
+    { key: "panelNavCalendar", view: "calendar", subKey: "panelCalendarSub" },
+
+    // resztę dopisujesz jako kolejne widoki, np:
+    // { key: "panelNavListings", view: "listings", subKey: "panelListingsSub" },
+    // { key: "panelNavBuyers", view: "buyers", subKey: "panelBuyersSub" },
   ],
   []
 );
+const activeNavItem = useMemo(() => {
+  return nav.find((x) => x.view === activeView) ?? nav[0];
+}, [nav, activeView]);
 
   return (
     <>
@@ -156,64 +147,35 @@ const nav = useMemo<NavItem[]>(
             </div>
 
             <nav className="px-3 pb-6 pt-2">
-                {nav.map((it) => {
-                    const isActive = it.view ? activeView === it.view : false;
+            {nav.map((it) => {
+                const isActive = activeView === it.view;
 
-                    const rowClass = clsx(
+                const rowClass = clsx(
                     "mt-1 flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm transition",
-                    isActive
-                        ? "bg-white/10 text-white"
-                        : "text-white/85 hover:bg-white/10 hover:text-white"
-                    );
+                    isActive ? "bg-white/10 text-white" : "text-white/85 hover:bg-white/10 hover:text-white"
+                );
 
-                    const content = (
-                    <>
-                        <span className={clsx("truncate", sidebarOpen ? "" : "text-center w-full")}>
+                return (
+                    <button
+                    key={it.key}
+                    type="button"
+                    className={rowClass}
+                    title={t(lang, it.key as any)}
+                    onClick={() => setActiveView(it.view)}
+                    >
+                    <span className={clsx("truncate", sidebarOpen ? "" : "text-center w-full")}>
                         {sidebarOpen ? t(lang, it.key as any) : "•"}
-                        </span>
+                    </span>
 
-                        {sidebarOpen && it.badge ? (
+                    {sidebarOpen && it.badge ? (
                         <span className="rounded-full bg-ew-accent/20 px-2 py-0.5 text-[11px] font-semibold text-ew-accent">
-                            {it.badge}
+                        {it.badge}
                         </span>
-                        ) : null}
-                    </>
-                    );
-
-                    if (it.view) {
-                        return (
-                            <button
-                            key={it.key}
-                            type="button"
-                            className={rowClass}
-                            title={t(lang, it.key as any)}
-                            onClick={() => setActiveView(it.view!)}
-                            >
-                            {content}
-                            </button>
-                        );
-                        }
-
-                        return it.href ? (
-                        <Link
-                            key={it.key}
-                            href={it.href}
-                            className={rowClass}
-                            title={t(lang, it.key as any)}
-                        >
-                            {content}
-                        </Link>
-                        ) : (
-                        <button
-                            key={it.key}
-                            type="button"
-                            className={rowClass}
-                            title={t(lang, it.key as any)}
-                        >
-                            {content}
-                        </button>
-                        );
+                    ) : null}
+                    </button>
+                );
                 })}
+
                 </nav>
 
             <div className="mt-auto px-4 pb-5">
@@ -247,9 +209,14 @@ const nav = useMemo<NavItem[]>(
                 <div className="flex min-w-0 items-center gap-3">
                   <div className="min-w-0">
                     <h1 className="truncate text-lg font-extrabold tracking-tight text-ew-primary">
-                      {t(lang, "panelHeaderTitle")}
+                    {t(lang, activeNavItem.key as any)}
                     </h1>
-                    <p className="truncate text-xs text-gray-500">{t(lang, "panelHeaderSub")}</p>
+
+                    <p className="truncate text-xs text-gray-500">
+                    {activeNavItem.subKey
+                        ? t(lang, activeNavItem.subKey as any)
+                        : t(lang, "panelHeaderSub")}
+                    </p>
                   </div>
                 </div>
 
