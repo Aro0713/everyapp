@@ -4,7 +4,7 @@ import Link from "next/link";
 import { DEFAULT_LANG, isLangKey, t } from "@/utils/i18n";
 import type { LangKey } from "@/utils/translations";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
-import Image from "next/image";
+import { useRouter } from "next/router";
 
 function getCookie(name: string) {
   if (typeof document === "undefined") return null;
@@ -66,33 +66,34 @@ function StatPill({
 export default function PanelPage() {
   const [lang, setLang] = useState<LangKey>(DEFAULT_LANG);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
     const c = getCookie("lang");
     if (isLangKey(c)) setLang(c);
   }, []);
 
-  const nav = useMemo<NavItem[]>(
-    () => [
-      { key: "panelNavDashboard", active: true },
-      { key: "panelNavCalendar" },
-      { key: "panelNavListings" },
-      { key: "panelNavBuyers" },
-      { key: "panelNavClients" },
-      { key: "panelNavTeam" },
-      { key: "panelNavOfficeDeals" },
-      { key: "panelNavEmployees" },
-      { key: "panelNavPrimaryMarket" },
-      { key: "panelNavBoard" },
-      { key: "panelNavUsers" },
-      { key: "panelNavLeaderboard" },
-      { key: "panelNavDownloads" },
-      { key: "panelNavQueries" },
-      { key: "panelNavReports" },
-      { key: "panelNavMenuSettings" },
-    ],
-    []
-  );
+ const nav = useMemo<NavItem[]>(
+  () => [
+    { key: "panelNavDashboard", href: "/panel" },
+    { key: "panelNavCalendar", href: "/panel/kalendarz" }, 
+    { key: "panelNavListings" },
+    { key: "panelNavBuyers" },
+    { key: "panelNavClients" },
+    { key: "panelNavTeam" },
+    { key: "panelNavOfficeDeals" },
+    { key: "panelNavEmployees" },
+    { key: "panelNavPrimaryMarket" },
+    { key: "panelNavBoard" },
+    { key: "panelNavUsers" },
+    { key: "panelNavLeaderboard" },
+    { key: "panelNavDownloads" },
+    { key: "panelNavQueries" },
+    { key: "panelNavReports" },
+    { key: "panelNavMenuSettings" },
+  ],
+  []
+);
 
   return (
     <>
@@ -148,29 +149,52 @@ export default function PanelPage() {
             </div>
 
             <nav className="px-3 pb-6 pt-2">
-              {nav.map((it) => (
-                <button
-                  key={it.key}
-                  type="button"
-                  className={clsx(
+                {nav.map((it) => {
+                    const isActive =
+                    !!it.href && (router.asPath === it.href || router.asPath.startsWith(it.href + "?"));
+
+                    const rowClass = clsx(
                     "mt-1 flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm transition",
-                    it.active
-                      ? "bg-white/10 text-white"
-                      : "text-white/85 hover:bg-white/10 hover:text-white"
-                  )}
-                  title={t(lang, it.key as any)}
-                >
-                  <span className={clsx("truncate", sidebarOpen ? "" : "text-center w-full")}>
-                    {sidebarOpen ? t(lang, it.key as any) : "•"}
-                  </span>
-                  {sidebarOpen && it.badge ? (
-                    <span className="rounded-full bg-ew-accent/20 px-2 py-0.5 text-[11px] font-semibold text-ew-accent">
-                      {it.badge}
-                    </span>
-                  ) : null}
-                </button>
-              ))}
-            </nav>
+                    isActive
+                        ? "bg-white/10 text-white"
+                        : "text-white/85 hover:bg-white/10 hover:text-white"
+                    );
+
+                    const content = (
+                    <>
+                        <span className={clsx("truncate", sidebarOpen ? "" : "text-center w-full")}>
+                        {sidebarOpen ? t(lang, it.key as any) : "•"}
+                        </span>
+
+                        {sidebarOpen && it.badge ? (
+                        <span className="rounded-full bg-ew-accent/20 px-2 py-0.5 text-[11px] font-semibold text-ew-accent">
+                            {it.badge}
+                        </span>
+                        ) : null}
+                    </>
+                    );
+
+                    return it.href ? (
+                    <Link
+                        key={it.key}
+                        href={it.href}
+                        className={rowClass}
+                        title={t(lang, it.key as any)}
+                    >
+                        {content}
+                    </Link>
+                    ) : (
+                    <button
+                        key={it.key}
+                        type="button"
+                        className={rowClass}
+                        title={t(lang, it.key as any)}
+                    >
+                        {content}
+                    </button>
+                    );
+                })}
+                </nav>
 
             <div className="mt-auto px-4 pb-5">
               <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
