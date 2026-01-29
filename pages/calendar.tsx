@@ -163,10 +163,12 @@ export default function CalendarPage() {
 
   // zmiana scope -> odśwież eventy w aktualnym zakresie
   useEffect(() => {
-    if (!range.start || !range.end) return;
-    loadEvents(range.start, range.end);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCalendarId]);
+  if (!activeCalendarId) return;
+  if (!range.start || !range.end) return;
+
+  loadEvents(range.start, range.end);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [activeCalendarId, scope, range.start, range.end]);
 
   // search -> odśwież (MVP)
   useEffect(() => {
@@ -199,48 +201,51 @@ export default function CalendarPage() {
     setIsModalOpen(true);
   }
 
-  async function submitNewEvent() {
-    if (!officeId || !activeCalendarId) return;
-
-    const title = draft.title.trim();
-    if (!title) return alert("Podaj tytuł");
-    if (!draft.start || !draft.end) return alert("Podaj datę start i koniec");
-
-    setSaving(true);
-    try {
-      const qs = new URLSearchParams({
-        orgId: officeId,
-        calendarId: activeCalendarId,
-      });
-
-      const r = await fetch(`/api/calendar/events?${qs.toString()}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title,
-          start: new Date(draft.start).toISOString(),
-          end: new Date(draft.end).toISOString(),
-          locationText: draft.locationText || null,
-          description: draft.description || null,
-          createdBy: userId,
-        }),
-      });
-
-      if (!r.ok) {
-        const err = await r.json().catch(() => null);
-        throw new Error(err?.error || "Nie udało się zapisać terminu");
-      }
-
-      setIsModalOpen(false);
-
-      // odśwież eventy w bieżącym zakresie
-      if (range.start && range.end) await loadEvents(range.start, range.end);
-    } catch (e: any) {
-      alert(e?.message ?? "Błąd zapisu");
-    } finally {
-      setSaving(false);
-    }
+async function submitNewEvent() {
+  if (!officeId || !activeCalendarId) {
+    alert("Brak aktywnego kalendarza (wybierz Mój / Biuro).");
+    return;
   }
+
+  const title = draft.title.trim();
+  if (!title) return alert("Podaj tytuł");
+  if (!draft.start || !draft.end) return alert("Podaj datę start i koniec");
+
+  setSaving(true);
+  try {
+    const qs = new URLSearchParams({
+      orgId: officeId,
+      calendarId: activeCalendarId,
+    });
+
+    const r = await fetch(`/api/calendar/events?${qs.toString()}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title,
+        start: new Date(draft.start).toISOString(),
+        end: new Date(draft.end).toISOString(),
+        locationText: draft.locationText || null,
+        description: draft.description || null,
+        createdBy: userId,
+      }),
+    });
+
+    if (!r.ok) {
+      const err = await r.json().catch(() => null);
+      throw new Error(err?.error || "Nie udało się zapisać terminu");
+    }
+
+    setIsModalOpen(false);
+
+    // odśwież eventy w bieżącym zakresie
+    if (range.start && range.end) await loadEvents(range.start, range.end);
+  } catch (e: any) {
+    alert(e?.message ?? "Błąd zapisu");
+  } finally {
+    setSaving(false);
+  }
+}
 
   return (
     <main className="min-h-screen bg-ew-bg p-6 text-ew-primary">
@@ -277,122 +282,140 @@ export default function CalendarPage() {
 
         {/* TOOLBAR */}
         <div className="mb-4 rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-2">
-              <div className="inline-flex overflow-hidden rounded-2xl border border-gray-200 bg-white">
+            {/* View switch */}
+            <div className="inline-flex overflow-hidden rounded-2xl border border-gray-200 bg-white">
                 <button
-                  type="button"
-                  className={clsx(
+                type="button"
+                className={clsx(
                     "px-3 py-2 text-sm font-semibold transition",
                     view === "dayGridMonth"
-                      ? "bg-ew-accent text-ew-primary"
-                      : "text-ew-primary hover:bg-ew-accent/10"
-                  )}
-                  onClick={() => setView("dayGridMonth")}
+                    ? "bg-ew-accent text-ew-primary"
+                    : "text-ew-primary hover:bg-ew-accent/10"
+                )}
+                onClick={() => setView("dayGridMonth")}
                 >
-                  {t(lang, "calViewMonth" as any) ?? "Miesiąc"}
+                {t(lang, "calViewMonth" as any) ?? "Miesiąc"}
                 </button>
+
                 <button
-                  type="button"
-                  className={clsx(
+                type="button"
+                className={clsx(
                     "px-3 py-2 text-sm font-semibold transition",
                     view === "timeGridWeek"
-                      ? "bg-ew-accent text-ew-primary"
-                      : "text-ew-primary hover:bg-ew-accent/10"
-                  )}
-                  onClick={() => setView("timeGridWeek")}
+                    ? "bg-ew-accent text-ew-primary"
+                    : "text-ew-primary hover:bg-ew-accent/10"
+                )}
+                onClick={() => setView("timeGridWeek")}
                 >
-                  {t(lang, "calViewWeek" as any) ?? "Tydzień"}
+                {t(lang, "calViewWeek" as any) ?? "Tydzień"}
                 </button>
+
                 <button
-                  type="button"
-                  className={clsx(
+                type="button"
+                className={clsx(
                     "px-3 py-2 text-sm font-semibold transition",
                     view === "timeGridDay"
-                      ? "bg-ew-accent text-ew-primary"
-                      : "text-ew-primary hover:bg-ew-accent/10"
-                  )}
-                  onClick={() => setView("timeGridDay")}
+                    ? "bg-ew-accent text-ew-primary"
+                    : "text-ew-primary hover:bg-ew-accent/10"
+                )}
+                onClick={() => setView("timeGridDay")}
                 >
-                  {t(lang, "calViewDay" as any) ?? "Dzień"}
+                {t(lang, "calViewDay" as any) ?? "Dzień"}
                 </button>
+
                 <button
-                  type="button"
-                  className={clsx(
+                type="button"
+                className={clsx(
                     "px-3 py-2 text-sm font-semibold transition",
                     view === "listWeek"
-                      ? "bg-ew-accent text-ew-primary"
-                      : "text-ew-primary hover:bg-ew-accent/10"
-                  )}
-                  onClick={() => setView("listWeek")}
+                    ? "bg-ew-accent text-ew-primary"
+                    : "text-ew-primary hover:bg-ew-accent/10"
+                )}
+                onClick={() => setView("listWeek")}
                 >
-                  {t(lang, "calViewList" as any) ?? "Lista"}
+                {t(lang, "calViewList" as any) ?? "Lista"}
                 </button>
-              </div>
+            </div>
 
-              {/* Scope switch */}
-              <div className="inline-flex overflow-hidden rounded-2xl border border-gray-200 bg-white">
+            {/* Scope switch */}
+            <div className="inline-flex overflow-hidden rounded-2xl border border-gray-200 bg-white">
                 <button
-                  type="button"
-                  className={clsx(
+                type="button"
+                className={clsx(
                     "px-3 py-2 text-sm font-semibold transition",
                     scope === "user"
-                      ? "bg-ew-primary text-white"
-                      : "text-ew-primary hover:bg-ew-accent/10"
-                  )}
-                  disabled={!userCalendarId}
-                  onClick={() => setScope("user")}
+                    ? "bg-ew-primary text-white"
+                    : "text-ew-primary hover:bg-ew-accent/10",
+                    !userCalendarId && "opacity-60 cursor-not-allowed"
+                )}
+                disabled={!userCalendarId}
+                title={!userCalendarId ? "Brak kalendarza użytkownika (Mój)" : undefined}
+                onClick={() => {
+                    if (!userCalendarId) return;
+                    setEvents([]);
+                    setScope("user");
+                }}
                 >
-                  {t(lang, "calScopeMine" as any) ?? "Mój"}
+                {t(lang, "calScopeMine" as any) ?? "Mój"}
                 </button>
+
                 <button
-                  type="button"
-                  className={clsx(
+                type="button"
+                className={clsx(
                     "px-3 py-2 text-sm font-semibold transition",
                     scope === "org"
-                      ? "bg-ew-primary text-white"
-                      : "text-ew-primary hover:bg-ew-accent/10"
-                  )}
-                  disabled={!orgCalendarId}
-                  onClick={() => setScope("org")}
+                    ? "bg-ew-primary text-white"
+                    : "text-ew-primary hover:bg-ew-accent/10",
+                    !orgCalendarId && "opacity-60 cursor-not-allowed"
+                )}
+                disabled={!orgCalendarId}
+                title={!orgCalendarId ? "Brak kalendarza biura (Biuro)" : undefined}
+                onClick={() => {
+                    if (!orgCalendarId) return;
+                    setEvents([]);
+                    setScope("org");
+                }}
                 >
-                  {t(lang, "calScopeOffice" as any) ?? "Biuro"}
+                {t(lang, "calScopeOffice" as any) ?? "Biuro"}
                 </button>
-              </div>
-
-              {/* Prev/Next */}
-              <div className="inline-flex overflow-hidden rounded-2xl border border-gray-200 bg-white">
-                <button
-                  type="button"
-                  className="px-3 py-2 text-sm font-semibold text-ew-primary transition hover:bg-ew-accent/10"
-                  onClick={() => calendarRef.current?.getApi().prev()}
-                >
-                  ‹
-                </button>
-                <button
-                  type="button"
-                  className="px-3 py-2 text-sm font-semibold text-ew-primary transition hover:bg-ew-accent/10"
-                  onClick={() => calendarRef.current?.getApi().next()}
-                >
-                  ›
-                </button>
-              </div>
             </div>
 
+            {/* Prev/Next */}
+            <div className="inline-flex overflow-hidden rounded-2xl border border-gray-200 bg-white">
+                <button
+                type="button"
+                className="px-3 py-2 text-sm font-semibold text-ew-primary transition hover:bg-ew-accent/10"
+                onClick={() => calendarRef.current?.getApi().prev()}
+                >
+                ‹
+                </button>
+                <button
+                type="button"
+                className="px-3 py-2 text-sm font-semibold text-ew-primary transition hover:bg-ew-accent/10"
+                onClick={() => calendarRef.current?.getApi().next()}
+                >
+                ›
+                </button>
+            </div>
+            </div>
+
+            {/* Search */}
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <div className="relative">
+            <div className="relative">
                 <input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder={t(lang, "calSearch" as any) ?? "Szukaj…"}
-                  className="w-full sm:w-72 rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={t(lang, "calSearch" as any) ?? "Szukaj…"}
+                className="w-full sm:w-72 rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
                 />
                 <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-400">
-                  ⌘K
+                ⌘K
                 </span>
-              </div>
             </div>
-          </div>
+            </div>
+        </div>
         </div>
 
         {/* CALENDAR GRID */}
@@ -524,14 +547,17 @@ export default function CalendarPage() {
                 {t(lang, "calCancel" as any) ?? "Anuluj"}
               </button>
 
-              <button
-                type="button"
-                className="rounded-2xl bg-ew-accent px-4 py-2 text-sm font-semibold text-ew-primary shadow-sm transition hover:opacity-95 disabled:opacity-60"
-                onClick={submitNewEvent}
-                disabled={saving}
-              >
-                {saving ? (t(lang, "calSaving" as any) ?? "Zapisuję…") : (t(lang, "calSave" as any) ?? "Zapisz")}
-              </button>
+           <button
+            type="button"
+            className="rounded-2xl bg-ew-accent px-4 py-2 text-sm font-semibold text-ew-primary shadow-sm transition hover:opacity-95 disabled:opacity-60"
+            onClick={submitNewEvent}
+            disabled={saving || !activeCalendarId}
+            title={!activeCalendarId ? "Brak aktywnego kalendarza (Mój / Biuro)" : undefined}
+            >
+            {saving
+                ? (t(lang, "calSaving" as any) ?? "Zapisuję…")
+                : (t(lang, "calSave" as any) ?? "Zapisz")}
+            </button>
             </div>
           </div>
         </div>

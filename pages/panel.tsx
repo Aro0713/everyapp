@@ -5,6 +5,7 @@ import { DEFAULT_LANG, isLangKey, t } from "@/utils/i18n";
 import type { LangKey } from "@/utils/translations";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { useRouter } from "next/router";
+import CalendarPage from "./calendar";
 
 function getCookie(name: string) {
   if (typeof document === "undefined") return null;
@@ -12,12 +13,16 @@ function getCookie(name: string) {
   return m ? decodeURIComponent(m[2]) : null;
 }
 
+type PanelView = "dashboard" | "calendar";
+
 type NavItem = {
-  key: string;         // translation key
-  href?: string;       // optional route
-  active?: boolean;    // simple active marker (MVP)
-  badge?: string;      // e.g. "NEW"
+  key: string;
+  href?: string;
+  view?: PanelView;   // jeśli używasz view
+  active?: boolean;
+  badge?: string;
 };
+
 
 function clsx(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
@@ -67,6 +72,8 @@ export default function PanelPage() {
   const [lang, setLang] = useState<LangKey>(DEFAULT_LANG);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const router = useRouter();
+  type PanelView = "dashboard" | "calendar";
+  const [activeView, setActiveView] = useState<PanelView>("dashboard");
 
   useEffect(() => {
     const c = getCookie("lang");
@@ -75,8 +82,8 @@ export default function PanelPage() {
 
 const nav = useMemo<NavItem[]>(
   () => [
-    { key: "panelNavDashboard", href: "/panel" },
-    { key: "panelNavCalendar", href: "/calendar" }, // <-- poprawka
+    { key: "panelNavDashboard", view: "dashboard" },
+    { key: "panelNavCalendar", view: "calendar" },
     { key: "panelNavListings" },
     { key: "panelNavBuyers" },
     { key: "panelNavClients" },
@@ -150,8 +157,7 @@ const nav = useMemo<NavItem[]>(
 
             <nav className="px-3 pb-6 pt-2">
                 {nav.map((it) => {
-                    const isActive =
-                    !!it.href && (router.asPath === it.href || router.asPath.startsWith(it.href + "?"));
+                    const isActive = it.view ? activeView === it.view : false;
 
                     const rowClass = clsx(
                     "mt-1 flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm transition",
@@ -174,25 +180,39 @@ const nav = useMemo<NavItem[]>(
                     </>
                     );
 
-                    return it.href ? (
-                    <Link
-                        key={it.key}
-                        href={it.href}
-                        className={rowClass}
-                        title={t(lang, it.key as any)}
-                    >
-                        {content}
-                    </Link>
-                    ) : (
-                    <button
-                        key={it.key}
-                        type="button"
-                        className={rowClass}
-                        title={t(lang, it.key as any)}
-                    >
-                        {content}
-                    </button>
-                    );
+                    if (it.view) {
+                        return (
+                            <button
+                            key={it.key}
+                            type="button"
+                            className={rowClass}
+                            title={t(lang, it.key as any)}
+                            onClick={() => setActiveView(it.view!)}
+                            >
+                            {content}
+                            </button>
+                        );
+                        }
+
+                        return it.href ? (
+                        <Link
+                            key={it.key}
+                            href={it.href}
+                            className={rowClass}
+                            title={t(lang, it.key as any)}
+                        >
+                            {content}
+                        </Link>
+                        ) : (
+                        <button
+                            key={it.key}
+                            type="button"
+                            className={rowClass}
+                            title={t(lang, it.key as any)}
+                        >
+                            {content}
+                        </button>
+                        );
                 })}
                 </nav>
 
@@ -268,145 +288,175 @@ const nav = useMemo<NavItem[]>(
             </header>
 
             {/* MAIN GRID */}
+            {activeView === "dashboard" ? (
             <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
-              {/* KPI row */}
-              <div className="grid gap-4 md:grid-cols-4">
+                {/* KPI row */}
+                <div className="grid gap-4 md:grid-cols-4">
                 <StatPill label={t(lang, "panelKpiCalls")} value="0" />
                 <StatPill label={t(lang, "panelKpiMeetings")} value="0" />
                 <StatPill label={t(lang, "panelKpiExports")} value="0" />
                 <StatPill label={t(lang, "panelKpiNotes")} value="0" />
-              </div>
+                </div>
 
-              {/* Widgets grid (jak EstiCRM) */}
-              <div className="mt-6 grid gap-6 md:grid-cols-12">
+                {/* Widgets grid (jak EstiCRM) */}
+                <div className="mt-6 grid gap-6 md:grid-cols-12">
                 <div className="md:col-span-7">
-                  <PanelCard
+                    <PanelCard
                     title={t(lang, "panelWidgetListingsInProgressTitle")}
                     subtitle={t(lang, "panelWidgetListingsInProgressSub")}
                     right={
-                      <button
+                        <button
                         type="button"
                         className="rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-ew-primary transition hover:bg-ew-accent/10"
-                      >
+                        >
                         {t(lang, "panelWidgetManage")}
-                      </button>
+                        </button>
                     }
-                  >
+                    >
                     <div className="flex h-56 items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-ew-accent/5">
-                      <p className="text-sm text-gray-500">{t(lang, "panelEmpty")}</p>
+                        <p className="text-sm text-gray-500">{t(lang, "panelEmpty")}</p>
                     </div>
-                  </PanelCard>
+                    </PanelCard>
                 </div>
 
                 <div className="md:col-span-5">
-                  <PanelCard
+                    <PanelCard
                     title={t(lang, "panelWidgetTopBuyersTitle")}
                     subtitle={t(lang, "panelWidgetTopBuyersSub")}
-                  >
+                    >
                     <div className="flex h-56 items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-ew-accent/5">
-                      <p className="text-sm text-gray-500">{t(lang, "panelEmpty")}</p>
+                        <p className="text-sm text-gray-500">{t(lang, "panelEmpty")}</p>
                     </div>
-                  </PanelCard>
+                    </PanelCard>
                 </div>
 
                 <div className="md:col-span-7">
-                  <PanelCard
+                    <PanelCard
                     title={t(lang, "panelWidgetNewOffersTitle")}
                     subtitle={t(lang, "panelWidgetNewOffersSub")}
-                  >
+                    >
                     <div className="flex h-64 items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-ew-accent/5">
-                      <p className="text-sm text-gray-500">{t(lang, "panelEmpty")}</p>
+                        <p className="text-sm text-gray-500">{t(lang, "panelEmpty")}</p>
                     </div>
-                  </PanelCard>
+                    </PanelCard>
                 </div>
 
                 <div className="md:col-span-5">
-                  <PanelCard
+                    <PanelCard
                     title={t(lang, "panelWidgetTodayTitle")}
                     subtitle={t(lang, "panelWidgetTodaySub")}
-                  >
+                    >
                     <div className="flex h-64 items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-ew-accent/5">
-                      <p className="text-sm text-gray-500">{t(lang, "panelEmpty")}</p>
+                        <p className="text-sm text-gray-500">{t(lang, "panelEmpty")}</p>
                     </div>
-                  </PanelCard>
+                    </PanelCard>
                 </div>
 
                 {/* Recent changes / recent activated */}
                 <div className="md:col-span-7">
-                  <PanelCard title={t(lang, "panelWidgetRecentPriceChangesTitle")} subtitle={t(lang, "panelWidgetRecent7Days")}>
+                    <PanelCard
+                    title={t(lang, "panelWidgetRecentPriceChangesTitle")}
+                    subtitle={t(lang, "panelWidgetRecent7Days")}
+                    >
                     <div className="space-y-3">
-                      {/* Placeholder rows */}
-                      {[1, 2, 3].map((i) => (
-                        <div key={i} className="flex items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white px-4 py-3">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-ew-primary">{t(lang, "panelRowPlaceholderTitle")}</p>
-                            <p className="truncate text-xs text-gray-500">{t(lang, "panelRowPlaceholderMeta")}</p>
-                          </div>
-                          <div className="text-right">
+                        {[1, 2, 3].map((i) => (
+                        <div
+                            key={i}
+                            className="flex items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white px-4 py-3"
+                        >
+                            <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-ew-primary">
+                                {t(lang, "panelRowPlaceholderTitle")}
+                            </p>
+                            <p className="truncate text-xs text-gray-500">
+                                {t(lang, "panelRowPlaceholderMeta")}
+                            </p>
+                            </div>
+                            <div className="text-right">
                             <p className="text-sm font-extrabold text-emerald-600">0 PLN</p>
                             <p className="text-xs text-gray-500">{t(lang, "panelRowPlaceholderDate")}</p>
-                          </div>
+                            </div>
                         </div>
-                      ))}
+                        ))}
                     </div>
-                  </PanelCard>
+                    </PanelCard>
                 </div>
 
                 <div className="md:col-span-5">
-                  <PanelCard title={t(lang, "panelWidgetRecentActivatedTitle")} subtitle={t(lang, "panelWidgetRecent7Days")}>
+                    <PanelCard
+                    title={t(lang, "panelWidgetRecentActivatedTitle")}
+                    subtitle={t(lang, "panelWidgetRecent7Days")}
+                    >
                     <div className="space-y-3">
-                      {[1, 2, 3].map((i) => (
-                        <div key={i} className="flex items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white px-4 py-3">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-ew-primary">{t(lang, "panelRowPlaceholderTitle")}</p>
-                            <p className="truncate text-xs text-gray-500">{t(lang, "panelRowPlaceholderMeta")}</p>
-                          </div>
-                          <span className="rounded-full bg-ew-accent/15 px-3 py-1 text-xs font-semibold text-ew-accent">
+                        {[1, 2, 3].map((i) => (
+                        <div
+                            key={i}
+                            className="flex items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white px-4 py-3"
+                        >
+                            <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-ew-primary">
+                                {t(lang, "panelRowPlaceholderTitle")}
+                            </p>
+                            <p className="truncate text-xs text-gray-500">
+                                {t(lang, "panelRowPlaceholderMeta")}
+                            </p>
+                            </div>
+                            <span className="rounded-full bg-ew-accent/15 px-3 py-1 text-xs font-semibold text-ew-accent">
                             {t(lang, "panelStatusActive")}
-                          </span>
+                            </span>
                         </div>
-                      ))}
+                        ))}
                     </div>
-                  </PanelCard>
+                    </PanelCard>
                 </div>
 
                 {/* Bottom widgets */}
                 <div className="md:col-span-7">
-                  <PanelCard title={t(lang, "panelWidgetMetricsTitle")} subtitle={t(lang, "panelWidgetMetricsSub")}>
+                    <PanelCard
+                    title={t(lang, "panelWidgetMetricsTitle")}
+                    subtitle={t(lang, "panelWidgetMetricsSub")}
+                    >
                     <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="rounded-3xl border border-gray-200 bg-white p-5">
+                        <div className="rounded-3xl border border-gray-200 bg-white p-5">
                         <p className="text-xs text-gray-500">{t(lang, "panelMetricDeals")}</p>
                         <p className="mt-2 text-4xl font-extrabold text-ew-primary">0</p>
-                      </div>
-                      <div className="rounded-3xl border border-gray-200 bg-white p-5">
+                        </div>
+                        <div className="rounded-3xl border border-gray-200 bg-white p-5">
                         <p className="text-xs text-gray-500">{t(lang, "panelMetricRevenue")}</p>
                         <p className="mt-2 text-4xl font-extrabold text-ew-primary">0</p>
-                      </div>
-                      <div className="rounded-3xl border border-gray-200 bg-white p-5">
+                        </div>
+                        <div className="rounded-3xl border border-gray-200 bg-white p-5">
                         <p className="text-xs text-gray-500">{t(lang, "panelMetricNewListings")}</p>
                         <p className="mt-2 text-4xl font-extrabold text-ew-primary">0</p>
-                      </div>
-                      <div className="rounded-3xl border border-gray-200 bg-white p-5">
+                        </div>
+                        <div className="rounded-3xl border border-gray-200 bg-white p-5">
                         <p className="text-xs text-gray-500">{t(lang, "panelMetricPresentations")}</p>
                         <p className="mt-2 text-4xl font-extrabold text-ew-primary">0</p>
-                      </div>
+                        </div>
                     </div>
-                  </PanelCard>
+                    </PanelCard>
                 </div>
 
                 <div className="md:col-span-5">
-                  <PanelCard title={t(lang, "panelWidgetExportErrorsTitle")} subtitle={t(lang, "panelWidgetExportErrorsSub")}>
+                    <PanelCard
+                    title={t(lang, "panelWidgetExportErrorsTitle")}
+                    subtitle={t(lang, "panelWidgetExportErrorsSub")}
+                    >
                     <div className="flex h-56 items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-ew-accent/5">
-                      <p className="text-sm text-gray-500">{t(lang, "panelNoMessages")}</p>
+                        <p className="text-sm text-gray-500">{t(lang, "panelNoMessages")}</p>
                     </div>
-                  </PanelCard>
+                    </PanelCard>
                 </div>
-              </div>
+                </div>
 
-              <footer className="mt-10 pb-6 text-xs text-gray-500">
-                {t(lang, "panelFooter")}
-              </footer>
+                <footer className="mt-10 pb-6 text-xs text-gray-500">{t(lang, "panelFooter")}</footer>
             </div>
+            ) : activeView === "calendar" ? (
+            <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
+                <CalendarPage />
+            </div>
+            ) : null}
+
           </section>
         </div>
       </main>
