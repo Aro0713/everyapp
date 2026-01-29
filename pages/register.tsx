@@ -150,21 +150,23 @@ useEffect(() => {
       <main className="min-h-screen bg-ew-bg text-ew-primary">
         {/* Topbar */}
        <div className="fixed left-4 right-4 top-4 z-50 flex items-center justify-between gap-3">
-        <Link
+       <Link
             href="/login"
             className="inline-flex items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-ew-primary shadow-lg transition hover:bg-ew-accent/10"
-        >
-            <Image
-            src="/everyapp-logo.svg"
-            alt="EveryAPP"
-            width={120}
-            height={30}
-            className="h-6 w-auto"
-            priority
-            />
-            <span className="sr-only">EveryAPP</span>
+            >
+            <span className="inline-flex items-center justify-center rounded-xl bg-white/30 backdrop-blur ring-1 ring-black/10 px-2 py-1">
+                <Image
+                src="/everyapp-logo.svg"
+                alt="EveryAPP"
+                width={120}
+                height={30}
+                className="h-6 w-auto"
+                priority
+                />
+            </span>
+
             <span>{t(lang, "registerBackLogin")}</span>
-        </Link>
+            </Link>
 
         <div className="rounded-2xl border border-gray-200 bg-white px-2 py-1 shadow-lg">
             <LanguageSwitcher currentLang={lang} />

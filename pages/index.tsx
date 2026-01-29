@@ -89,7 +89,8 @@ useEffect(() => {
               {t(lang, "heroBadge")}
             </div>
 
-            <div className="mt-5">
+           <div className="mt-5 inline-flex">
+            <span className="rounded-2xl bg-white/20 backdrop-blur ring-1 ring-white/25 px-4 py-3">
               <Image
                 src="/everyapp-logo.svg"
                 alt="EveryAPP"
@@ -98,7 +99,8 @@ useEffect(() => {
                 priority
                 className="h-auto w-[240px] md:w-[360px]"
               />
-            </div>
+            </span>
+          </div>
 
             <p className="mt-4 text-xl font-semibold text-ew-accent md:text-2xl">
               {t(lang, "heroTagline")}

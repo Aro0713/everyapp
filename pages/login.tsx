@@ -71,6 +71,15 @@ export default function LoginPage() {
        <div className="fixed left-4 right-4 top-4 z-50 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
             <Link href="/" className="inline-flex items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-ew-primary shadow-lg transition hover:bg-ew-accent/10">
+          <span
+            className="
+                inline-flex items-center justify-center
+                rounded-xl
+                bg-white/30 backdrop-blur
+                ring-1 ring-black/10
+                px-2 py-1
+            "
+            >
             <Image
                 src="/everyapp-logo.svg"
                 alt="EveryAPP"
@@ -79,6 +88,7 @@ export default function LoginPage() {
                 className="h-6 w-auto"
                 priority
             />
+            </span>
             <span className="sr-only">EveryAPP</span>
             <span>{t(lang, "loginBackHome")}</span>
             </Link>

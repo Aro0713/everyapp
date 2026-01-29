@@ -113,15 +113,19 @@ export default function PanelPage() {
             <div className="flex h-16 items-center justify-between px-5">
               <div className="flex items-center gap-3">
                 {/* LOGO */}
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10">
+                <div
+                className="
+                    flex h-10 w-10 items-center justify-center
+                    rounded-2xl
+                    bg-white/25 backdrop-blur
+                    ring-1 ring-white/30
+                "
+                >
                 <img
-                    src="/brand/everyapp-logo.svg"
+                    src="/everyapp-logo.svg"
                     alt="EveryAPP"
-                    className={clsx(
-                    "h-7 w-7 transition-all",
-                    sidebarOpen ? "opacity-100" : "opacity-90"
-                    )}
-                />
+                    className="h-7 w-auto"
+                    />
                 </div>
 
                 {sidebarOpen ? (
