@@ -16,10 +16,12 @@ type PanelView = "dashboard" | "calendar"; // na razie te dwa, potem dopisujesz 
 
 type NavItem = {
   key: string;
-  view: PanelView;          // obowiązkowe: identyfikator widoku
-  subKey?: string;          // opcjonalny podtytuł do topbara
+  view?: PanelView;     // ⬅️ view opcjonalne
+  subKey?: string;
   badge?: string;
+  disabled?: boolean;   // ⬅️ jawne disabled (czytelność)
 };
+
 
 
 
@@ -83,12 +85,25 @@ const nav = useMemo<NavItem[]>(
     { key: "panelNavDashboard", view: "dashboard", subKey: "panelHeaderSub" },
     { key: "panelNavCalendar", view: "calendar", subKey: "panelCalendarSub" },
 
-    // resztę dopisujesz jako kolejne widoki, np:
-    // { key: "panelNavListings", view: "listings", subKey: "panelListingsSub" },
-    // { key: "panelNavBuyers", view: "buyers", subKey: "panelBuyersSub" },
+    // widoczne, ale jeszcze nieaktywne moduły
+    { key: "panelNavListings", disabled: true },
+    { key: "panelNavBuyers", disabled: true },
+    { key: "panelNavClients", disabled: true },
+    { key: "panelNavTeam", disabled: true },
+    { key: "panelNavOfficeDeals", disabled: true },
+    { key: "panelNavEmployees", disabled: true },
+    { key: "panelNavPrimaryMarket", disabled: true },
+    { key: "panelNavBoard", disabled: true },
+    { key: "panelNavUsers", disabled: true },
+    { key: "panelNavLeaderboard", disabled: true },
+    { key: "panelNavDownloads", disabled: true },
+    { key: "panelNavQueries", disabled: true },
+    { key: "panelNavReports", disabled: true },
+    { key: "panelNavMenuSettings", disabled: true },
   ],
   []
 );
+
 const activeNavItem = useMemo(() => {
   return nav.find((x) => x.view === activeView) ?? nav[0];
 }, [nav, activeView]);
@@ -147,34 +162,40 @@ const activeNavItem = useMemo(() => {
             </div>
 
             <nav className="px-3 pb-6 pt-2">
-            {nav.map((it) => {
-                const isActive = activeView === it.view;
+           {nav.map((it) => {
+            const isActive = it.view ? activeView === it.view : false;
+            const isDisabled = it.disabled || !it.view;
 
-                const rowClass = clsx(
-                    "mt-1 flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm transition",
-                    isActive ? "bg-white/10 text-white" : "text-white/85 hover:bg-white/10 hover:text-white"
-                );
+            const rowClass = clsx(
+                "mt-1 flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm transition",
+                isActive && "bg-white/10 text-white",
+                !isActive && !isDisabled && "text-white/85 hover:bg-white/10 hover:text-white",
+                isDisabled && "cursor-not-allowed opacity-50"
+            );
 
-                return (
-                    <button
-                    key={it.key}
-                    type="button"
-                    className={rowClass}
-                    title={t(lang, it.key as any)}
-                    onClick={() => setActiveView(it.view)}
-                    >
-                    <span className={clsx("truncate", sidebarOpen ? "" : "text-center w-full")}>
-                        {sidebarOpen ? t(lang, it.key as any) : "•"}
+            return (
+                <button
+                key={it.key}
+                type="button"
+                className={rowClass}
+                title={t(lang, it.key as any)}
+                disabled={isDisabled}
+                onClick={() => {
+                    if (it.view) setActiveView(it.view);
+                }}
+                >
+                <span className={clsx("truncate", sidebarOpen ? "" : "text-center w-full")}>
+                    {sidebarOpen ? t(lang, it.key as any) : "•"}
+                </span>
+
+                {sidebarOpen && it.badge ? (
+                    <span className="rounded-full bg-ew-accent/20 px-2 py-0.5 text-[11px] font-semibold text-ew-accent">
+                    {it.badge}
                     </span>
-
-                    {sidebarOpen && it.badge ? (
-                        <span className="rounded-full bg-ew-accent/20 px-2 py-0.5 text-[11px] font-semibold text-ew-accent">
-                        {it.badge}
-                        </span>
-                    ) : null}
-                    </button>
-                );
-                })}
+                ) : null}
+                </button>
+            );
+            })}
 
                 </nav>
 
