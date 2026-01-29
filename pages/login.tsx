@@ -48,7 +48,26 @@ export default function LoginPage() {
         return;
       }
 
-      await new Promise((r) => setTimeout(r, 350));
+      const r = await fetch("/api/login", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ email, password }),
+});
+
+if (!r.ok) {
+  // opcjonalnie: odczytaj kod błędu z API
+  const err = await r.json().catch(() => null);
+  setError(
+  err?.error === "INVALID_CREDENTIALS"
+    ? t(lang, "loginErrorInvalidCredentials")
+    : t(lang, "loginErrorGeneric")
+);
+  return;
+}
+
+if (remember) setCookie("rememberMe", "1");
+window.location.href = "/panel";
+
     } finally {
       setLoading(false);
     }

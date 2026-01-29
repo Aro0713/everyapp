@@ -2966,6 +2966,27 @@ calSaving: {
   lt: "Išsaugoma…",
   vi: "Đang lưu…",
 },
+loginErrorGeneric: {
+  pl: "Nie udało się zalogować",
+  en: "Login failed",
+  de: "Anmeldung fehlgeschlagen",
+  cs: "Přihlášení se nezdařilo",
+  sk: "Prihlásenie zlyhalo",
+  ua: "Не вдалося увійти",
+  lt: "Prisijungti nepavyko",
+  vi: "Đăng nhập không thành công",
+},
+
+loginErrorInvalidCredentials: {
+  pl: "Błędny e-mail lub hasło",
+  en: "Invalid email or password",
+  de: "Ungültige E-Mail oder Passwort",
+  cs: "Neplatný e-mail nebo heslo",
+  sk: "Neplatný e-mail alebo heslo",
+  ua: "Невірна електронна пошта або пароль",
+  lt: "Neteisingas el. paštas arba slaptažodis",
+  vi: "Email hoặc mật khẩu không hợp lệ",
+},
 
 } as const);
 
