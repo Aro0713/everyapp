@@ -1,22 +1,23 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { pool } from "../../../lib/neonDb";
-
+import { getUserIdFromRequest } from "../../../lib/session";
 
 function mustString(v: unknown, name: string) {
   if (typeof v !== "string" || !v.trim()) throw new Error(`Invalid ${name}`);
   return v.trim();
 }
+function optString(v: unknown): string | null {
+  return typeof v === "string" && v.trim() ? v.trim() : null;
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
-    // MVP: org/calendar passed via query.
-    // In production you’ll take these from session (user/org membership).
     const orgId = mustString(req.query.orgId, "orgId");
     const calendarId = mustString(req.query.calendarId, "calendarId");
 
     if (req.method === "GET") {
-      const start = typeof req.query.start === "string" ? req.query.start : null;
-      const end = typeof req.query.end === "string" ? req.query.end : null;
+      const start = optString(req.query.start);
+      const end = optString(req.query.end);
 
       const { rows } = await pool.query(
         `
@@ -24,14 +25,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         FROM events
         WHERE org_id = $1
           AND calendar_id = $2
-          AND ($3::timestamptz IS NULL OR start_at >= $3::timestamptz)
-          AND ($4::timestamptz IS NULL OR end_at <= $4::timestamptz)
+          AND ($3::timestamptz IS NULL OR end_at   > $3::timestamptz)
+          AND ($4::timestamptz IS NULL OR start_at < $4::timestamptz)
         ORDER BY start_at ASC
         `,
         [orgId, calendarId, start, end]
       );
 
-      // FullCalendar expects: { id, title, start, end, ... }
       return res.status(200).json(
         rows.map((r) => ({
           id: r.id,
@@ -39,25 +39,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           start: r.start_at,
           end: r.end_at,
           extendedProps: {
-            description: r.description,
-            locationText: r.location_text,
-            status: r.status,
+            description: r.description ?? null,
+            locationText: r.location_text ?? null,
+            status: r.status ?? null,
           },
         }))
       );
     }
 
     if (req.method === "POST") {
+      // ✅ bierz usera z SESJI
+      const sessionUserId = getUserIdFromRequest(req);
+
+      if (!sessionUserId) {
+        return res.status(401).json({ error: "UNAUTHORIZED" });
+      }
+
       const body = req.body ?? {};
       const title = mustString(body.title, "title");
       const start = mustString(body.start, "start");
       const end = mustString(body.end, "end");
-
-      // MVP: created_by = owner_user_id later from auth. For now pass it.
-      const createdBy = mustString(body.createdBy, "createdBy");
-
-      const description = typeof body.description === "string" ? body.description : null;
-      const locationText = typeof body.locationText === "string" ? body.locationText : null;
+      const description = optString(body.description);
+      const locationText = optString(body.locationText);
 
       const { rows } = await pool.query(
         `
@@ -65,7 +68,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $7::timestamptz, $8)
         RETURNING id
         `,
-        [orgId, calendarId, title, description, locationText, start, end, createdBy]
+        [orgId, calendarId, title, description, locationText, start, end, sessionUserId]
       );
 
       return res.status(201).json({ id: rows[0].id });
@@ -74,6 +77,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.setHeader("Allow", "GET,POST");
     return res.status(405).json({ error: "Method not allowed" });
   } catch (e: any) {
+    console.error("CAL_EVENTS_ERROR", e);
     return res.status(400).json({ error: e?.message ?? "Bad request" });
   }
 }

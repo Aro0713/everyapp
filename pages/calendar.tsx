@@ -236,7 +236,6 @@ async function submitNewEvent() {
         end: new Date(draft.end).toISOString(),
         locationText: draft.locationText || null,
         description: draft.description || null,
-        createdBy: userId,
       }),
     });
 

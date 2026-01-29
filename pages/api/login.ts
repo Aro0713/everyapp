@@ -27,7 +27,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const ok = await bcrypt.compare(password, hash);
     if (!ok) return res.status(401).json({ error: "INVALID_CREDENTIALS" });
 
-    res.setHeader("Set-Cookie", setSessionCookie(userId));
+    res.setHeader("Set-Cookie", setSessionCookie(userId, req));
     return res.status(200).json({ ok: true });
   } catch (e: any) {
     console.error("LOGIN_API_ERROR", e);
