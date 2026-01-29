@@ -82,7 +82,8 @@ export default function CalendarPage() {
   const [events, setEvents] = useState<FcEvent[]>([]);
 
   // MVP: docelowo z auth/sesji (na razie hardcode)
-  const [userId] = useState("TU_WKLEJ_USER_ID_NA_MVP");
+  const [userId, setUserId] = useState<string | null>(null);
+
 
   // bootstrap output
   const [officeId, setOfficeId] = useState<string | null>(null);
