@@ -1,0 +1,71 @@
+/* styles/fullcalendar-base.css */
+/* Minimal FullCalendar base styling (MVP) */
+
+.fc {
+  --fc-small-font-size: 0.85em;
+  --fc-border-color: rgba(0, 0, 0, 0.12);
+  --fc-page-bg-color: transparent;
+  --fc-today-bg-color: rgba(0, 0, 0, 0.03);
+}
+
+.fc .fc-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.fc .fc-toolbar-title {
+  margin: 0;
+}
+
+.fc .fc-button-group {
+  display: inline-flex;
+}
+
+.fc .fc-scrollgrid {
+  border: 1px solid var(--fc-border-color);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.fc .fc-scrollgrid table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.fc .fc-col-header-cell,
+.fc .fc-timegrid-axis,
+.fc .fc-timegrid-slot-label,
+.fc .fc-daygrid-day {
+  border: 1px solid var(--fc-border-color);
+}
+
+.fc .fc-col-header-cell {
+  background: rgba(0,0,0,0.02);
+}
+
+.fc .fc-timegrid-slot {
+  height: 2.5em;
+}
+
+.fc .fc-day-today {
+  background: var(--fc-today-bg-color);
+}
+
+.fc .fc-event {
+  cursor: pointer;
+}
+
+.fc .fc-list-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.fc .fc-list-table td,
+.fc .fc-list-table th {
+  border: 1px solid var(--fc-border-color);
+  padding: 10px;
+}
