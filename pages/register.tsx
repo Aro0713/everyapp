@@ -4,6 +4,7 @@ import Link from "next/link";
 import { DEFAULT_LANG, isLangKey, t } from "@/utils/i18n";
 import type { LangKey } from "@/utils/translations";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
+import Image from "next/image";
 
 function getCookie(name: string) {
   if (typeof document === "undefined") return null;
@@ -148,23 +149,42 @@ useEffect(() => {
 
       <main className="min-h-screen bg-ew-bg text-ew-primary">
         {/* Topbar */}
-        <div className="fixed right-4 top-4 z-50 flex items-center gap-3">
-          <Link
+       <div className="fixed left-4 right-4 top-4 z-50 flex items-center justify-between gap-3">
+        <Link
             href="/login"
-            className="inline-flex items-center justify-center rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-ew-primary shadow-lg transition hover:bg-ew-accent/10"
-          >
-            {t(lang, "registerBackLogin")}
-          </Link>
+            className="inline-flex items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-ew-primary shadow-lg transition hover:bg-ew-accent/10"
+        >
+            <Image
+            src="/everyapp-logo.svg"
+            alt="EveryAPP"
+            width={120}
+            height={30}
+            className="h-6 w-auto"
+            priority
+            />
+            <span className="sr-only">EveryAPP</span>
+            <span>{t(lang, "registerBackLogin")}</span>
+        </Link>
 
-          <div className="rounded-2xl border border-gray-200 bg-white px-2 py-1 shadow-lg">
+        <div className="rounded-2xl border border-gray-200 bg-white px-2 py-1 shadow-lg">
             <LanguageSwitcher currentLang={lang} />
-          </div>
+        </div>
         </div>
 
         {/* Header strip */}
         <section className="relative overflow-hidden bg-ew-primary text-white">
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/5 via-transparent to-black/15" />
           <div className="mx-auto max-w-6xl px-6 py-14 md:py-16">
+            <div className="mb-4">
+            <Image
+                src="/everyapp-logo.svg"
+                alt="EveryAPP"
+                width={220}
+                height={55}
+                className="h-10 w-auto"
+                priority
+            />
+            </div>
             <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-white/85">
               <span className="h-1.5 w-1.5 rounded-full bg-ew-accent" />
               {t(lang, "registerBadge")}

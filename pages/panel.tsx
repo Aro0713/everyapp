@@ -4,6 +4,7 @@ import Link from "next/link";
 import { DEFAULT_LANG, isLangKey, t } from "@/utils/i18n";
 import type { LangKey } from "@/utils/translations";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
+import Image from "next/image";
 
 function getCookie(name: string) {
   if (typeof document === "undefined") return null;
@@ -111,9 +112,16 @@ export default function PanelPage() {
           >
             <div className="flex h-16 items-center justify-between px-5">
               <div className="flex items-center gap-3">
-                {/* LOGO (MVP: tekst). Pod SVG: podmień na <img/> lub next/image */}
+                {/* LOGO */}
                 <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10">
-                  <span className="text-xs font-extrabold text-ew-accent">EA</span>
+                <img
+                    src="/brand/everyapp-logo.svg"
+                    alt="EveryAPP"
+                    className={clsx(
+                    "h-7 w-7 transition-all",
+                    sidebarOpen ? "opacity-100" : "opacity-90"
+                    )}
+                />
                 </div>
 
                 {sidebarOpen ? (

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { DEFAULT_LANG, isLangKey, t } from "@/utils/i18n";
 import type { LangKey } from "@/utils/translations";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
+import Image from "next/image";
+import Link from "next/link";
 
 function getCookie(name: string) {
   if (typeof document === "undefined") return null;
@@ -52,7 +54,7 @@ useEffect(() => {
   return (
     <main className="min-h-screen bg-ew-bg text-ew-primary">
       <div className="fixed right-4 top-4 z-50 flex items-center gap-3 rounded-2xl px-2 py-2">
-  <a
+<Link
   href="/login"
   className={
     "inline-flex items-center justify-center rounded-2xl px-4 py-2 text-sm font-semibold shadow-lg transition " +
@@ -62,7 +64,8 @@ useEffect(() => {
   }
 >
   {t(lang, "ctaLogin")}
-</a>
+</Link>
+
 
 <div
   className={
@@ -86,9 +89,16 @@ useEffect(() => {
               {t(lang, "heroBadge")}
             </div>
 
-            <h1 className="mt-5 text-4xl font-extrabold leading-tight tracking-tight md:text-6xl">
-              {t(lang, "brandName")}
-            </h1>
+            <div className="mt-5">
+              <Image
+                src="/everyapp-logo.svg"
+                alt="EveryAPP"
+                width={360}
+                height={90}
+                priority
+                className="h-auto w-[240px] md:w-[360px]"
+              />
+            </div>
 
             <p className="mt-4 text-xl font-semibold text-ew-accent md:text-2xl">
               {t(lang, "heroTagline")}
