@@ -1,0 +1,137 @@
+/* styles/fullcalendar-ew.css */
+/* EveryAPP theme for FullCalendar – Tailwind-compatible */
+
+:root {
+  /* FullCalendar core variables */
+  --fc-page-bg-color: transparent;
+
+  --fc-border-color: rgb(var(--ew-primary) / 0.12);
+  --fc-neutral-bg-color: rgb(var(--ew-accent) / 0.08);
+  --fc-today-bg-color: rgb(var(--ew-accent) / 0.12);
+
+  --fc-event-bg-color: rgb(var(--ew-accent) / 1);
+  --fc-event-border-color: rgb(var(--ew-accent) / 1);
+  --fc-event-text-color: rgb(var(--ew-primary) / 1);
+}
+
+/* Root */
+.fc {
+  font-family: inherit;
+  color: rgb(var(--ew-primary) / 1);
+}
+
+/* Toolbar */
+.fc .fc-toolbar {
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.fc .fc-toolbar-title {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: rgb(var(--ew-primary) / 1);
+}
+
+/* Buttons (CRM style) */
+.fc .fc-button {
+  border-radius: 12px !important;
+  border: 1px solid rgb(var(--ew-primary) / 0.12) !important;
+  background: rgb(var(--ew-bg) / 1) !important;
+  color: rgb(var(--ew-primary) / 1) !important;
+  font-weight: 700 !important;
+  padding: 8px 12px !important;
+  box-shadow: 0 1px 0 rgb(var(--ew-primary) / 0.04);
+}
+
+.fc .fc-button:hover {
+  background: rgb(var(--ew-accent) / 0.10) !important;
+}
+
+.fc .fc-button:focus {
+  box-shadow: 0 0 0 3px rgb(var(--ew-accent) / 0.25) !important;
+}
+
+/* Active view button */
+.fc .fc-button-primary:not(:disabled).fc-button-active,
+.fc .fc-button-primary:not(:disabled):active {
+  background: rgb(var(--ew-accent) / 1) !important;
+  border-color: rgb(var(--ew-primary) / 0.06) !important;
+  color: rgb(var(--ew-primary) / 1) !important;
+}
+
+/* Button groups */
+.fc .fc-toolbar-chunk .fc-button-group {
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.fc .fc-button-group .fc-button {
+  border-radius: 0 !important;
+}
+
+.fc .fc-button-group .fc-button:first-child {
+  border-top-left-radius: 14px !important;
+  border-bottom-left-radius: 14px !important;
+}
+
+.fc .fc-button-group .fc-button:last-child {
+  border-top-right-radius: 14px !important;
+  border-bottom-right-radius: 14px !important;
+}
+
+/* Grid */
+.fc .fc-scrollgrid,
+.fc .fc-scrollgrid table {
+  border-color: rgb(var(--ew-primary) / 0.12) !important;
+}
+
+/* Column headers */
+.fc .fc-col-header-cell-cushion {
+  padding: 10px 8px;
+  font-size: 12px;
+  font-weight: 800;
+  color: rgb(var(--ew-primary) / 0.85);
+}
+
+/* Time axis */
+.fc .fc-timegrid-slot-label-cushion,
+.fc .fc-timegrid-axis-cushion {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgb(var(--ew-primary) / 0.70);
+}
+
+/* Today highlight */
+.fc .fc-day-today {
+  background: rgb(var(--ew-accent) / 0.12) !important;
+}
+
+/* Events */
+.fc .fc-event {
+  border-radius: 12px;
+  padding: 2px 6px;
+  font-weight: 800;
+}
+
+/* All-day & axis background */
+.fc .fc-timegrid-axis-frame,
+.fc .fc-timegrid-slot-label-frame {
+  background: rgb(var(--ew-bg) / 0.6);
+}
+
+/* List view */
+.fc .fc-list {
+  border-color: rgb(var(--ew-primary) / 0.12) !important;
+}
+
+.fc .fc-list-day-cushion {
+  background: rgb(var(--ew-accent) / 0.12) !important;
+  color: rgb(var(--ew-primary) / 1) !important;
+  font-weight: 800;
+}
+
+/* Remove default focus outline */
+.fc :focus {
+  outline: none;
+}
