@@ -73,10 +73,10 @@ export default function PanelPage() {
     if (isLangKey(c)) setLang(c);
   }, []);
 
- const nav = useMemo<NavItem[]>(
+const nav = useMemo<NavItem[]>(
   () => [
     { key: "panelNavDashboard", href: "/panel" },
-    { key: "panelNavCalendar", href: "/panel/kalendarz" }, 
+    { key: "panelNavCalendar", href: "/calendar" }, // <-- poprawka
     { key: "panelNavListings" },
     { key: "panelNavBuyers" },
     { key: "panelNavClients" },
