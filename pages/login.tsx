@@ -48,12 +48,7 @@ export default function LoginPage() {
         return;
       }
 
-      // Symulacja logowania
       await new Promise((r) => setTimeout(r, 350));
-
-      if (remember) setCookie("rememberMe", "1");
-      // docelowo: redirect do panelu
-      window.location.href = "/panel";
     } finally {
       setLoading(false);
     }

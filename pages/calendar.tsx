@@ -113,10 +113,18 @@ export default function CalendarPage() {
     description: "",
   });
 
-  useEffect(() => {
-    const c = getCookie("lang");
-    if (isLangKey(c)) setLang(c);
-  }, []);
+useEffect(() => {
+  (async () => {
+    const r = await fetch("/api/me");
+    if (!r.ok) {
+      console.error("GET /api/me failed", r.status);
+      return;
+    }
+    const data = await r.json().catch(() => null);
+    if (data?.userId) setUserId(data.userId);
+    else console.error("/api/me returned no userId", data);
+  })();
+}, []);
 
   // Bootstrap: znajdź biuro usera i zapewnij kalendarze
   useEffect(() => {
