@@ -169,6 +169,7 @@ useEffect(() => {
       if (!r.ok) return;
 
       const data: BootstrapResponse = await r.json();
+      console.log("BOOTSTRAP_RESPONSE", data);
       setOfficeId(data.officeId);
       setOrgCalendarId(data.orgCalendarId ?? null);
       setUserCalendarId(data.userCalendarId ?? null);

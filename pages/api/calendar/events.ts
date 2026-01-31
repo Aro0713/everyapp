@@ -10,25 +10,60 @@ function optString(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null;
 }
 
-async function getOrgIdForCalendar(calendarId: string): Promise<string> {
-  const { rows } = await pool.query(
-    `SELECT org_id FROM calendars WHERE id = $1 LIMIT 1`,
-    [calendarId]
-  );
-  const orgId = rows?.[0]?.org_id as string | undefined;
-  if (!orgId) throw new Error("Calendar not found");
-  return orgId;
-}
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     const calendarId = mustString(req.query.calendarId, "calendarId");
-    const orgId = await getOrgIdForCalendar(calendarId);
+
+    // calendar meta
+    const cal = await pool.query(
+      `SELECT id, org_id, owner_user_id FROM calendars WHERE id = $1 LIMIT 1`,
+      [calendarId]
+    );
+    const calRow = cal.rows[0];
+    if (!calRow) return res.status(404).json({ error: "Calendar not found" });
+
+    const orgId: string = calRow.org_id;
+    const ownerUserId: string | null = calRow.owner_user_id ?? null;
+    const isOfficeCalendar = ownerUserId === null;
 
     if (req.method === "GET") {
       const start = optString(req.query.start);
       const end = optString(req.query.end);
 
+      // Jeśli to kalendarz biura: agreguj eventy wszystkich userów w tym office (org_id = officeId)
+      if (isOfficeCalendar) {
+        const { rows } = await pool.query(
+          `
+          SELECT e.id, e.title, e.description, e.location_text, e.start_at, e.end_at, e.status,
+                 cu.owner_user_id as owner_user_id
+          FROM events e
+          JOIN calendars cu ON cu.id = e.calendar_id
+          WHERE cu.org_id = $1
+            AND cu.owner_user_id IS NOT NULL
+            AND ($2::timestamptz IS NULL OR e.end_at   > $2::timestamptz)
+            AND ($3::timestamptz IS NULL OR e.start_at < $3::timestamptz)
+          ORDER BY e.start_at ASC
+          `,
+          [orgId, start, end]
+        );
+
+        return res.status(200).json(
+          rows.map((r) => ({
+            id: r.id,
+            title: r.title,
+            start: r.start_at,
+            end: r.end_at,
+            extendedProps: {
+              description: r.description ?? null,
+              locationText: r.location_text ?? null,
+              status: r.status ?? null,
+              ownerUserId: r.owner_user_id ?? null, // przyda się do UI/kolorów
+            },
+          }))
+        );
+      }
+
+      // Jeśli to kalendarz użytkownika: tylko jego eventy
       const { rows } = await pool.query(
         `
         SELECT id, title, description, location_text, start_at, end_at, status
@@ -67,13 +102,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const description = optString(body.description);
       const locationText = optString(body.locationText);
 
+      // MVP: zapis zawsze do kalendarza usera zalogowanego
+      const userCal = await pool.query(
+        `SELECT id FROM calendars WHERE org_id = $1 AND owner_user_id = $2 LIMIT 1`,
+        [orgId, sessionUserId]
+      );
+      const targetCalendarId: string | null = userCal.rows[0]?.id ?? null;
+      if (!targetCalendarId) {
+        return res.status(409).json({ error: "User calendar missing for this office" });
+      }
+
       const { rows } = await pool.query(
         `
         INSERT INTO events (org_id, calendar_id, title, description, location_text, start_at, end_at, created_by)
         VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $7::timestamptz, $8)
         RETURNING id
         `,
-        [orgId, calendarId, title, description, locationText, start, end, sessionUserId]
+        [orgId, targetCalendarId, title, description, locationText, start, end, sessionUserId]
       );
 
       return res.status(201).json({ id: rows[0].id });
