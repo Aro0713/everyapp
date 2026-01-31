@@ -74,6 +74,33 @@ function toLocalInput(dt: Date) {
     dt.getHours()
   )}:${pad(dt.getMinutes())}`;
 }
+type EventType =
+  | "presentation"
+  | "acquisition"
+  | "broker_agreement"
+  | "preliminary_agreement"
+  | "final_agreement"
+  | "contact"
+  | "task"
+  | "vacation"
+  | "other";
+
+const EVENT_TYPES: Array<{ value: EventType; labelKey: string }> = [
+  { value: "presentation", labelKey: "calendarEventTypePresentation" },
+  { value: "acquisition", labelKey: "calendarEventTypeAcquisition" },
+  { value: "broker_agreement", labelKey: "calendarEventTypeBrokerAgreement" },
+  { value: "preliminary_agreement", labelKey: "calendarEventTypePreliminaryAgreement" },
+  { value: "final_agreement", labelKey: "calendarEventTypeFinalAgreement" },
+  { value: "contact", labelKey: "calendarEventTypeContact" },
+  { value: "task", labelKey: "calendarEventTypeTask" },
+  { value: "vacation", labelKey: "calendarEventTypeVacation" },
+  { value: "other", labelKey: "calendarEventTypeOther" },
+];
+
+function labelForEventType(lang: LangKey, type: EventType) {
+  const key = EVENT_TYPES.find((x) => x.value === type)?.labelKey;
+  return key ? t(lang, key as any) : "";
+}
 
 export default function CalendarPage() {
   const calendarRef = useRef<FullCalendar | null>(null);
@@ -99,19 +126,22 @@ export default function CalendarPage() {
   // Modal state (KROK 2)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [draft, setDraft] = useState<{
-    title: string;
-    start: string;
-    end: string;
-    locationText: string;
-    description: string;
-  }>({
-    title: "",
-    start: "",
-    end: "",
-    locationText: "",
-    description: "",
-  });
+ const [draft, setDraft] = useState<{
+  eventType: EventType;
+  title: string;
+  start: string;
+  end: string;
+  locationText: string;
+  description: string;
+}>({
+  eventType: "presentation",
+  title: "",
+  start: "",
+  end: "",
+  locationText: "",
+  description: "",
+});
+
 
 useEffect(() => {
   (async () => {
@@ -200,13 +230,15 @@ useEffect(() => {
     const start = prefill?.start ?? now;
     const end = prefill?.end ?? new Date(now.getTime() + 60 * 60 * 1000);
 
-    setDraft({
-      title: "",
-      start: toLocalInput(start),
-      end: toLocalInput(end),
-      locationText: "",
-      description: "",
-    });
+setDraft({
+  eventType: "presentation",
+  title: labelForEventType(lang, "presentation"),
+  start: toLocalInput(start),
+  end: toLocalInput(end),
+  locationText: "",
+  description: "",
+});
+
     setIsModalOpen(true);
   }
 
@@ -236,7 +268,8 @@ async function submitNewEvent() {
         end: new Date(draft.end).toISOString(),
         locationText: draft.locationText || null,
         description: draft.description || null,
-      }),
+        eventType: draft.eventType,
+        }),
     });
 
     if (!r.ok) {
@@ -481,6 +514,33 @@ async function submitNewEvent() {
             </div>
 
             <div className="mt-5 space-y-4">
+                <div>
+                    <label className="text-xs font-semibold text-gray-600">Typ</label>
+                    <select
+                        value={draft.eventType}
+                        onChange={(e) => {
+                            const nextType = e.target.value as EventType;
+                            setDraft((d) => {
+                            const autoTitle = labelForEventType(lang, nextType);
+                            const prevAuto = labelForEventType(lang, d.eventType);
+                            const shouldAuto = !d.title.trim() || d.title.trim() === prevAuto;
+
+                            return {
+                                ...d,
+                                eventType: nextType,
+                                title: shouldAuto ? autoTitle : d.title,
+                            };
+                            });
+                        }}
+                        >
+                        {EVENT_TYPES.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                            {t(lang, opt.labelKey as any)}
+                            </option>
+                        ))}
+                        </select>
+                    </div>
+
               <div>
                 <label className="text-xs font-semibold text-gray-600">
                   {t(lang, "calFieldTitle" as any) ?? "Tytuł"}

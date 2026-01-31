@@ -10,10 +10,20 @@ function optString(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null;
 }
 
+async function getOrgIdForCalendar(calendarId: string): Promise<string> {
+  const { rows } = await pool.query(
+    `SELECT org_id FROM calendars WHERE id = $1 LIMIT 1`,
+    [calendarId]
+  );
+  const orgId = rows?.[0]?.org_id as string | undefined;
+  if (!orgId) throw new Error("Calendar not found");
+  return orgId;
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
-    const orgId = mustString(req.query.orgId, "orgId");
     const calendarId = mustString(req.query.calendarId, "calendarId");
+    const orgId = await getOrgIdForCalendar(calendarId);
 
     if (req.method === "GET") {
       const start = optString(req.query.start);
@@ -23,13 +33,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         `
         SELECT id, title, description, location_text, start_at, end_at, status
         FROM events
-        WHERE org_id = $1
-          AND calendar_id = $2
-          AND ($3::timestamptz IS NULL OR end_at   > $3::timestamptz)
-          AND ($4::timestamptz IS NULL OR start_at < $4::timestamptz)
+        WHERE calendar_id = $1
+          AND ($2::timestamptz IS NULL OR end_at   > $2::timestamptz)
+          AND ($3::timestamptz IS NULL OR start_at < $3::timestamptz)
         ORDER BY start_at ASC
         `,
-        [orgId, calendarId, start, end]
+        [calendarId, start, end]
       );
 
       return res.status(200).json(
@@ -48,12 +57,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (req.method === "POST") {
-      // ✅ bierz usera z SESJI
       const sessionUserId = getUserIdFromRequest(req);
-
-      if (!sessionUserId) {
-        return res.status(401).json({ error: "UNAUTHORIZED" });
-      }
+      if (!sessionUserId) return res.status(401).json({ error: "UNAUTHORIZED" });
 
       const body = req.body ?? {};
       const title = mustString(body.title, "title");

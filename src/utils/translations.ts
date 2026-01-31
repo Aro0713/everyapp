@@ -2987,6 +2987,104 @@ loginErrorInvalidCredentials: {
   lt: "Neteisingas el. paštas arba slaptažodis",
   vi: "Email hoặc mật khẩu không hợp lệ",
 },
+calendarEventTypePresentation: {
+  pl: "Prezentacja",
+  en: "Presentation",
+  de: "Präsentation",
+  cs: "Prezentace",
+  sk: "Prezentácia",
+  ua: "Презентація",
+  lt: "Prezentacija",
+  vi: "Buổi giới thiệu",
+},
+
+calendarEventTypeAcquisition: {
+  pl: "Pozyskanie oferty",
+  en: "Offer acquisition",
+  de: "Akquise eines Angebots",
+  cs: "Získání nabídky",
+  sk: "Získanie ponuky",
+  ua: "Отримання пропозиції",
+  lt: "Pasiūlymo gavimas",
+  vi: "Tiếp nhận nguồn hàng",
+},
+
+calendarEventTypeBrokerAgreement: {
+  pl: "Podpisanie umowy pośrednictwa",
+  en: "Brokerage agreement signing",
+  de: "Unterzeichnung des Maklervertrags",
+  cs: "Podpis zprostředkovatelské smlouvy",
+  sk: "Podpis sprostredkovateľskej zmluvy",
+  ua: "Підписання посередницького договору",
+  lt: "Tarpininkavimo sutarties pasirašymas",
+  vi: "Ký hợp đồng môi giới",
+},
+
+calendarEventTypePreliminaryAgreement: {
+  pl: "Umowa przedwstępna",
+  en: "Preliminary agreement",
+  de: "Vorvertrag",
+  cs: "Předběžná smlouva",
+  sk: "Predbežná zmluva",
+  ua: "Попередній договір",
+  lt: "Preliminari sutartis",
+  vi: "Hợp đồng sơ bộ",
+},
+
+calendarEventTypeFinalAgreement: {
+  pl: "Umowa przeniesienia własności / umowa końcowa",
+  en: "Final ownership transfer agreement",
+  de: "Endgültiger Eigentumsübertragungsvertrag",
+  cs: "Konečná smlouva o převodu vlastnictví",
+  sk: "Konečná zmluva o prevode vlastníctva",
+  ua: "Остаточний договір передачі власності",
+  lt: "Galutinė nuosavybės perdavimo sutartis",
+  vi: "Hợp đồng chuyển nhượng cuối cùng",
+},
+
+calendarEventTypeContact: {
+  pl: "Kontakt",
+  en: "Contact",
+  de: "Kontakt",
+  cs: "Kontakt",
+  sk: "Kontakt",
+  ua: "Контакт",
+  lt: "Kontaktas",
+  vi: "Liên hệ",
+},
+
+calendarEventTypeTask: {
+  pl: "Zadanie",
+  en: "Task",
+  de: "Aufgabe",
+  cs: "Úkol",
+  sk: "Úloha",
+  ua: "Завдання",
+  lt: "Užduotis",
+  vi: "Nhiệm vụ",
+},
+
+calendarEventTypeVacation: {
+  pl: "Urlop",
+  en: "Vacation",
+  de: "Urlaub",
+  cs: "Dovolená",
+  sk: "Dovolenka",
+  ua: "Відпустка",
+  lt: "Atostogos",
+  vi: "Kỳ nghỉ",
+},
+
+calendarEventTypeOther: {
+  pl: "Inny",
+  en: "Other",
+  de: "Sonstiges",
+  cs: "Jiné",
+  sk: "Iné",
+  ua: "Інше",
+  lt: "Kita",
+  vi: "Khác",
+},
 
 } as const);
 
