@@ -3520,6 +3520,48 @@ teamPermissionsEmpty: {
   lt: "Leidimai neapibrėžti.",
   vi: "Chưa có quyền nào được định nghĩa.",
 },
+teamSave: {
+  pl: "Zapisz zmiany",
+  en: "Save changes",
+  de: "Änderungen speichern",
+  cs: "Uložit změny",
+  sk: "Uložiť zmeny",
+  ua: "Зберегти зміни",
+  lt: "Išsaugoti pakeitimus",
+  vi: "Lưu thay đổi",
+},
+
+teamCancel: {
+  pl: "Anuluj",
+  en: "Cancel",
+  de: "Abbrechen",
+  cs: "Zrušit",
+  sk: "Zrušiť",
+  ua: "Скасувати",
+  lt: "Atšaukti",
+  vi: "Hủy",
+},
+
+teamSaveNotImplemented: {
+  pl: "Zapis jeszcze nie jest podpięty.",
+  en: "Saving is not wired yet.",
+  de: "Speichern ist noch nicht angebunden.",
+  cs: "Ukládání zatím není zapojené.",
+  sk: "Ukladanie ešte nie je zapojené.",
+  ua: "Збереження ще не підключене.",
+  lt: "Išsaugojimas dar neprijungtas.",
+  vi: "Chức năng lưu chưa được kết nối.",
+},
+teamPermissionsProfile: {
+  pl: "Profil uprawnień",
+  en: "Permission profile",
+  de: "Berechtigungsprofil",
+  cs: "Profil oprávnění",
+  sk: "Profil oprávnení",
+  ua: "Профіль прав доступу",
+  lt: "Leidimų profilis",
+  vi: "Hồ sơ quyền hạn",
+},
 
 } as const);
 
