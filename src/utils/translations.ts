@@ -3357,6 +3357,148 @@ teamRoleCompanyAdmin: {
   lt: "Įmonės administratorius",
   vi: "Quản trị công ty",
 },
+permissionCategoryCalendar: {
+  pl: "Kalendarz",
+  en: "Calendar",
+  de: "Kalender",
+  cs: "Kalendář",
+  sk: "Kalendár",
+  ua: "Календар",
+  lt: "Kalendorius",
+  vi: "Lịch",
+},
+
+permissionCategoryTeam: {
+  pl: "Zarządzanie zespołem",
+  en: "Team management",
+  de: "Teamverwaltung",
+  cs: "Správa týmu",
+  sk: "Správa tímu",
+  ua: "Керування командою",
+  lt: "Komandos valdymas",
+  vi: "Quản lý đội nhóm",
+},
+
+permissionCategoryOffers: {
+  pl: "Oferty",
+  en: "Listings",
+  de: "Angebote",
+  cs: "Nabídky",
+  sk: "Ponuky",
+  ua: "Пропозиції",
+  lt: "Pasiūlymai",
+  vi: "Nguồn hàng",
+},
+
+permissionCategoryClients: {
+  pl: "Klienci",
+  en: "Clients",
+  de: "Kunden",
+  cs: "Klienti",
+  sk: "Klienti",
+  ua: "Клієнти",
+  lt: "Klientai",
+  vi: "Khách hàng",
+},
+
+permissionCalendarView: {
+  pl: "Podgląd kalendarza",
+  en: "View calendar",
+  de: "Kalender anzeigen",
+  cs: "Zobrazení kalendáře",
+  sk: "Zobrazenie kalendára",
+  ua: "Перегляд календаря",
+  lt: "Kalendoriaus peržiūra",
+  vi: "Xem lịch",
+},
+
+permissionCalendarEditOwn: {
+  pl: "Edycja własnych terminów",
+  en: "Edit own events",
+  de: "Eigene Termine bearbeiten",
+  cs: "Úprava vlastních událostí",
+  sk: "Úprava vlastných udalostí",
+  ua: "Редагування власних подій",
+  lt: "Redaguoti savo įvykius",
+  vi: "Chỉnh sửa sự kiện của mình",
+},
+
+permissionCalendarEditOffice: {
+  pl: "Edycja terminów biura",
+  en: "Edit office events",
+  de: "Bürotermine bearbeiten",
+  cs: "Úprava událostí kanceláře",
+  sk: "Úprava udalostí kancelárie",
+  ua: "Редагування подій офісу",
+  lt: "Redaguoti biuro įvykius",
+  vi: "Chỉnh sửa lịch văn phòng",
+},
+
+permissionTeamView: {
+  pl: "Podgląd zespołu",
+  en: "View team",
+  de: "Team anzeigen",
+  cs: "Zobrazení týmu",
+  sk: "Zobrazenie tímu",
+  ua: "Перегляд команди",
+  lt: "Komandos peržiūra",
+  vi: "Xem đội nhóm",
+},
+
+permissionTeamManage: {
+  pl: "Zarządzanie uprawnieniami",
+  en: "Manage permissions",
+  de: "Berechtigungen verwalten",
+  cs: "Správa oprávnění",
+  sk: "Správa oprávnení",
+  ua: "Керування правами доступу",
+  lt: "Teisių valdymas",
+  vi: "Quản lý quyền",
+},
+
+permissionOffersView: {
+  pl: "Podgląd ofert",
+  en: "View listings",
+  de: "Angebote anzeigen",
+  cs: "Zobrazení nabídek",
+  sk: "Zobrazenie ponúk",
+  ua: "Перегляд пропозицій",
+  lt: "Pasiūlymų peržiūra",
+  vi: "Xem nguồn hàng",
+},
+
+permissionOffersEdit: {
+  pl: "Edycja ofert",
+  en: "Edit listings",
+  de: "Angebote bearbeiten",
+  cs: "Úprava nabídek",
+  sk: "Úprava ponúk",
+  ua: "Редагування пропозицій",
+  lt: "Redaguoti pasiūlymus",
+  vi: "Chỉnh sửa nguồn hàng",
+},
+
+permissionClientsView: {
+  pl: "Podgląd klientów",
+  en: "View clients",
+  de: "Kunden anzeigen",
+  cs: "Zobrazení klientů",
+  sk: "Zobrazenie klientov",
+  ua: "Перегляд клієнтів",
+  lt: "Klientų peržiūra",
+  vi: "Xem khách hàng",
+},
+
+permissionClientsEdit: {
+  pl: "Edycja klientów",
+  en: "Edit clients",
+  de: "Kunden bearbeiten",
+  cs: "Úprava klientů",
+  sk: "Úprava klientov",
+  ua: "Редагування клієнтів",
+  lt: "Redaguoti klientus",
+  vi: "Chỉnh sửa khách hàng",
+},
 
 } as const);
 

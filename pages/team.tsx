@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { DEFAULT_LANG, t } from "@/utils/i18n";
+import { DEFAULT_LANG, isLangKey, t } from "@/utils/i18n";
 import type { LangKey } from "@/utils/translations";
+
+function getCookie(name: string) {
+  if (typeof document === "undefined") return null;
+  const m = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
+  return m ? decodeURIComponent(m[2]) : null;
+}
 
 type Me = {
   userId: string | null;
@@ -43,6 +49,23 @@ function rank(role: string | null | undefined) {
   return ROLE_RANK[role ?? ""] ?? 0;
 }
 
+// map: DB role -> translations key
+const ROLE_LABEL_KEY: Record<string, string> = {
+  agent: "teamRoleAgent",
+  manager: "teamRoleManager",
+  office_admin: "teamRoleOfficeAdmin",
+  admin: "teamRoleAdmin",
+  owner: "teamRoleOwner",
+  company_admin: "teamRoleCompanyAdmin",
+};
+
+// map: DB status -> translations key
+const STATUS_LABEL_KEY: Record<string, string> = {
+  active: "teamStatusActive",
+  pending: "teamStatusPending",
+  blocked: "teamStatusBlocked",
+};
+
 export default function TeamPage() {
   const [me, setMe] = useState<Me>({ userId: null });
   const [lang, setLang] = useState<LangKey>(DEFAULT_LANG);
@@ -50,7 +73,12 @@ export default function TeamPage() {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  
+
+  // lang from cookie
+  useEffect(() => {
+    const c = getCookie("lang");
+    if (isLangKey(c)) setLang(c);
+  }, []);
 
   async function load() {
     setLoading(true);
@@ -61,11 +89,11 @@ export default function TeamPage() {
       setMe(meData);
 
       const r = await fetch("/api/team/members");
-      if (!r.ok) throw new Error("Nie udało się pobrać zespołu");
+      if (!r.ok) throw new Error(t(lang, "teamErrorFetchMembers" as any) ?? "Failed to load team");
       const data = await r.json();
       setRows(Array.isArray(data) ? data : []);
     } catch (e: any) {
-      setError(e?.message ?? "Błąd");
+      setError(e?.message ?? (t(lang, "teamErrorGeneric" as any) ?? "Error"));
     } finally {
       setLoading(false);
     }
@@ -73,6 +101,7 @@ export default function TeamPage() {
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const canManage = useMemo(() => rank(me.membershipRole) >= rank("manager"), [me.membershipRole]);
@@ -87,10 +116,10 @@ export default function TeamPage() {
         body: JSON.stringify({ membershipId, ...patch }),
       });
       const j = await r.json().catch(() => null);
-      if (!r.ok) throw new Error(j?.error || "Błąd zapisu");
+      if (!r.ok) throw new Error(j?.error || (t(lang, "teamErrorSave" as any) ?? "Save failed"));
       await load();
     } catch (e: any) {
-      setError(e?.message ?? "Błąd");
+      setError(e?.message ?? (t(lang, "teamErrorGeneric" as any) ?? "Error"));
     } finally {
       setSavingId(null);
     }
@@ -101,18 +130,24 @@ export default function TeamPage() {
       <div className="mx-auto max-w-6xl">
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-extrabold tracking-tight">Zarządzanie zespołem</h1>
+            <h1 className="text-2xl font-extrabold tracking-tight">
+              {t(lang, "teamTitle" as any) ?? "Team management"}
+            </h1>
+
             <p className="mt-1 text-sm text-gray-600">
               {me.fullName ? `${me.fullName} (${me.email})` : "—"}{" "}
               {me.officeName ? `• ${me.officeName}` : ""}
-              {me.membershipRole ? ` • rola: ${me.membershipRole}` : ""}
+              {me.membershipRole
+                ? ` • ${t(lang, ROLE_LABEL_KEY[me.membershipRole] as any) ?? me.membershipRole}`
+                : ""}
             </p>
           </div>
+
           <button
             className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold shadow-sm hover:bg-ew-accent/10"
             onClick={load}
           >
-            Odśwież
+            {t(lang, "teamRefresh" as any) ?? "Refresh"}
           </button>
         </div>
 
@@ -124,27 +159,27 @@ export default function TeamPage() {
 
         <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
           {loading ? (
-            <div className="p-6 text-sm text-gray-600">Ładuję…</div>
+            <div className="p-6 text-sm text-gray-600">
+              {t(lang, "teamLoading" as any) ?? "Loading…"}
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead className="text-left text-gray-600">
                   <tr className="border-b">
-                    <th className="py-3 pr-4">Agent</th>
-                    <th className="py-3 pr-4">Email</th>
-                    <th className="py-3 pr-4">Telefon</th>
-                    <th className="py-3 pr-4">Rola</th>
-                    <th className="py-3 pr-4">Status</th>
-                    <th className="py-3 pr-0">Akcje</th>
+                    <th className="py-3 pr-4">{t(lang, "teamColumnAgent" as any) ?? "Agent"}</th>
+                    <th className="py-3 pr-4">{t(lang, "teamColumnEmail" as any) ?? "Email"}</th>
+                    <th className="py-3 pr-4">{t(lang, "teamColumnPhone" as any) ?? "Phone"}</th>
+                    <th className="py-3 pr-4">{t(lang, "teamColumnRole" as any) ?? "Role"}</th>
+                    <th className="py-3 pr-4">{t(lang, "teamColumnStatus" as any) ?? "Status"}</th>
+                    <th className="py-3 pr-0">{t(lang, "teamColumnActions" as any) ?? "Actions"}</th>
                   </tr>
                 </thead>
+
                 <tbody>
                   {rows.map((r) => {
                     const isSelf = r.user_id === me.userId;
-                    const disabled =
-                      !canManage ||
-                      isSelf ||
-                      rank(r.role) >= rank(me.membershipRole);
+                    const disabled = !canManage || isSelf || rank(r.role) >= rank(me.membershipRole);
 
                     return (
                       <tr key={r.membership_id} className="border-b last:border-b-0">
@@ -160,12 +195,8 @@ export default function TeamPage() {
                             onChange={(e) => updateMembership(r.membership_id, { role: e.target.value })}
                           >
                             {ROLE_OPTIONS.map((opt) => (
-                              <option
-                                key={opt}
-                                value={opt}
-                                disabled={rank(opt) >= rank(me.membershipRole)}
-                              >
-                                {opt}
+                              <option key={opt} value={opt} disabled={rank(opt) >= rank(me.membershipRole)}>
+                                {t(lang, (ROLE_LABEL_KEY[opt] ?? opt) as any) ?? opt}
                               </option>
                             ))}
                           </select>
@@ -178,15 +209,21 @@ export default function TeamPage() {
                             disabled={disabled || savingId === r.membership_id}
                             onChange={(e) => updateMembership(r.membership_id, { status: e.target.value })}
                           >
-                            <option value="active">active</option>
-                            <option value="pending">pending</option>
-                            <option value="blocked">blocked</option>
+                            {["active", "pending", "blocked"].map((s) => (
+                              <option key={s} value={s}>
+                                {t(lang, (STATUS_LABEL_KEY[s] ?? s) as any) ?? s}
+                              </option>
+                            ))}
                           </select>
                         </td>
 
                         <td className="py-3 pr-0">
                           <span className="text-xs text-gray-500">
-                            {isSelf ? "To Ty" : disabled ? "Brak uprawnień" : "—"}
+                            {isSelf
+                              ? t(lang, "teamSelfLabel" as any) ?? "You"
+                              : disabled
+                              ? t(lang, "teamNoPermissions" as any) ?? "No permissions"
+                              : "—"}
                           </span>
                         </td>
                       </tr>
@@ -196,7 +233,9 @@ export default function TeamPage() {
               </table>
 
               {!rows.length ? (
-                <div className="p-6 text-sm text-gray-600">Brak członków zespołu.</div>
+                <div className="p-6 text-sm text-gray-600">
+                  {t(lang, "teamNoMembers" as any) ?? "No team members."}
+                </div>
               ) : null}
             </div>
           )}
