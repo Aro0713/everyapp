@@ -10,48 +10,46 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const userId = getUserIdFromRequest(req);
-    if (!userId) {
-      return res.status(401).json({ error: "UNAUTHORIZED" });
-    }
+    if (!userId) return res.status(200).json({ userId: null });
 
-    // znajdź aktywne biuro użytkownika
-    const m = await pool.query(
+    // aktywne członkostwo (prefer owner/admin)
+    const { rows } = await pool.query(
       `
-      SELECT office_id
-      FROM memberships
-      WHERE user_id = $1 AND status = 'active'
-      ORDER BY created_at DESC
+      SELECT
+        u.id as user_id,
+        u.full_name,
+        u.email,
+        u.phone,
+        m.office_id,
+        m.role,
+        m.status,
+        o.name as office_name
+      FROM users u
+      LEFT JOIN memberships m
+        ON m.user_id = u.id AND m.status = 'active'
+      LEFT JOIN offices o
+        ON o.id = m.office_id
+      WHERE u.id = $1
+      ORDER BY (m.role = 'company_admin') DESC, (m.role = 'owner') DESC, (m.role = 'admin') DESC, m.created_at DESC
       LIMIT 1
       `,
       [userId]
     );
 
-    const officeId = m.rows[0]?.office_id;
-    if (!officeId) {
-      return res.status(404).json({ error: "No active office for user" });
-    }
+    if (!rows[0]) return res.status(200).json({ userId });
 
-    // lista członków zespołu z widoku
-    const { rows } = await pool.query(
-      `
-      SELECT
-        membership_id,
-        user_id,
-        user_full_name,
-        user_email,
-        role,
-        status,
-        created_at
-      FROM memberships_view
-      WHERE office_id = $1
-      ORDER BY created_at ASC
-      `,
-      [officeId]
-    );
-
-    return res.status(200).json(rows);
-  } catch (e: any) {
-    console.error("TEAM_MEMBERS_ERROR", e);
+    return res.status(200).json({
+      userId: rows[0].user_id,
+      fullName: rows[0].full_name,
+      email: rows[0].email,
+      phone: rows[0].phone,
+      officeId: rows[0].office_id ?? null,
+      officeName: rows[0].office_name ?? null,
+      membershipRole: rows[0].role ?? null,
+      membershipStatus: rows[0].status ?? null,
+    });
+  } catch (e) {
+    console.error("ME_ERROR", e);
     return res.status(500).json({ error: "Internal server error" });
   }
 }

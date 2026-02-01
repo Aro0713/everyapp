@@ -5,6 +5,7 @@ import { DEFAULT_LANG, isLangKey, t } from "@/utils/i18n";
 import type { LangKey } from "@/utils/translations";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import CalendarPage from "./calendar";
+import { useRouter } from "next/router";
 
 function getCookie(name: string) {
   if (typeof document === "undefined") return null;
@@ -16,14 +17,12 @@ type PanelView = "dashboard" | "calendar"; // na razie te dwa, potem dopisujesz 
 
 type NavItem = {
   key: string;
-  view?: PanelView;     // ⬅️ view opcjonalne
+  view?: PanelView;
+  href?: string;
   subKey?: string;
   badge?: string;
-  disabled?: boolean;   // ⬅️ jawne disabled (czytelność)
+  disabled?: boolean;
 };
-
-
-
 
 function clsx(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
@@ -73,7 +72,8 @@ export default function PanelPage() {
   const [lang, setLang] = useState<LangKey>(DEFAULT_LANG);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeView, setActiveView] = useState<PanelView>("dashboard");
-
+  
+  const router = useRouter();
 
   useEffect(() => {
     const c = getCookie("lang");
@@ -89,7 +89,7 @@ const nav = useMemo<NavItem[]>(
     { key: "panelNavListings", disabled: true },
     { key: "panelNavBuyers", disabled: true },
     { key: "panelNavClients", disabled: true },
-    { key: "panelNavTeam", disabled: true },
+    { key: "panelNavTeam", href: "/team", subKey: "teamSubtitle" },
     { key: "panelNavOfficeDeals", disabled: true },
     { key: "panelNavEmployees", disabled: true },
     { key: "panelNavPrimaryMarket", disabled: true },
@@ -164,7 +164,7 @@ const activeNavItem = useMemo(() => {
             <nav className="px-3 pb-6 pt-2">
            {nav.map((it) => {
             const isActive = it.view ? activeView === it.view : false;
-            const isDisabled = it.disabled || !it.view;
+            const isDisabled = !!it.disabled;
 
             const rowClass = clsx(
                 "mt-1 flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm transition",
@@ -175,26 +175,35 @@ const activeNavItem = useMemo(() => {
 
             return (
                 <button
-                key={it.key}
-                type="button"
-                className={rowClass}
-                title={t(lang, it.key as any)}
-                disabled={isDisabled}
-                onClick={() => {
-                    if (it.view) setActiveView(it.view);
-                }}
-                >
-                <span className={clsx("truncate", sidebarOpen ? "" : "text-center w-full")}>
-                    {sidebarOpen ? t(lang, it.key as any) : "•"}
-                </span>
+                    key={it.key}
+                    type="button"
+                    className={rowClass}
+                    title={t(lang, it.key as any)}
+                    disabled={isDisabled}
+                    onClick={() => {
+                    if (it.disabled) return;
 
-                {sidebarOpen && it.badge ? (
-                    <span className="rounded-full bg-ew-accent/20 px-2 py-0.5 text-[11px] font-semibold text-ew-accent">
-                    {it.badge}
+                    if (it.href) {
+                        router.push(it.href);
+                        return;
+                    }
+
+                    if (it.view) {
+                        setActiveView(it.view);
+                    }
+                    }}
+                >
+                    <span className={clsx("truncate", sidebarOpen ? "" : "text-center w-full")}>
+                    {sidebarOpen ? t(lang, it.key as any) : "•"}
                     </span>
-                ) : null}
+
+                    {sidebarOpen && it.badge ? (
+                    <span className="rounded-full bg-ew-accent/20 px-2 py-0.5 text-[11px] font-semibold text-ew-accent">
+                        {it.badge}
+                    </span>
+                    ) : null}
                 </button>
-            );
+                );
             })}
 
                 </nav>
