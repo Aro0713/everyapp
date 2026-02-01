@@ -126,9 +126,9 @@ const [permBusy, setPermBusy] = useState(false);
       setProfiles(list);
 
       // auto-select first profile (jeśli jeszcze nic nie wybrane)
-      if (!selectedProfileId && list.length > 0) {
-        setSelectedProfileId(list[0].id);
-      }
+     if (list.length > 0) {
+        setSelectedProfileId((prev) => (prev ? prev : list[0].id));
+        }
 
     } catch (e: any) {
       setError(e?.message ?? (t(lang, "teamErrorGeneric" as any) ?? "Error"));
@@ -178,19 +178,11 @@ async function savePermissions() {
   setError(null);
 
   try {
-    // najbardziej kompatybilny format: tablica itemów
-    const itemsArray = Object.entries(permDraft).map(([permission_key, allowed]) => ({
-      permission_key,
-      allowed: !!allowed,
-    }));
 
     const r = await fetch(`/api/permissions/profile?id=${encodeURIComponent(selectedProfileId)}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        items: itemsArray,        // <- preferowane przez backendy
-        itemsMap: permDraft,      // <- zostawione “w razie gdyby” backend chciał mapy
-      }),
+     body: JSON.stringify({ items: permDraft }),
     });
 
     const j = await r.json().catch(() => null);
