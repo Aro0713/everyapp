@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { DEFAULT_LANG, isLangKey, t } from "@/utils/i18n";
 import type { LangKey } from "@/utils/translations";
+import { PERMISSION_LABEL_KEY, PERMISSION_CATEGORY_KEY } from "@/lib/permissions";
 
 function getCookie(name: string) {
   if (typeof document === "undefined") return null;
@@ -73,6 +74,22 @@ export default function TeamPage() {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+type PermissionRow = { key: string; category: string };
+
+const [permissions, setPermissions] = useState<PermissionRow[]>([]);
+const [permLoading, setPermLoading] = useState(false);
+
+async function loadPermissions() {
+  setPermLoading(true);
+  try {
+    const r = await fetch("/api/permissions");
+    if (!r.ok) throw new Error("Nie udało się pobrać uprawnień");
+    const data = await r.json();
+    setPermissions(Array.isArray(data) ? data : []);
+  } finally {
+    setPermLoading(false);
+  }
+}
 
   // lang from cookie
   useEffect(() => {
@@ -92,6 +109,7 @@ export default function TeamPage() {
       if (!r.ok) throw new Error(t(lang, "teamErrorFetchMembers" as any) ?? "Failed to load team");
       const data = await r.json();
       setRows(Array.isArray(data) ? data : []);
+      await loadPermissions();
     } catch (e: any) {
       setError(e?.message ?? (t(lang, "teamErrorGeneric" as any) ?? "Error"));
     } finally {
@@ -240,6 +258,51 @@ export default function TeamPage() {
             </div>
           )}
         </div>
+        <div className="mt-6 rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+                <h2 className="text-lg font-extrabold tracking-tight text-ew-primary">
+                {t(lang, "teamPermissionsTitle" as any) ?? "Uprawnienia"}
+                </h2>
+            </div>
+
+            {permLoading ? (
+                <div className="p-4 text-sm text-gray-600">
+                {t(lang, "teamLoading" as any) ?? "Ładuję…"}
+                </div>
+            ) : permissions.length ? (
+                Object.entries(
+                permissions.reduce<Record<string, PermissionRow[]>>((acc, p) => {
+                    (acc[p.category] ||= []).push(p);
+                    return acc;
+                }, {})
+                ).map(([category, items]) => (
+                <div key={category} className="mt-5">
+                    <div className="text-sm font-bold text-ew-primary">
+                    {t(lang, (PERMISSION_CATEGORY_KEY[category] ?? category) as any) ?? category}
+                    </div>
+
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    {items.map((p) => (
+                        <label
+                        key={p.key}
+                        className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-3 py-2"
+                        >
+                        {/* MVP: na razie bez zapisu profilu */}
+                        <input type="checkbox" className="h-4 w-4" />
+                        <span className="text-sm text-ew-primary">
+                            {t(lang, (PERMISSION_LABEL_KEY[p.key] ?? p.key) as any) ?? p.key}
+                        </span>
+                        </label>
+                    ))}
+                    </div>
+                </div>
+                ))
+            ) : (
+                <div className="p-4 text-sm text-gray-600">
+                {t(lang, "teamPermissionsEmpty" as any) ?? "Brak zdefiniowanych uprawnień."}
+                </div>
+            )}
+            </div>
       </div>
     </main>
   );

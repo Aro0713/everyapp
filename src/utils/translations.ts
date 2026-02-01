@@ -3499,6 +3499,27 @@ permissionClientsEdit: {
   lt: "Redaguoti klientus",
   vi: "Chỉnh sửa khách hàng",
 },
+teamPermissionsTitle: {
+  pl: "Uprawnienia",
+  en: "Permissions",
+  de: "Berechtigungen",
+  cs: "Oprávnění",
+  sk: "Oprávnenia",
+  ua: "Права доступу",
+  lt: "Leidimai",
+  vi: "Quyền hạn",
+},
+
+teamPermissionsEmpty: {
+  pl: "Brak zdefiniowanych uprawnień.",
+  en: "No permissions defined.",
+  de: "Keine Berechtigungen definiert.",
+  cs: "Nejsou definována žádná oprávnění.",
+  sk: "Nie sú definované žiadne oprávnenia.",
+  ua: "Права доступу не визначені.",
+  lt: "Leidimai neapibrėžti.",
+  vi: "Chưa có quyền nào được định nghĩa.",
+},
 
 } as const);
 
