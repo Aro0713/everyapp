@@ -4,14 +4,16 @@ import { getUserIdFromRequest } from "../../../lib/session";
 
 async function getOfficeIdForUser(userId: string) {
   const { rows } = await pool.query(
-    `SELECT office_id, role
-     FROM memberships
-     WHERE user_id=$1 AND status='active'
-     ORDER BY created_at DESC
-     LIMIT 1`,
+    `
+    SELECT office_id
+    FROM memberships
+    WHERE user_id = $1 AND status = 'active'
+    ORDER BY (role = 'owner') DESC, created_at DESC
+    LIMIT 1
+    `,
     [userId]
   );
-  return rows[0] ?? null;
+  return rows[0]?.office_id ?? null;
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -19,74 +21,46 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const userId = getUserIdFromRequest(req);
     if (!userId) return res.status(401).json({ error: "UNAUTHORIZED" });
 
-    const ctx = await getOfficeIdForUser(userId);
-    if (!ctx?.office_id) return res.status(404).json({ error: "No office" });
-
-    const profileId = String(req.query.id ?? "").trim();
-    if (!profileId) return res.status(400).json({ error: "Missing id" });
-
-    // bezpieczeństwo: profil musi należeć do tego biura
-    const p = await pool.query(
-      `SELECT id FROM permission_profiles WHERE id=$1 AND office_id=$2 LIMIT 1`,
-      [profileId, ctx.office_id]
-    );
-    if (!p.rows[0]) return res.status(403).json({ error: "Forbidden" });
+    const officeId = await getOfficeIdForUser(userId);
+    if (!officeId) return res.status(404).json({ error: "NO_OFFICE" });
 
     if (req.method === "GET") {
       const { rows } = await pool.query(
         `
-        SELECT
-          perm.key,
-          perm.category,
-          COALESCE(it.allowed, FALSE) AS allowed
-        FROM permissions perm
-        LEFT JOIN permission_profile_items it
-          ON it.permission_key = perm.key AND it.profile_id = $1
-        ORDER BY perm.category ASC, perm.key ASC
+        SELECT id, name, description
+        FROM permission_profiles
+        WHERE office_id = $1
+        ORDER BY name ASC
         `,
-        [profileId]
+        [officeId]
       );
-
       return res.status(200).json(rows);
     }
 
-    if (req.method === "PUT") {
-      const items = req.body?.items;
-      if (!items || typeof items !== "object") {
-        return res.status(400).json({ error: "Invalid items" });
+    if (req.method === "POST") {
+      const name = String(req.body?.name ?? "").trim();
+      const description = req.body?.description ?? null;
+
+      if (!name) {
+        return res.status(400).json({ error: "MISSING_NAME" });
       }
 
-      // items: Record<permission_key, boolean>
-      const entries = Object.entries(items) as Array<[string, unknown]>;
+      const { rows } = await pool.query(
+        `
+        INSERT INTO permission_profiles (office_id, name, description)
+        VALUES ($1, $2, $3)
+        RETURNING id, name, description
+        `,
+        [officeId, name, description]
+      );
 
-      // transakcja
-      await pool.query("BEGIN");
-      try {
-        for (const [key, val] of entries) {
-          const allowed = !!val;
-          await pool.query(
-            `
-            INSERT INTO permission_profile_items (profile_id, permission_key, allowed)
-            VALUES ($1, $2, $3)
-            ON CONFLICT (profile_id, permission_key)
-            DO UPDATE SET allowed = EXCLUDED.allowed
-            `,
-            [profileId, key, allowed]
-          );
-        }
-        await pool.query("COMMIT");
-      } catch (err) {
-        await pool.query("ROLLBACK");
-        throw err;
-      }
-
-      return res.status(200).json({ ok: true });
+      return res.status(200).json(rows[0]);
     }
 
-    res.setHeader("Allow", "GET,PUT");
-    return res.status(405).json({ error: "Method not allowed" });
+    res.setHeader("Allow", "GET,POST");
+    return res.status(405).json({ error: "METHOD_NOT_ALLOWED" });
   } catch (e) {
-    console.error("PERM_PROFILE_ERROR", e);
-    return res.status(500).json({ error: "Internal server error" });
+    console.error("PERMISSIONS_PROFILES_ERROR", e);
+    return res.status(500).json({ error: "SERVER_ERROR" });
   }
 }
