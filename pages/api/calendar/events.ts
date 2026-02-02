@@ -125,6 +125,60 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     res.setHeader("Allow", "GET,POST");
+    if (req.method === "PATCH") {
+  const sessionUserId = getUserIdFromRequest(req);
+  if (!sessionUserId) return res.status(401).json({ error: "UNAUTHORIZED" });
+
+  const body = req.body ?? {};
+  const eventId = mustString(body.id, "id");
+
+  const title = optString(body.title);
+  const start = optString(body.start);
+  const end = optString(body.end);
+  const description = optString(body.description);
+  const locationText = optString(body.locationText);
+
+  // 1. Pobierz event + właściciela
+  const ev = await pool.query(
+    `
+    SELECT e.id, e.created_by, c.owner_user_id
+    FROM events e
+    JOIN calendars c ON c.id = e.calendar_id
+    WHERE e.id = $1
+    LIMIT 1
+    `,
+    [eventId]
+  );
+
+  const row = ev.rows[0];
+  if (!row) return res.status(404).json({ error: "Event not found" });
+
+  const isOwner = row.created_by === sessionUserId;
+  const isOfficeEvent = row.owner_user_id === null;
+
+  // 2. TODO: tu w przyszłości sprawdzisz permissions z memberships
+  if (!isOwner && !isOfficeEvent) {
+    return res.status(403).json({ error: "FORBIDDEN" });
+  }
+
+  // 3. Update
+  await pool.query(
+    `
+    UPDATE events
+    SET
+      title = COALESCE($2, title),
+      description = COALESCE($3, description),
+      location_text = COALESCE($4, location_text),
+      start_at = COALESCE($5::timestamptz, start_at),
+      end_at   = COALESCE($6::timestamptz, end_at)
+    WHERE id = $1
+    `,
+    [eventId, title, description, locationText, start, end]
+  );
+
+  return res.status(200).json({ ok: true });
+}
+
     return res.status(405).json({ error: "Method not allowed" });
   } catch (e: any) {
     console.error("CAL_EVENTS_ERROR", e);

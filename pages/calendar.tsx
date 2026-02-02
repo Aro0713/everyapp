@@ -126,6 +126,7 @@ export default function CalendarPage() {
   // Modal state (KROK 2)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
  const [draft, setDraft] = useState<{
   eventType: EventType;
   title: string;
@@ -154,6 +155,10 @@ useEffect(() => {
     if (data?.userId) setUserId(data.userId);
     else console.error("/api/me returned no userId", data);
   })();
+}, []);
+useEffect(() => {
+  const c = getCookie("lang");
+  if (isLangKey(c)) setLang(c);
 }, []);
 
   // Bootstrap: znajdź biuro usera i zapewnij kalendarze
@@ -226,21 +231,71 @@ useEffect(() => {
 
   const localeObj = useMemo(() => fcLocale(lang), [lang]);
 
-  function openNewEvent(prefill?: { start?: Date; end?: Date }) {
-    const now = new Date();
-    const start = prefill?.start ?? now;
-    const end = prefill?.end ?? new Date(now.getTime() + 60 * 60 * 1000);
+function openNewEvent(prefill?: { start?: Date; end?: Date }) {
+  setEditingEventId(null);
 
-setDraft({
-  eventType: "presentation",
-  title: labelForEventType(lang, "presentation"),
-  start: toLocalInput(start),
-  end: toLocalInput(end),
-  locationText: "",
-  description: "",
-});
+  const now = new Date();
+  const start = prefill?.start ?? now;
+  const end = prefill?.end ?? new Date(now.getTime() + 60 * 60 * 1000);
+
+  setDraft({
+    eventType: "presentation",
+    title: labelForEventType(lang, "presentation"),
+    start: toLocalInput(start),
+    end: toLocalInput(end),
+    locationText: "",
+    description: "",
+  });
+
+  setIsModalOpen(true);
+}
+
+  function openEditEvent(ev: any) {
+    setEditingEventId(ev.id);
+
+    const start = ev.start ? new Date(ev.start) : new Date();
+    const end = ev.end ? new Date(ev.end) : new Date(start.getTime() + 60 * 60 * 1000);
+
+    setDraft({
+      eventType: (ev.extendedProps?.eventType as EventType) ?? "other",
+      title: ev.title ?? "",
+      start: toLocalInput(start),
+      end: toLocalInput(end),
+      locationText: ev.extendedProps?.locationText ?? "",
+      description: ev.extendedProps?.description ?? "",
+    });
 
     setIsModalOpen(true);
+  }
+  async function patchEvent(payload: {
+    id: string;
+    title?: string;
+    start?: string;
+    end?: string;
+    locationText?: string | null;
+    description?: string | null;
+    eventType?: EventType;
+  }) {
+    if (!officeId || !activeCalendarId) {
+      alert("Brak aktywnego kalendarza (wybierz Mój / Biuro).");
+      return;
+    }
+
+    const qs = new URLSearchParams({
+      orgId: officeId,
+      calendarId: activeCalendarId,
+    });
+
+    const r = await fetch(`/api/calendar/events?${qs.toString()}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!r.ok) {
+      const err = await r.json().catch(() => null);
+      throw new Error(err?.error || "Nie udało się zapisać zmian terminu");
+    }
   }
 
 async function submitNewEvent() {
@@ -260,23 +315,38 @@ async function submitNewEvent() {
       calendarId: activeCalendarId,
     });
 
-    const r = await fetch(`/api/calendar/events?${qs.toString()}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+      if (editingEventId) {
+      // EDIT (PATCH)
+      await patchEvent({
+        id: editingEventId,
         title,
         start: new Date(draft.start).toISOString(),
         end: new Date(draft.end).toISOString(),
         locationText: draft.locationText || null,
         description: draft.description || null,
         eventType: draft.eventType,
+      });
+    } else {
+      // CREATE (POST)
+      const r = await fetch(`/api/calendar/events?${qs.toString()}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title,
+          start: new Date(draft.start).toISOString(),
+          end: new Date(draft.end).toISOString(),
+          locationText: draft.locationText || null,
+          description: draft.description || null,
+          eventType: draft.eventType,
         }),
-    });
+      });
 
-    if (!r.ok) {
-      const err = await r.json().catch(() => null);
-      throw new Error(err?.error || "Nie udało się zapisać terminu");
+      if (!r.ok) {
+        const err = await r.json().catch(() => null);
+        throw new Error(err?.error || "Nie udało się zapisać terminu");
+      }
     }
+    setEditingEventId(null);
 
     setIsModalOpen(false);
 
@@ -472,6 +542,42 @@ async function submitNewEvent() {
             nowIndicator
             selectable
             selectMirror
+            editable
+            eventStartEditable
+            eventDurationEditable
+
+            eventClick={(info) => {
+            openEditEvent(info.event);
+            }}
+
+            eventDrop={async (info) => {
+            try {
+                await patchEvent({
+                id: info.event.id,
+                start: info.event.start?.toISOString(),
+                end: info.event.end?.toISOString(),
+                });
+                if (range.start && range.end) await loadEvents(range.start, range.end);
+            } catch (e: any) {
+                info.revert();
+                alert(e?.message ?? "Błąd zapisu zmian");
+            }
+            }}
+
+            eventResize={async (info) => {
+            try {
+                await patchEvent({
+                id: info.event.id,
+                start: info.event.start?.toISOString(),
+                end: info.event.end?.toISOString(),
+                });
+                if (range.start && range.end) await loadEvents(range.start, range.end);
+            } catch (e: any) {
+                info.revert();
+                alert(e?.message ?? "Błąd zapisu zmian");
+            }
+            }}
+
             events={events}
             datesSet={(arg) => {
               setRange({ start: arg.startStr, end: arg.endStr });
@@ -491,14 +597,19 @@ async function submitNewEvent() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
           onMouseDown={(e) => {
             // klik na tło zamyka
-            if (e.target === e.currentTarget) setIsModalOpen(false);
+            if (e.target === e.currentTarget) {
+            setIsModalOpen(false);
+            setEditingEventId(null);
+            }
           }}
         >
           <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-xl">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-lg font-extrabold tracking-tight text-ew-primary">
-                  {t(lang, "calNewEvent" as any) ?? "Nowy termin"}
+                {editingEventId
+                    ? (t(lang, "calEditEvent" as any) ?? "Edytuj termin")
+                    : (t(lang, "calNewEvent" as any) ?? "Nowy termin")}
                 </h2>
                 <p className="mt-1 text-xs text-gray-500">
                   {scope === "user" ? "Zapis do mojego kalendarza" : "Zapis do kalendarza biura"}
@@ -508,7 +619,10 @@ async function submitNewEvent() {
               <button
                 type="button"
                 className="rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-ew-primary transition hover:bg-ew-accent/10"
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => {
+                setIsModalOpen(false);
+                setEditingEventId(null);
+                }}
               >
                 ✕
               </button>
@@ -610,11 +724,14 @@ async function submitNewEvent() {
               <button
                 type="button"
                 className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-ew-primary transition hover:bg-ew-accent/10"
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => {
+                    setIsModalOpen(false);
+                    setEditingEventId(null);
+                }}
                 disabled={saving}
-              >
+                >
                 {t(lang, "calCancel" as any) ?? "Anuluj"}
-              </button>
+                </button>
 
            <button
             type="button"
