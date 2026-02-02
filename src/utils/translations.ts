@@ -3624,6 +3624,16 @@ panelCalendarSub: {
   lt: "Susitikimų kalendoriaus valdymas",
   vi: "Quản lý lịch hẹn",
 },
+calEditEvent: {
+  pl: "Edytuj termin",
+  en: "Edit event",
+  de: "Termin bearbeiten",
+  cs: "Upravit událost",
+  sk: "Upraviť udalosť",
+  ua: "Редагувати подію",
+  lt: "Redaguoti įvykį",
+  vi: "Chỉnh sửa sự kiện",
+},
 
 } as const);
 
