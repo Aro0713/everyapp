@@ -3594,6 +3594,26 @@ teamPermissionsNoProfiles: {
   lt: "Nėra leidimų profilių.",
   vi: "Không có hồ sơ quyền hạn.",
 },
+teamPermissionsSelectMembers: {
+  pl: "Zaznacz użytkownika(ów) z listy powyżej.",
+  en: "Select user(s) from the list above.",
+  de: "Wähle Benutzer aus der Liste oben.",
+  cs: "Vyber uživatele ze seznamu výše.",
+  sk: "Vyber používateľov zo zoznamu vyššie.",
+  ua: "Виберіть користувача(ів) зі списку вище.",
+  lt: "Pasirinkite naudotoją(-us) iš sąrašo aukščiau.",
+  vi: "Chọn người dùng từ danh sách phía trên.",
+},
+teamSelectedCount: {
+  pl: "Wybrano",
+  en: "Selected",
+  de: "Ausgewählt",
+  cs: "Vybráno",
+  sk: "Vybrané",
+  ua: "Вибрано",
+  lt: "Pasirinkta",
+  vi: "Đã chọn",
+},
 
 } as const);
 
