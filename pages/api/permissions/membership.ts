@@ -2,6 +2,8 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { pool } from "../../../lib/neonDb";
 import { getUserIdFromRequest } from "../../../lib/session";
 
+type MembershipRow = { office_id: string | null };
+
 const ROLE_RANK: Record<string, number> = {
   company_admin: 100,
   owner: 90,
@@ -30,8 +32,9 @@ async function getMyRoleInOffice(userId: string, officeId: string): Promise<stri
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== "PUT") {
-    res.setHeader("Allow", "PUT");
+  // ✅ obsługujemy GET i PUT
+  if (req.method !== "GET" && req.method !== "PUT") {
+    res.setHeader("Allow", "GET,PUT");
     return res.status(405).json({ error: "METHOD_NOT_ALLOWED" });
   }
 
@@ -39,54 +42,68 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const userId = getUserIdFromRequest(req);
     if (!userId) return res.status(401).json({ error: "UNAUTHORIZED" });
 
-    const membershipIds: unknown = req.body?.membershipIds;
-    const items: unknown = req.body?.items;
+    const membershipId = String(req.query.id ?? "").trim();
+    if (!membershipId) return res.status(400).json({ error: "Missing id" });
 
-    if (!Array.isArray(membershipIds) || membershipIds.length === 0) {
-      return res.status(400).json({ error: "Missing membershipIds" });
+    // membership musi istnieć
+    const { rows: mRows } = await pool.query<MembershipRow>(
+      `
+      SELECT office_id
+      FROM memberships
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [membershipId]
+    );
+
+    const officeId = mRows[0]?.office_id ?? null;
+    if (!officeId) return res.status(404).json({ error: "MEMBERSHIP_NOT_FOUND" });
+
+    // bezpieczeństwo: musisz być manager+ w tym samym biurze
+    const myRole = await getMyRoleInOffice(userId, officeId);
+    if (!myRole || rank(myRole) < rank("manager")) {
+      return res.status(403).json({ error: "FORBIDDEN" });
     }
+
+    if (req.method === "GET") {
+      const { rows } = await pool.query(
+        `
+        SELECT
+          perm.key,
+          perm.category,
+          COALESCE(mi.allowed, FALSE) AS allowed
+        FROM permissions perm
+        LEFT JOIN membership_permission_items mi
+          ON mi.permission_key = perm.key
+         AND mi.membership_id = $1
+        ORDER BY perm.category ASC, perm.key ASC
+        `,
+        [membershipId]
+      );
+
+      return res.status(200).json(rows);
+    }
+
+    // PUT
+    const items = req.body?.items;
     if (!items || typeof items !== "object") {
       return res.status(400).json({ error: "Invalid items" });
     }
 
-    // load office_ids for memberships
-    const { rows: ms } = await pool.query(
-      `
-      SELECT id, office_id
-      FROM memberships
-      WHERE id = ANY($1::uuid[])
-      `,
-      [membershipIds]
-    );
-
-    if (ms.length === 0) return res.status(404).json({ error: "MEMBERSHIPS_NOT_FOUND" });
-
-    // enforce: all memberships must be in offices where user is manager+
-    const officeIds = Array.from(new Set(ms.map((m: any) => m.office_id).filter(Boolean)));
-
-    for (const officeId of officeIds) {
-      const myRole = await getMyRoleInOffice(userId, officeId);
-      if (!myRole || rank(myRole) < rank("manager")) {
-        return res.status(403).json({ error: "FORBIDDEN" });
-      }
-    }
-
-    const entries = Object.entries(items as Record<string, unknown>) as Array<[string, unknown]>;
+    const entries = Object.entries(items) as Array<[string, unknown]>;
 
     await pool.query("BEGIN");
     try {
-      for (const m of ms) {
-        for (const [permissionKey, val] of entries) {
-          await pool.query(
-            `
-            INSERT INTO membership_permission_items (membership_id, permission_key, allowed)
-            VALUES ($1, $2, $3)
-            ON CONFLICT (membership_id, permission_key)
-            DO UPDATE SET allowed = EXCLUDED.allowed, updated_at = now()
-            `,
-            [m.id, permissionKey, !!val]
-          );
-        }
+      for (const [permissionKey, val] of entries) {
+        await pool.query(
+          `
+          INSERT INTO membership_permission_items (membership_id, permission_key, allowed)
+          VALUES ($1, $2, $3)
+          ON CONFLICT (membership_id, permission_key)
+          DO UPDATE SET allowed = EXCLUDED.allowed, updated_at = now()
+          `,
+          [membershipId, permissionKey, !!val]
+        );
       }
       await pool.query("COMMIT");
     } catch (e) {
@@ -94,9 +111,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       throw e;
     }
 
-    return res.status(200).json({ ok: true, updatedMemberships: ms.length });
+    return res.status(200).json({ ok: true });
   } catch (e: any) {
-    console.error("MEMBERSHIPS_PERMISSIONS_BATCH_ERROR", e);
+    console.error("MEMBERSHIP_PERMISSIONS_ERROR", e);
     return res.status(500).json({ error: e?.message ?? "SERVER_ERROR" });
   }
 }
