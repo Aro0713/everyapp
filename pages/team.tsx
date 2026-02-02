@@ -64,8 +64,10 @@ const ROLE_LABEL_KEY: Record<string, string> = {
 const STATUS_LABEL_KEY: Record<string, string> = {
   active: "teamStatusActive",
   pending: "teamStatusPending",
-  blocked: "teamStatusBlocked",
+  rejected: "teamStatusRejected",
+  revoked: "teamStatusRevoked",
 };
+
 type PermissionRow = {
   key: string;
   category: string;
@@ -125,10 +127,8 @@ const [permBusy, setPermBusy] = useState(false);
       const list: Profile[] = Array.isArray(profilesData) ? profilesData : [];
       setProfiles(list);
 
-      // auto-select first profile (jeśli jeszcze nic nie wybrane)
-     if (list.length > 0) {
-        setSelectedProfileId((prev) => (prev ? prev : list[0].id));
-        }
+           // auto-select: ustaw pierwszy profil dopiero po tym jak lista faktycznie się załaduje
+      setSelectedProfileId((prev) => (prev ? prev : list[0]?.id ?? ""));
 
     } catch (e: any) {
       setError(e?.message ?? (t(lang, "teamErrorGeneric" as any) ?? "Error"));
@@ -325,7 +325,7 @@ function cancelPermissions() {
                           disabled={disabled || savingId === r.membership_id}
                           onChange={(e) => updateMembership(r.membership_id, { status: e.target.value })}
                         >
-                          {["active", "pending", "blocked"].map((s) => (
+                         {["active", "pending", "rejected", "revoked"].map((s) => (
                             <option key={s} value={s}>
                               {t(lang, (STATUS_LABEL_KEY[s] ?? s) as any) ?? s}
                             </option>
@@ -372,27 +372,40 @@ function cancelPermissions() {
             className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-ew-primary shadow-sm"
             value={selectedProfileId}
             onChange={(e) => setSelectedProfileId(e.target.value)}
-            disabled={permBusy || profiles.length === 0}
+            disabled={permBusy}
             title={t(lang, "teamPermissionsProfile" as any) ?? "Profil uprawnień"}
             >
             {/* placeholder – ważne */}
-            <option value="">
-                {t(lang, "teamPermissionsSelectProfile" as any) ?? "— wybierz profil —"}
-            </option>
-
-            {profiles.map((p) => (
-                <option key={p.id} value={p.id}>
-                {p.name}
+            {profiles.length === 0 ? (
+                <option value="">
+                    {t(lang, "teamLoading" as any) ?? "Loading…"}
                 </option>
-            ))}
+                ) : (
+                <>
+                    <option value="">
+                    {t(lang, "teamPermissionsSelectProfile" as any) ?? "— wybierz profil —"}
+                    </option>
+
+                    {profiles.map((p) => (
+                    <option key={p.id} value={p.id}>
+                        {p.name}
+                    </option>
+                    ))}
+                </>
+                )}
             </select>
         </div>
 
-        {permBusy ? (
-          <div className="p-4 text-sm text-gray-600">
-            {t(lang, "teamLoading" as any) ?? "Ładuję…"}
-          </div>
-        ) : profilePerms.length ? (
+            {permBusy ? (
+            <div className="p-4 text-sm text-gray-600">
+                {t(lang, "teamLoading" as any) ?? "Ładuję…"}
+            </div>
+            ) : !selectedProfileId ? (
+            <div className="p-4 text-sm text-gray-600">
+                {t(lang, "teamPermissionsSelectProfile" as any) ?? "— wybierz profil —"}
+            </div>
+            ) : profilePerms.length ? (
+
           Object.entries(
             profilePerms.reduce<Record<string, ProfilePermRow[]>>((acc, p) => {
               (acc[p.category] ||= []).push(p);

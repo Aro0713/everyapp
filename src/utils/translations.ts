@@ -3563,6 +3563,28 @@ teamPermissionsProfile: {
   vi: "Hồ sơ quyền hạn",
 },
 
+teamStatusRejected: {
+  pl: "Odrzucony",
+  en: "Rejected",
+  de: "Abgelehnt",
+  cs: "Odmítnutý",
+  sk: "Odmietnutý",
+  ua: "Відхилений",
+  lt: "Atmestas",
+  vi: "Bị từ chối",
+},
+
+teamStatusRevoked: {
+  pl: "Zablokowany",
+  en: "Revoked",
+  de: "Entzogen",
+  cs: "Zrušený",
+  sk: "Odvolaný",
+  ua: "Скасований",
+  lt: "Atšauktas",
+  vi: "Đã thu hồi",
+},
+
 } as const);
 
 export type TranslationKey = keyof typeof translations;
