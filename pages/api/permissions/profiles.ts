@@ -5,6 +5,7 @@ import { getUserIdFromRequest } from "../../../lib/session";
 type OfficeRow = { office_id: string };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+    console.log("PERMISSIONS_PROFILES_V2_ACTIVE");
   try {
     const userId = getUserIdFromRequest(req);
     if (!userId) return res.status(401).json({ error: "UNAUTHORIZED" });
