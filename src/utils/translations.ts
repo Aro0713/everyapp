@@ -3614,6 +3614,16 @@ teamSelectedCount: {
   lt: "Pasirinkta",
   vi: "Đã chọn",
 },
+teamPermissionsSaved: {
+  pl: "Zmiany zapisane.",
+  en: "Changes have been saved.",
+  de: "Änderungen wurden gespeichert.",
+  cs: "Změny byly uloženy.",
+  sk: "Zmeny boli uložené.",
+  ua: "Зміни збережено.",
+  lt: "Pakeitimai išsaugoti.",
+  vi: "Đã lưu thay đổi.",
+},
 
 } as const);
 

@@ -84,6 +84,7 @@ export default function TeamPage() {
   const [permDraft, setPermDraft] = useState<Record<string, boolean>>({});
   const [permSaved, setPermSaved] = useState<Record<string, boolean>>({});
   const [permBusy, setPermBusy] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // lang from cookie
   useEffect(() => {
@@ -155,6 +156,11 @@ export default function TeamPage() {
       setPermSaved({});
       return;
     }
+  useEffect(() => {
+    if (!successMessage) return;
+    const tmr = setTimeout(() => setSuccessMessage(null), 3000);
+    return () => clearTimeout(tmr);
+    }, [successMessage]);
 
     loadMembershipPerms(first).catch((e: any) => {
       setError(e?.message ?? (t(lang, "teamErrorGeneric" as any) ?? "Error"));
@@ -203,6 +209,7 @@ export default function TeamPage() {
         if (!r.ok) throw new Error(j?.error || "Błąd zapisu uprawnień");
 
         setPermSaved({ ...permDraft });
+        setSuccessMessage(t(lang, "teamPermissionsSaved" as any) ?? "Zmiany zapisane.");
         return;
       }
 
@@ -287,6 +294,11 @@ export default function TeamPage() {
             {error}
           </div>
         ) : null}
+            {successMessage ? (
+            <div className="mb-4 rounded-2xl border border-green-200 bg-green-50 p-3 text-sm text-green-700">
+                {successMessage}
+            </div>
+            ) : null}
 
         {/* TEAM TABLE */}
         <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
