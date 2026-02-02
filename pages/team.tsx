@@ -86,6 +86,7 @@ export default function TeamPage() {
   const [lang, setLang] = useState<LangKey>(DEFAULT_LANG);
   const [rows, setRows] = useState<MemberRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [profilesLoading, setProfilesLoading] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -115,27 +116,36 @@ const [permBusy, setPermBusy] = useState(false);
       if (!r.ok) throw new Error(t(lang, "teamErrorFetchMembers" as any) ?? "Failed to load team");
       const data = await r.json();
       setRows(Array.isArray(data) ? data : []);
-            // --- permission profiles (do selecta) ---
-      const rProfiles = await fetch("/api/permissions/profiles");
-      if (!rProfiles.ok) {
+        // --- permission profiles (do selecta) ---
+        setProfilesLoading(true);
+        const rProfiles = await fetch("/api/permissions/profiles", { cache: "no-store" });
+        if (!rProfiles.ok) {
         throw new Error(
-          t(lang, "teamErrorFetchProfiles" as any) ??
-            "Failed to load permission profiles"
+            t(lang, "teamErrorFetchProfiles" as any) ?? "Failed to load permission profiles"
         );
-      }
-      const profilesData = await rProfiles.json();
-      const list: Profile[] = Array.isArray(profilesData) ? profilesData : [];
-      setProfiles(list);
+        }
 
-           // auto-select: ustaw pierwszy profil dopiero po tym jak lista faktycznie się załaduje
-      setSelectedProfileId((prev) => (prev ? prev : list[0]?.id ?? ""));
+        const profilesData = await rProfiles.json();
+        const raw: any[] = Array.isArray(profilesData) ? profilesData : [];
+
+        // filtrujemy tylko rekordy z prawidłowym id (uuid string)
+        const list: Profile[] = raw.filter((p) => p && typeof p.id === "string" && p.id.length > 10);
+
+        setProfiles(list);
+
+        // auto-select: utrzymaj prev jeśli nadal istnieje, inaczej bierz pierwszy
+        setSelectedProfileId((prev) => {
+        if (prev && list.some((p) => p.id === prev)) return prev;
+        return list[0]?.id ?? "";
+        });
 
     } catch (e: any) {
       setError(e?.message ?? (t(lang, "teamErrorGeneric" as any) ?? "Error"));
     } finally {
-      setLoading(false);
-    }
-  }
+        setLoading(false);
+        setProfilesLoading(false);
+        }
+      }
 
   useEffect(() => {
     load();
@@ -207,7 +217,7 @@ async function loadProfilePerms(profileId: string) {
   setPermBusy(true);
   setError(null);
   try {
-    const r = await fetch(`/api/permissions/profile?id=${encodeURIComponent(profileId)}`);
+   const r = await fetch(`/api/permissions/profile?id=${encodeURIComponent(profileId)}`, { cache: "no-store" });
     const data = await r.json().catch(() => null);
 
     if (!r.ok) {
@@ -366,7 +376,6 @@ function cancelPermissions() {
             {t(lang, "teamPermissionsTitle" as any) ?? "Uprawnienia"}
           </h2>
 
-          {/* Profile select */}
          {/* Profile select */}
             <select
             className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-ew-primary shadow-sm"
@@ -376,23 +385,27 @@ function cancelPermissions() {
             title={t(lang, "teamPermissionsProfile" as any) ?? "Profil uprawnień"}
             >
             {/* placeholder – ważne */}
-            {profiles.length === 0 ? (
+           {profilesLoading ? (
+            <option value="">
+                {t(lang, "teamLoading" as any) ?? "Loading…"}
+            </option>
+            ) : profiles.length === 0 ? (
+            <option value="">
+                {t(lang, "teamPermissionsNoProfiles" as any) ?? "Brak profili uprawnień."}
+            </option>
+            ) : (
+            <>
                 <option value="">
-                    {t(lang, "teamLoading" as any) ?? "Loading…"}
+                {t(lang, "teamPermissionsSelectProfile" as any) ?? "— wybierz profil —"}
                 </option>
-                ) : (
-                <>
-                    <option value="">
-                    {t(lang, "teamPermissionsSelectProfile" as any) ?? "— wybierz profil —"}
-                    </option>
 
-                    {profiles.map((p) => (
-                    <option key={p.id} value={p.id}>
-                        {p.name}
-                    </option>
-                    ))}
-                </>
-                )}
+                {profiles.map((p) => (
+                <option key={p.id} value={p.id}>
+                    {p.name}
+                </option>
+                ))}
+            </>
+            )}
             </select>
         </div>
 

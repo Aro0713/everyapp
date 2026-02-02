@@ -3584,6 +3584,16 @@ teamStatusRevoked: {
   lt: "Atšauktas",
   vi: "Đã thu hồi",
 },
+teamPermissionsNoProfiles: {
+  pl: "Brak profili uprawnień.",
+  en: "No permission profiles.",
+  de: "Keine Berechtigungsprofile.",
+  cs: "Žádné profily oprávnění.",
+  sk: "Žiadne profily oprávnení.",
+  ua: "Немає профілів прав доступу.",
+  lt: "Nėra leidimų profilių.",
+  vi: "Không có hồ sơ quyền hạn.",
+},
 
 } as const);
 
