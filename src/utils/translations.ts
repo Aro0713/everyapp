@@ -3614,15 +3614,15 @@ teamSelectedCount: {
   lt: "Pasirinkta",
   vi: "Đã chọn",
 },
-teamPermissionsSaved: {
-  pl: "Zmiany zapisane.",
-  en: "Changes have been saved.",
-  de: "Änderungen wurden gespeichert.",
-  cs: "Změny byly uloženy.",
-  sk: "Zmeny boli uložené.",
-  ua: "Зміни збережено.",
-  lt: "Pakeitimai išsaugoti.",
-  vi: "Đã lưu thay đổi.",
+panelCalendarSub: {
+  pl: "Zarządzanie kalendarzem spotkań",
+  en: "Meeting calendar management",
+  de: "Terminverwaltung",
+  cs: "Správa kalendáře schůzek",
+  sk: "Správa kalendára stretnutí",
+  ua: "Керування календарем зустрічей",
+  lt: "Susitikimų kalendoriaus valdymas",
+  vi: "Quản lý lịch hẹn",
 },
 
 } as const);
