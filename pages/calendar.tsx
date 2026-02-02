@@ -126,6 +126,7 @@ export default function CalendarPage() {
   // Modal state (KROK 2)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
  const [draft, setDraft] = useState<{
   eventType: EventType;
@@ -186,25 +187,44 @@ useEffect(() => {
 
   const activeCalendarId = scope === "user" ? userCalendarId : orgCalendarId;
 
-  async function loadEvents(rangeStart?: string, rangeEnd?: string) {
-    if (!officeId || !activeCalendarId) return;
+async function loadEvents(rangeStart?: string, rangeEnd?: string) {
+  if (!officeId || !activeCalendarId) return;
 
-    const qs = new URLSearchParams({
-      orgId: officeId,
-      calendarId: activeCalendarId,
-    });
+  const qs = new URLSearchParams({
+    orgId: officeId,
+    calendarId: activeCalendarId,
+  });
 
-    if (rangeStart) qs.set("start", rangeStart);
-    if (rangeEnd) qs.set("end", rangeEnd);
+  if (rangeStart) qs.set("start", rangeStart);
+  if (rangeEnd) qs.set("end", rangeEnd);
 
-    const r = await fetch(`/api/calendar/events?${qs.toString()}`);
-    if (!r.ok) return;
+  // 1) internal events
+  const r = await fetch(`/api/calendar/events?${qs.toString()}`);
+  if (!r.ok) return;
 
-    const data = await r.json();
-    const list: FcEvent[] = Array.isArray(data) ? data : [];
-    const q = query.trim().toLowerCase();
-    setEvents(q ? list.filter((e) => (e.title || "").toLowerCase().includes(q)) : list);
+  const data = await r.json().catch(() => []);
+  const list: FcEvent[] = Array.isArray(data) ? data : [];
+
+  // 2) external (ICS) cached events (fail-safe)
+  let extList: FcEvent[] = [];
+  try {
+    const rExt = await fetch(`/api/calendar/external-events?${qs.toString()}`);
+    if (rExt.ok) {
+      const extData = await rExt.json().catch(() => []);
+      extList = Array.isArray(extData) ? extData : [];
+    }
+  } catch {
+    // ignore external failures (MVP)
   }
+
+  // 3) merge
+  const merged = [...list, ...extList];
+
+  // 4) filter by query
+  const q = query.trim().toLowerCase();
+  setEvents(q ? merged.filter((e) => (e.title || "").toLowerCase().includes(q)) : merged);
+}
+
 
   // zmiana scope -> odśwież eventy w aktualnym zakresie
   useEffect(() => {
@@ -277,8 +297,8 @@ function openNewEvent(prefill?: { start?: Date; end?: Date }) {
     eventType?: EventType;
   }) {
     if (!officeId || !activeCalendarId) {
-      alert("Brak aktywnego kalendarza (wybierz Mój / Biuro).");
-      return;
+      alert(t(lang, "calNoActiveCalendar" as any) ?? "No active calendar.");     
+     return;
     }
 
     const qs = new URLSearchParams({
@@ -300,13 +320,13 @@ function openNewEvent(prefill?: { start?: Date; end?: Date }) {
 
 async function submitNewEvent() {
   if (!officeId || !activeCalendarId) {
-    alert("Brak aktywnego kalendarza (wybierz Mój / Biuro).");
-    return;
+    alert(t(lang, "calNoActiveCalendar" as any) ?? "No active calendar.");    return;
   }
 
   const title = draft.title.trim();
-  if (!title) return alert("Podaj tytuł");
-  if (!draft.start || !draft.end) return alert("Podaj datę start i koniec");
+  if (!title) return alert(t(lang, "calErrorMissingTitle" as any) ?? "Enter a title.");
+
+  if (!draft.start || !draft.end) return alert(t(lang, "calErrorMissingDates" as any) ?? "Enter start and end date.");
 
   setSaving(true);
   try {
@@ -353,9 +373,32 @@ async function submitNewEvent() {
     // odśwież eventy w bieżącym zakresie
     if (range.start && range.end) await loadEvents(range.start, range.end);
   } catch (e: any) {
-    alert(e?.message ?? "Błąd zapisu");
+    alert(e?.message ?? (t(lang, "calSaveError" as any) ?? "Save failed"));
   } finally {
     setSaving(false);
+  }
+}
+async function syncCalendars() {
+  if (syncing) return;
+
+  setSyncing(true);
+  try {
+    const r = await fetch("/api/calendar/sync-ics", { method: "GET" });
+    if (!r.ok) {
+      const err = await r.json().catch(() => null);
+      throw new Error(err?.error || (t(lang, "calSyncError" as any) ?? "Sync failed"));
+    }
+
+    // odśwież widok po syncu
+    if (range.start && range.end) {
+      await loadEvents(range.start, range.end);
+    }
+
+    alert(t(lang, "calSyncSuccess" as any) ?? "Synchronization completed");
+  } catch (e: any) {
+    alert(e?.message ?? (t(lang, "calSyncError" as any) ?? "Sync failed"));
+  } finally {
+    setSyncing(false);
   }
 }
 
@@ -381,7 +424,17 @@ async function submitNewEvent() {
             >
               + Nowy termin
             </button>
-
+            <button
+                type="button"
+                className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold shadow-sm transition hover:bg-ew-accent/10 disabled:opacity-60"
+                onClick={syncCalendars}
+                disabled={syncing}
+                title={t(lang, "calSyncTitle" as any) ?? "Sync calendars"}
+                >
+                {syncing
+                    ? (t(lang, "calSyncing" as any) ?? "Synchronizing…")
+                    : (t(lang, "calSyncButton" as any) ?? "Synchronize")}
+                </button>
             <button
               type="button"
               className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold shadow-sm transition hover:bg-ew-accent/10"
@@ -547,10 +600,19 @@ async function submitNewEvent() {
             eventDurationEditable
 
             eventClick={(info) => {
+            if (info.event.extendedProps?.source === "ics") {
+                alert(t(lang, "calExternalReadOnly" as any) ?? "External events are read-only.");
+                return;
+            }
             openEditEvent(info.event);
             }}
 
             eventDrop={async (info) => {
+            if (info.event.extendedProps?.source === "ics") {
+                info.revert();
+                alert(t(lang, "calExternalReadOnly" as any) ?? "External events are read-only.");
+                return;
+            }
             try {
                 await patchEvent({
                 id: info.event.id,
@@ -560,12 +622,17 @@ async function submitNewEvent() {
                 if (range.start && range.end) await loadEvents(range.start, range.end);
             } catch (e: any) {
                 info.revert();
-                alert(e?.message ?? "Błąd zapisu zmian");
+                alert(e?.message ?? (t(lang, "calUpdateError" as any) ?? "Could not save changes."));
             }
             }}
 
             eventResize={async (info) => {
-            try {
+                if (info.event.extendedProps?.source === "ics") {
+                    info.revert();
+                    alert(t(lang, "calExternalReadOnly" as any) ?? "External events are read-only.");
+                    return;
+                }
+                try {
                 await patchEvent({
                 id: info.event.id,
                 start: info.event.start?.toISOString(),
