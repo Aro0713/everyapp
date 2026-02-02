@@ -147,6 +147,12 @@ export default function TeamPage() {
     const allowed = new Set(selectableMembershipIds);
     setSelectedMembershipIds((prev) => prev.filter((id) => allowed.has(id)));
   }, [selectableMembershipIds]);
+  
+  useEffect(() => {
+  if (!successMessage) return;
+  const tmr = setTimeout(() => setSuccessMessage(null), 3000);
+  return () => clearTimeout(tmr);
+}, [successMessage]);
 
   useEffect(() => {
     const first = selectedMembershipIds[0];
@@ -156,11 +162,6 @@ export default function TeamPage() {
       setPermSaved({});
       return;
     }
-  useEffect(() => {
-    if (!successMessage) return;
-    const tmr = setTimeout(() => setSuccessMessage(null), 3000);
-    return () => clearTimeout(tmr);
-    }, [successMessage]);
 
     loadMembershipPerms(first).catch((e: any) => {
       setError(e?.message ?? (t(lang, "teamErrorGeneric" as any) ?? "Error"));
@@ -224,6 +225,7 @@ export default function TeamPage() {
       if (!r.ok) throw new Error(j?.error || "Błąd zapisu uprawnień (batch)");
 
       setPermSaved({ ...permDraft });
+        setSuccessMessage(t(lang, "teamPermissionsSaved" as any) ?? "Zmiany zapisane.");
     } catch (e: any) {
       setError(e?.message ?? (t(lang, "teamErrorGeneric" as any) ?? "Error"));
     } finally {
