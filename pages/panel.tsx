@@ -6,6 +6,7 @@ import type { LangKey } from "@/utils/translations";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import CalendarPage from "./calendar";
 import { useRouter } from "next/router";
+import TeamView from "@/components/TeamView";
 
 function getCookie(name: string) {
   if (typeof document === "undefined") return null;
@@ -13,7 +14,7 @@ function getCookie(name: string) {
   return m ? decodeURIComponent(m[2]) : null;
 }
 
-type PanelView = "dashboard" | "calendar"; // na razie te dwa, potem dopisujesz kolejne
+type PanelView = "dashboard" | "calendar" | "team";
 
 type NavItem = {
   key: string;
@@ -70,7 +71,11 @@ function StatPill({
 
 export default function PanelPage() {
   const [lang, setLang] = useState<LangKey>(DEFAULT_LANG);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarPinned, setSidebarPinned] = useState(false); // opcjonalnie: “przypnij”
+    const [sidebarHover, setSidebarHover] = useState(false);
+
+    const sidebarVisible = sidebarPinned || sidebarHover;
+
   const [activeView, setActiveView] = useState<PanelView>("dashboard");
   
   const router = useRouter();
@@ -89,7 +94,7 @@ const nav = useMemo<NavItem[]>(
     { key: "panelNavListings", disabled: true },
     { key: "panelNavBuyers", disabled: true },
     { key: "panelNavClients", disabled: true },
-    { key: "panelNavTeam", href: "/team", subKey: "teamSubtitle" },
+    { key: "panelNavTeam", view: "team", subKey: "teamSubtitle" },
     { key: "panelNavOfficeDeals", disabled: true },
     { key: "panelNavEmployees", disabled: true },
     { key: "panelNavPrimaryMarket", disabled: true },
@@ -117,63 +122,69 @@ const activeNavItem = useMemo(() => {
 
       <main className="min-h-screen bg-ew-bg text-ew-primary">
         <div className="flex min-h-screen">
-          {/* SIDEBAR */}
-          <aside
+          {/* SIDEBAR (auto-hide on hover) */}
+        <aside
+        onMouseEnter={() => setSidebarHover(true)}
+        onMouseLeave={() => setSidebarHover(false)}
+        className={clsx(
+            "fixed left-0 top-0 z-50 hidden h-screen md:block",
+            "transition-all duration-200"
+        )}
+        >
+        {/* Hot-zone: niewidoczny pasek do wywołania menu */}
+        {!sidebarVisible ? (
+            <div
+            className="absolute left-0 top-0 h-full w-3"
+            onMouseEnter={() => setSidebarHover(true)}
+            />
+        ) : null}
+
+        {/* Właściwy panel */}
+        <div
             className={clsx(
-              "sticky top-0 hidden h-screen w-72 shrink-0 border-r border-white/10 bg-ew-primary text-white md:block",
-              sidebarOpen ? "" : "md:w-20"
+            "h-full border-r border-white/10 bg-ew-primary text-white",
+            "transition-transform duration-200 will-change-transform",
+            "w-72",
+            sidebarVisible ? "translate-x-0" : "-translate-x-[calc(100%-0.75rem)]"
             )}
-          >
+        >
             <div className="flex h-16 items-center justify-between px-5">
-              <div className="flex items-center gap-3">
-                {/* LOGO */}
-                <div
-                className="
-                    flex h-10 w-10 items-center justify-center
-                    rounded-2xl
-                    bg-white/25 backdrop-blur
-                    ring-1 ring-white/30
-                "
-                >
-                <img
-                    src="/everyapp-logo.svg"
-                    alt="EveryAPP"
-                    className="h-7 w-auto"
-                    />
+            <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/25 backdrop-blur ring-1 ring-white/30">
+                <img src="/everyapp-logo.svg" alt="EveryAPP" className="h-7 w-auto" />
                 </div>
 
-                {sidebarOpen ? (
-                  <div className="leading-tight">
-                    <div className="text-sm font-extrabold tracking-tight">EveryAPP</div>
-                    <div className="text-xs text-white/70">{t(lang, "panelSidebarSub")}</div>
-                  </div>
-                ) : null}
-              </div>
+                <div className="leading-tight">
+                <div className="text-sm font-extrabold tracking-tight">EveryAPP</div>
+                <div className="text-xs text-white/70">{t(lang, "panelSidebarSub")}</div>
+                </div>
+            </div>
 
-              <button
+            {/* Przypięcie (opcjonalnie, ale przydatne) */}
+            <button
                 type="button"
-                onClick={() => setSidebarOpen((v) => !v)}
+                onClick={() => setSidebarPinned((v) => !v)}
                 className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-white/90 transition hover:bg-white/10"
                 aria-label={t(lang, "panelToggleSidebar")}
                 title={t(lang, "panelToggleSidebar")}
-              >
-                {sidebarOpen ? "⟨⟨" : "⟩⟩"}
-              </button>
+            >
+                {sidebarPinned ? "📌" : "📍"}
+            </button>
             </div>
 
             <nav className="px-3 pb-6 pt-2">
-           {nav.map((it) => {
-            const isActive = it.view ? activeView === it.view : false;
-            const isDisabled = !!it.disabled;
+            {nav.map((it) => {
+                const isActive = it.view ? activeView === it.view : false;
+                const isDisabled = !!it.disabled;
 
-            const rowClass = clsx(
+                const rowClass = clsx(
                 "mt-1 flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm transition",
                 isActive && "bg-white/10 text-white",
                 !isActive && !isDisabled && "text-white/85 hover:bg-white/10 hover:text-white",
                 isDisabled && "cursor-not-allowed opacity-50"
-            );
+                );
 
-            return (
+                return (
                 <button
                     key={it.key}
                     type="button"
@@ -188,16 +199,11 @@ const activeNavItem = useMemo(() => {
                         return;
                     }
 
-                    if (it.view) {
-                        setActiveView(it.view);
-                    }
+                    if (it.view) setActiveView(it.view);
                     }}
                 >
-                    <span className={clsx("truncate", sidebarOpen ? "" : "text-center w-full")}>
-                    {sidebarOpen ? t(lang, it.key as any) : "•"}
-                    </span>
-
-                    {sidebarOpen && it.badge ? (
+                    <span className="truncate">{t(lang, it.key as any)}</span>
+                    {it.badge ? (
                     <span className="rounded-full bg-ew-accent/20 px-2 py-0.5 text-[11px] font-semibold text-ew-accent">
                         {it.badge}
                     </span>
@@ -205,34 +211,35 @@ const activeNavItem = useMemo(() => {
                 </button>
                 );
             })}
-
-                </nav>
+            </nav>
 
             <div className="mt-auto px-4 pb-5">
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
                 <p className="text-xs font-semibold text-white/80">{t(lang, "panelSidebarHintTitle")}</p>
                 <p className="mt-1 text-xs text-white/65">{t(lang, "panelSidebarHintDesc")}</p>
 
                 <div className="mt-3 flex gap-2">
-                  <Link
+                <Link
                     href="/"
                     className="inline-flex flex-1 items-center justify-center rounded-2xl bg-ew-accent px-3 py-2 text-xs font-bold text-ew-primary transition hover:opacity-95"
-                  >
+                >
                     {t(lang, "panelGoHome")}
-                  </Link>
-                  <Link
+                </Link>
+                <Link
                     href="/login"
                     className="inline-flex flex-1 items-center justify-center rounded-2xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-white/90 transition hover:bg-white/10"
-                  >
+                >
                     {t(lang, "panelLogout")}
-                  </Link>
+                </Link>
                 </div>
-              </div>
             </div>
-          </aside>
+            </div>
+        </div>
+        </aside>
 
           {/* CONTENT */}
-          <section className="flex min-w-0 flex-1 flex-col">
+                   <section className="flex min-w-0 flex-1 flex-col md:pl-3">
+
             {/* TOPBAR */}
             <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/80 backdrop-blur">
               <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
@@ -284,9 +291,9 @@ const activeNavItem = useMemo(() => {
               </div>
             </header>
 
-            {/* MAIN GRID */}
-            {activeView === "dashboard" ? (
-            <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
+                {/* MAIN GRID */}
+                {activeView === "dashboard" ? (
+                <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
                 {/* KPI row */}
                 <div className="grid gap-4 md:grid-cols-4">
                 <StatPill label={t(lang, "panelKpiCalls")} value="0" />
@@ -445,14 +452,17 @@ const activeNavItem = useMemo(() => {
                     </PanelCard>
                 </div>
                 </div>
-
                 <footer className="mt-10 pb-6 text-xs text-gray-500">{t(lang, "panelFooter")}</footer>
-            </div>
-            ) : activeView === "calendar" ? (
-            <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
-                <CalendarPage />
-            </div>
-            ) : null}
+                </div>
+                ) : activeView === "calendar" ? (
+                <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
+                    <CalendarPage />
+                </div>
+                ) : activeView === "team" ? (
+                <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
+                    <TeamView />
+                </div>
+                ) : null}
 
           </section>
         </div>
