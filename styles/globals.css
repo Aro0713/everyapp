@@ -8,3 +8,21 @@
   --ew-bg: 255 255 255;    /* #FFFFFF */
 }
 
+/* === Firmowe (EveryAPP / Biuro) === */
+.fc-event--office {
+  background-color: var(--ew-primary, #4C6FFF) !important;
+  border-color: var(--ew-primary, #4C6FFF) !important;
+  color: #ffffff !important;
+}
+
+/* === Prywatne (Mój / ICS) === */
+.fc-event--private {
+  background-color: #E6F3F1 !important;
+  border: 1px solid #5FA8A0 !important;
+  color: #0F3D3A !important;
+}
+
+/* Opcjonalnie: delikatniejszy hover */
+.fc-event--private:hover {
+  background-color: #4C8F88 !important;
+}

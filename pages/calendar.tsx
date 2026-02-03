@@ -710,98 +710,109 @@ async function deleteIntegration(id: string) {
             </div>
         </div>
         </div>
+        {/* LEGEND */}
+        <div className="mb-4 mt-2 flex gap-4 text-xs text-gray-600">
+          <span className="flex items-center gap-2">
+            <span className="h-3 w-3 rounded bg-ew-primary" />
+            {t(lang, "calLegendOffice" as any) ?? "Firmowe"}
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="h-3 w-3 rounded" style={{ background: "#5FA8A0" }} />
+            {t(lang, "calLegendPrivate" as any) ?? "Prywatne"}
+          </span>
+        </div>
                 {/* CONNECTED CALENDARS (Mine only) */}
-{scope === "user" ? (
-  <div className="mb-4 rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
-    <div className="flex items-center justify-between gap-3">
-      <div>
-        <div className="text-sm font-extrabold text-ew-primary">
-          {t(lang, "calIntegrationsTitle" as any) ?? "Connected calendars"}
-        </div>
-        <div className="mt-1 text-xs text-gray-500">
-          {t(lang, "calIntegrationsSub" as any) ?? "ICS sources are read-only. External events cannot be edited."}
-        </div>
-      </div>
-
-      <button
-        type="button"
-        className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold shadow-sm transition hover:bg-ew-accent/10 disabled:opacity-60"
-        onClick={() => setIsConnectOpen(true)}
-        disabled={connectSaving}
-      >
-        + {t(lang, "calConnectButton" as any) ?? "Connect calendar"}
-      </button>
-    </div>
-
-    {integrationsLoading ? (
-      <div className="mt-3 text-sm text-gray-600">
-        {t(lang, "calIntegrationsLoading" as any) ?? "Loading…"}
-      </div>
-    ) : integrations.length === 0 ? (
-      <div className="mt-3 rounded-2xl border border-dashed border-gray-200 bg-ew-accent/5 p-4 text-sm text-gray-600">
-        {t(lang, "calIntegrationsEmpty" as any) ??
-          "No connected calendars. Add an ICS source (Google/Outlook/Apple) to synchronize."}
-      </div>
-    ) : (
-      <div className="mt-3 space-y-2">
-        {integrations.map((it) => {
-          const ok = !it.last_error;
-          return (
-            <div
-              key={it.id}
-              className="flex flex-col gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div className="min-w-0">
-                <div className="truncate text-sm font-semibold text-ew-primary">{it.name}</div>
-                <div className="mt-1 truncate text-xs text-gray-500">
-                  {it.last_sync_at
-                    ? `${t(lang, "calIntegrationLastSync" as any) ?? "Last sync"}: ${new Date(it.last_sync_at).toLocaleString()}`
-                    : `${t(lang, "calIntegrationLastSync" as any) ?? "Last sync"}: —`}
+        {scope === "user" ? (
+          <div className="mb-4 rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-extrabold text-ew-primary">
+                  {t(lang, "calIntegrationsTitle" as any) ?? "Connected calendars"}
                 </div>
-                {it.last_error ? (
-                  <div className="mt-1 text-xs text-red-600">
-                    {t(lang, "calIntegrationError" as any) ?? "Error"}: {it.last_error}
-                  </div>
-                ) : null}
+                <div className="mt-1 text-xs text-gray-500">
+                  {t(lang, "calIntegrationsSub" as any) ?? "ICS sources are read-only. External events cannot be edited."}
+                </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <span
-                  className={clsx(
-                    "rounded-full px-3 py-1 text-xs font-semibold",
-                    ok ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"
-                  )}
-                >
-                  {ok
-                    ? (t(lang, "calIntegrationStatusOk" as any) ?? "OK")
-                    : (t(lang, "calIntegrationStatusError" as any) ?? "Error")}
-                </span>
-
-                <button
-                  type="button"
-                  className="rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold shadow-sm transition hover:bg-ew-accent/10 disabled:opacity-60"
-                  onClick={syncCalendars}
-                  disabled={syncing}
-                  title={t(lang, "calSyncTitle" as any) ?? "Calendar sync (ICS)"}
-                >
-                  {t(lang, "calIntegrationRefresh" as any) ?? "Refresh"}
-                </button>
-
-                <button
-                  type="button"
-                  className="rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold shadow-sm transition hover:bg-ew-accent/10"
-                  onClick={() => deleteIntegration(it.id)}
-                >
-                  {t(lang, "calIntegrationDelete" as any) ?? "Delete"}
-                </button>
-              </div>
+              <button
+                type="button"
+                className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold shadow-sm transition hover:bg-ew-accent/10 disabled:opacity-60"
+                onClick={() => setIsConnectOpen(true)}
+                disabled={connectSaving}
+              >
+                + {t(lang, "calConnectButton" as any) ?? "Connect calendar"}
+              </button>
             </div>
-          );
-        })}
-      </div>
-    )}
-  </div>
-) : null}
+
+            {integrationsLoading ? (
+              <div className="mt-3 text-sm text-gray-600">
+                {t(lang, "calIntegrationsLoading" as any) ?? "Loading…"}
+              </div>
+            ) : integrations.length === 0 ? (
+              <div className="mt-3 rounded-2xl border border-dashed border-gray-200 bg-ew-accent/5 p-4 text-sm text-gray-600">
+                {t(lang, "calIntegrationsEmpty" as any) ??
+                  "No connected calendars. Add an ICS source (Google/Outlook/Apple) to synchronize."}
+              </div>
+            ) : (
+              <div className="mt-3 space-y-2">
+                {integrations.map((it) => {
+                  const ok = !it.last_error;
+                  return (
+                    <div
+                      key={it.id}
+                      className="flex flex-col gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-ew-primary">{it.name}</div>
+                        <div className="mt-1 truncate text-xs text-gray-500">
+                          {it.last_sync_at
+                            ? `${t(lang, "calIntegrationLastSync" as any) ?? "Last sync"}: ${new Date(it.last_sync_at).toLocaleString()}`
+                            : `${t(lang, "calIntegrationLastSync" as any) ?? "Last sync"}: —`}
+                        </div>
+                        {it.last_error ? (
+                          <div className="mt-1 text-xs text-red-600">
+                            {t(lang, "calIntegrationError" as any) ?? "Error"}: {it.last_error}
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={clsx(
+                            "rounded-full px-3 py-1 text-xs font-semibold",
+                            ok ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"
+                          )}
+                        >
+                          {ok
+                            ? (t(lang, "calIntegrationStatusOk" as any) ?? "OK")
+                            : (t(lang, "calIntegrationStatusError" as any) ?? "Error")}
+                        </span>
+
+                        <button
+                          type="button"
+                          className="rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold shadow-sm transition hover:bg-ew-accent/10 disabled:opacity-60"
+                          onClick={syncCalendars}
+                          disabled={syncing}
+                          title={t(lang, "calSyncTitle" as any) ?? "Calendar sync (ICS)"}
+                        >
+                          {t(lang, "calIntegrationRefresh" as any) ?? "Refresh"}
+                        </button>
+
+                        <button
+                          type="button"
+                          className="rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold shadow-sm transition hover:bg-ew-accent/10"
+                          onClick={() => deleteIntegration(it.id)}
+                        >
+                          {t(lang, "calIntegrationDelete" as any) ?? "Delete"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : null}
 
         {/* CALENDAR GRID */}
         <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
@@ -818,6 +829,12 @@ async function deleteIntegration(id: string) {
             editable
             eventStartEditable
             eventDurationEditable
+            eventClassNames={(arg) => {
+              const src = arg.event.extendedProps?.source;
+
+              if (src === "ics") return ["fc-event--private"];
+              return ["fc-event--office"];
+            }}
 
             eventClick={(info) => {
             if (info.event.extendedProps?.source === "ics") {

@@ -4023,6 +4023,37 @@ calIntegrationDeleteError: {
   lt: "Nepavyko ištrinti integracijos.",
   vi: "Không thể xóa tích hợp.",
 },
+calIntegrationStatusOk: {
+  pl: "OK",
+  en: "OK",
+  de: "OK",
+  cs: "OK",
+  sk: "OK",
+  ua: "OK",
+  lt: "OK",
+  vi: "OK",
+},
+calLegendOffice: {
+  pl: "Firmowe",
+  en: "Work",
+  de: "Geschäftlich",
+  cs: "Firemní",
+  sk: "Firemné",
+  ua: "Робочі",
+  lt: "Darbo",
+  vi: "Công việc",
+},
+
+calLegendPrivate: {
+  pl: "Prywatne",
+  en: "Private",
+  de: "Privat",
+  cs: "Soukromé",
+  sk: "Súkromné",
+  ua: "Приватні",
+  lt: "Asmeniniai",
+  vi: "Cá nhân",
+},
 
 } as const);
 
