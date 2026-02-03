@@ -2,17 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
+/* =========================
+   EveryAPP – CSS VARIABLES
+   ========================= */
 :root {
-  --ew-primary: 43 60 90;   /* #2B3C5A */
-  --ew-accent: 119 156 211;/* #779CD3 */
-  --ew-bg: 255 255 255;    /* #FFFFFF */
+  --ew-primary: 43 60 90;    /* #2B3C5A – EveryAPP Blue */
+  --ew-accent: 119 156 211; /* #779CD3 */
+  --ew-bg: 255 255 255;     /* #FFFFFF */
 }
+
+/* =====================================
+   FULLCALENDAR – EVENT COLOR OVERRIDES
+   ===================================== */
 
 /* === Firmowe (EveryAPP / Biuro) === */
 .fc-event--office {
-  background-color: var(--ew-primary, #4C6FFF) !important;
-  border-color: var(--ew-primary, #4C6FFF) !important;
+  background-color: rgb(var(--ew-primary)) !important;
+  border-color: rgb(var(--ew-primary)) !important;
   color: #ffffff !important;
+
+  /* subtelna obwódka (lepsza separacja w gęstych dniach) */
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+
+  /* stabilny wygląd */
+  opacity: 1;
 }
 
 /* === Prywatne (Mój / ICS) === */
@@ -20,9 +33,29 @@
   background-color: #E6F3F1 !important;
   border: 1px solid #5FA8A0 !important;
   color: #0F3D3A !important;
+
+  /* delikatnie mniej „krzykliwe” */
+  opacity: 0.92;
 }
 
-/* Opcjonalnie: delikatniejszy hover */
+/* Hover dla prywatnych – czytelny feedback */
 .fc-event--private:hover {
   background-color: #4C8F88 !important;
+  border-color: #4C8F88 !important;
+  color: #ffffff !important;
+  opacity: 1;
+}
+
+/* =====================================
+   (Opcjonalne) Drobne dopolerowanie FC
+   ===================================== */
+
+/* Zaokrąglenia spójne z UI */
+.fc .fc-event {
+  border-radius: 0.75rem;
+}
+
+/* Lepsza czytelność tytułów */
+.fc .fc-event-title {
+  font-weight: 600;
 }
