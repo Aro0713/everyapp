@@ -45,3 +45,26 @@
   background-color: #4C8F88 !important;
   border-color: #4C8F88 !important;
 }
+/* =====================================
+   FULLCALENDAR – FORCE WHITE TEXT
+   ===================================== */
+
+/* Firmowe (EveryAPP / Biuro) – biały tekst */
+.fc-event--office,
+.fc-event--office .fc-event-main,
+.fc-event--office .fc-event-main-frame,
+.fc-event--office .fc-event-content,
+.fc-event--office .fc-event-title,
+.fc-event--office .fc-event-time {
+  color: #ffffff !important;
+}
+
+/* Prywatne (Mój / ICS) – biały tekst */
+.fc-event--private,
+.fc-event--private .fc-event-main,
+.fc-event--private .fc-event-main-frame,
+.fc-event--private .fc-event-content,
+.fc-event--private .fc-event-title,
+.fc-event--private .fc-event-time {
+  color: #ffffff !important;
+}
