@@ -15,47 +15,60 @@
    FULLCALENDAR – EVENT COLOR OVERRIDES
    ===================================== */
 
+/* Ujednolicenie wyglądu eventów w różnych widokach FullCalendar */
+.fc .fc-event {
+  border-radius: 0.6rem !important;   
+  box-shadow: none !important;        
+  overflow: hidden;
+}
+
+/* Czytelność tekstu w eventach */
+.fc .fc-event-title,
+.fc .fc-event-time {
+  font-weight: 600;
+  line-height: 1.2;
+}
+
 /* === Firmowe (EveryAPP / Biuro) === */
+/* Styl: "chip" – jasne tło + mocny akcent */
 .fc-event--office {
-  background-color: rgb(var(--ew-primary)) !important;
-  border-color: rgb(var(--ew-primary)) !important;
-  color: #ffffff !important;
+  background-color: rgba(var(--ew-primary), 0.10) !important;
+  border: 1px solid rgba(var(--ew-primary), 0.35) !important;
+  color: rgb(var(--ew-primary)) !important;
+  opacity: 1 !important;
+}
 
-  /* subtelna obwódka (lepsza separacja w gęstych dniach) */
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+/* Pasek akcentu po lewej + padding działa niezależnie od wrapperów */
+.fc-event--office .fc-event-main,
+.fc-event--office .fc-event-main-frame,
+.fc-event--office .fc-event-content {
+  border-left: 4px solid rgb(var(--ew-primary)) !important;
+  padding-left: 8px;
+}
 
-  /* stabilny wygląd */
-  opacity: 1;
+/* Hover – delikatny */
+.fc-event--office:hover {
+  background-color: rgba(var(--ew-primary), 0.14) !important;
+  border-color: rgba(var(--ew-primary), 0.55) !important;
 }
 
 /* === Prywatne (Mój / ICS) === */
 .fc-event--private {
-  background-color: #E6F3F1 !important;
-  border: 1px solid #5FA8A0 !important;
+  background-color: rgba(95, 168, 160, 0.12) !important;
+  border: 1px solid rgba(95, 168, 160, 0.45) !important;
   color: #0F3D3A !important;
-
-  /* delikatnie mniej „krzykliwe” */
-  opacity: 0.92;
+  opacity: 0.95 !important;
 }
 
-/* Hover dla prywatnych – czytelny feedback */
+.fc-event--private .fc-event-main,
+.fc-event--private .fc-event-main-frame,
+.fc-event--private .fc-event-content {
+  border-left: 4px solid #5FA8A0 !important;
+  padding-left: 8px;
+}
+
 .fc-event--private:hover {
-  background-color: #4C8F88 !important;
-  border-color: #4C8F88 !important;
-  color: #ffffff !important;
-  opacity: 1;
-}
-
-/* =====================================
-   (Opcjonalne) Drobne dopolerowanie FC
-   ===================================== */
-
-/* Zaokrąglenia spójne z UI */
-.fc .fc-event {
-  border-radius: 0.75rem;
-}
-
-/* Lepsza czytelność tytułów */
-.fc .fc-event-title {
-  font-weight: 600;
+  background-color: rgba(95, 168, 160, 0.16) !important;
+  border-color: rgba(95, 168, 160, 0.60) !important;
+  opacity: 1 !important;
 }
