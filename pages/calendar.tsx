@@ -127,6 +127,27 @@ export default function CalendarPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
+
+  type IntegrationRow = {
+  id: string;
+  provider: "ics";
+  name: string;
+  ics_url: string;
+  is_enabled: boolean;
+  last_sync_at?: string | null;
+  last_error?: string | null;
+};
+
+const [integrations, setIntegrations] = useState<IntegrationRow[]>([]);
+const [integrationsLoading, setIntegrationsLoading] = useState(false);
+
+const [isConnectOpen, setIsConnectOpen] = useState(false);
+const [connectSaving, setConnectSaving] = useState(false);
+const [connectDraft, setConnectDraft] = useState<{ name: string; icsUrl: string }>({
+  name: "",
+  icsUrl: "",
+});
+
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
  const [draft, setDraft] = useState<{
   eventType: EventType;
@@ -182,6 +203,7 @@ useEffect(() => {
 
       if (data.userCalendarId) setScope("user");
       else setScope("org");
+      await loadIntegrations();
     })();
   }, [userId]);
 
@@ -380,6 +402,16 @@ async function submitNewEvent() {
 }
 async function syncCalendars() {
   if (syncing) return;
+  if (scope !== "user") {
+  alert(t(lang, "calSyncMineOnly" as any) ?? "Synchronization is available only in Mine.");
+  return;
+}
+
+if (integrations.length === 0) {
+  alert(t(lang, "calSyncNoSources" as any) ?? "No connected calendars. Add an ICS source first.");
+  return;
+}
+
 
   setSyncing(true);
   try {
@@ -399,6 +431,88 @@ async function syncCalendars() {
     alert(e?.message ?? (t(lang, "calSyncError" as any) ?? "Sync failed"));
   } finally {
     setSyncing(false);
+  }
+}
+async function loadIntegrations() {
+  setIntegrationsLoading(true);
+  try {
+    const r = await fetch("/api/calendar/integrations");
+    if (!r.ok) throw new Error("INTEGRATIONS_FETCH_FAILED");
+    const data = await r.json().catch(() => []);
+    const list: IntegrationRow[] = Array.isArray(data) ? data : [];
+    setIntegrations(list);
+  } catch {
+    // MVP: nie blokuj kalendarza jeśli integracje nie dojdą
+    setIntegrations([]);
+  } finally {
+    setIntegrationsLoading(false);
+  }
+}
+
+function isValidIcsUrl(url: string) {
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" || u.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+async function addIntegration({ name, icsUrl }: { name: string; icsUrl: string }, syncAfter: boolean) {
+  const n = name.trim();
+  const u = icsUrl.trim();
+
+  if (!n) {
+    alert(t(lang, "calConnectErrorName" as any) ?? "Enter a name.");
+    return;
+  }
+  if (!isValidIcsUrl(u)) {
+    alert(t(lang, "calConnectErrorUrl" as any) ?? "Enter a valid ICS URL.");
+    return;
+  }
+
+  setConnectSaving(true);
+  try {
+    const r = await fetch("/api/calendar/integrations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: n, icsUrl: u }),
+    });
+
+    const j = await r.json().catch(() => null);
+    if (!r.ok) throw new Error(j?.error || (t(lang, "calConnectErrorSave" as any) ?? "Could not save integration."));
+
+    setIsConnectOpen(false);
+    setConnectDraft({ name: "", icsUrl: "" });
+
+    await loadIntegrations();
+
+    if (syncAfter) {
+      await syncCalendars(); // ma już alerty
+    } else {
+      alert(t(lang, "calConnectSaved" as any) ?? "Calendar connected.");
+    }
+  } catch (e: any) {
+    alert(e?.message ?? (t(lang, "calConnectErrorSave" as any) ?? "Could not save integration."));
+  } finally {
+    setConnectSaving(false);
+  }
+}
+
+async function deleteIntegration(id: string) {
+  if (!confirm(t(lang, "calIntegrationDeleteConfirm" as any) ?? "Delete this integration?")) return;
+
+  try {
+    const r = await fetch(`/api/calendar/integrations?id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+    if (!r.ok) throw new Error("DELETE_FAILED");
+    await loadIntegrations();
+
+    // po usunięciu odśwież listę eventów (żeby zniknęły z UI)
+    if (range.start && range.end) await loadEvents(range.start, range.end);
+  } catch {
+    alert(t(lang, "calIntegrationDeleteError" as any) ?? "Could not delete integration.");
   }
 }
 
@@ -435,6 +549,20 @@ async function syncCalendars() {
                     ? (t(lang, "calSyncing" as any) ?? "Synchronizing…")
                     : (t(lang, "calSyncButton" as any) ?? "Synchronize")}
                 </button>
+                <button
+                  type="button"
+                  className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold shadow-sm transition hover:bg-ew-accent/10 disabled:opacity-60"
+                  onClick={() => {
+                    if (scope !== "user") {
+                      alert(t(lang, "calConnectMineOnly" as any) ?? "Connect calendars in Mine.");
+                      return;
+                    }
+                    setIsConnectOpen(true);
+                  }}
+                >
+                  + {t(lang, "calConnectButton" as any) ?? "Connect calendar"}
+                </button>
+
             <button
               type="button"
               className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold shadow-sm transition hover:bg-ew-accent/10"
@@ -582,6 +710,98 @@ async function syncCalendars() {
             </div>
         </div>
         </div>
+                {/* CONNECTED CALENDARS (Mine only) */}
+{scope === "user" ? (
+  <div className="mb-4 rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
+    <div className="flex items-center justify-between gap-3">
+      <div>
+        <div className="text-sm font-extrabold text-ew-primary">
+          {t(lang, "calIntegrationsTitle" as any) ?? "Connected calendars"}
+        </div>
+        <div className="mt-1 text-xs text-gray-500">
+          {t(lang, "calIntegrationsSub" as any) ?? "ICS sources are read-only. External events cannot be edited."}
+        </div>
+      </div>
+
+      <button
+        type="button"
+        className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold shadow-sm transition hover:bg-ew-accent/10 disabled:opacity-60"
+        onClick={() => setIsConnectOpen(true)}
+        disabled={connectSaving}
+      >
+        + {t(lang, "calConnectButton" as any) ?? "Connect calendar"}
+      </button>
+    </div>
+
+    {integrationsLoading ? (
+      <div className="mt-3 text-sm text-gray-600">
+        {t(lang, "calIntegrationsLoading" as any) ?? "Loading…"}
+      </div>
+    ) : integrations.length === 0 ? (
+      <div className="mt-3 rounded-2xl border border-dashed border-gray-200 bg-ew-accent/5 p-4 text-sm text-gray-600">
+        {t(lang, "calIntegrationsEmpty" as any) ??
+          "No connected calendars. Add an ICS source (Google/Outlook/Apple) to synchronize."}
+      </div>
+    ) : (
+      <div className="mt-3 space-y-2">
+        {integrations.map((it) => {
+          const ok = !it.last_error;
+          return (
+            <div
+              key={it.id}
+              className="flex flex-col gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold text-ew-primary">{it.name}</div>
+                <div className="mt-1 truncate text-xs text-gray-500">
+                  {it.last_sync_at
+                    ? `${t(lang, "calIntegrationLastSync" as any) ?? "Last sync"}: ${new Date(it.last_sync_at).toLocaleString()}`
+                    : `${t(lang, "calIntegrationLastSync" as any) ?? "Last sync"}: —`}
+                </div>
+                {it.last_error ? (
+                  <div className="mt-1 text-xs text-red-600">
+                    {t(lang, "calIntegrationError" as any) ?? "Error"}: {it.last_error}
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span
+                  className={clsx(
+                    "rounded-full px-3 py-1 text-xs font-semibold",
+                    ok ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"
+                  )}
+                >
+                  {ok
+                    ? (t(lang, "calIntegrationStatusOk" as any) ?? "OK")
+                    : (t(lang, "calIntegrationStatusError" as any) ?? "Error")}
+                </span>
+
+                <button
+                  type="button"
+                  className="rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold shadow-sm transition hover:bg-ew-accent/10 disabled:opacity-60"
+                  onClick={syncCalendars}
+                  disabled={syncing}
+                  title={t(lang, "calSyncTitle" as any) ?? "Calendar sync (ICS)"}
+                >
+                  {t(lang, "calIntegrationRefresh" as any) ?? "Refresh"}
+                </button>
+
+                <button
+                  type="button"
+                  className="rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold shadow-sm transition hover:bg-ew-accent/10"
+                  onClick={() => deleteIntegration(it.id)}
+                >
+                  {t(lang, "calIntegrationDelete" as any) ?? "Delete"}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    )}
+  </div>
+) : null}
 
         {/* CALENDAR GRID */}
         <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
@@ -815,6 +1035,98 @@ async function syncCalendars() {
           </div>
         </div>
       ) : null}
+      {/* CONNECT MODAL */}
+{isConnectOpen ? (
+  <div
+    className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+    onMouseDown={(e) => {
+      if (e.target === e.currentTarget) setIsConnectOpen(false);
+    }}
+  >
+    <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-xl">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-extrabold tracking-tight text-ew-primary">
+            {t(lang, "calConnectTitle" as any) ?? "Connect calendar (ICS)"}
+          </h2>
+          <p className="mt-1 text-xs text-gray-500">
+            {t(lang, "calConnectHint" as any) ??
+              "Paste a private ICS link (Google/Outlook/Apple). Imported events are read-only."}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          className="rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-ew-primary transition hover:bg-ew-accent/10"
+          onClick={() => setIsConnectOpen(false)}
+        >
+          ✕
+        </button>
+      </div>
+
+      <div className="mt-5 space-y-4">
+        <div>
+          <label className="text-xs font-semibold text-gray-600">
+            {t(lang, "calConnectNameLabel" as any) ?? "Name"}
+          </label>
+          <input
+            value={connectDraft.name}
+            onChange={(e) => setConnectDraft((d) => ({ ...d, name: e.target.value }))}
+            className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
+            placeholder={t(lang, "calConnectNamePh" as any) ?? "e.g. Google private"}
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-semibold text-gray-600">
+            {t(lang, "calConnectUrlLabel" as any) ?? "ICS URL"}
+          </label>
+          <input
+            value={connectDraft.icsUrl}
+            onChange={(e) => setConnectDraft((d) => ({ ...d, icsUrl: e.target.value }))}
+            className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
+            placeholder="https://..."
+          />
+          <p className="mt-2 text-xs text-gray-500">
+            {t(lang, "calConnectUrlHelp" as any) ??
+              "Tip: in Google Calendar, use the private address in iCal format."}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-6 flex items-center justify-end gap-2">
+        <button
+          type="button"
+          className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-ew-primary transition hover:bg-ew-accent/10 disabled:opacity-60"
+          onClick={() => setIsConnectOpen(false)}
+          disabled={connectSaving}
+        >
+          {t(lang, "calCancel" as any) ?? "Cancel"}
+        </button>
+
+          <button
+            type="button"
+            className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold shadow-sm transition hover:bg-ew-accent/10 disabled:opacity-60"
+            onClick={() => addIntegration(connectDraft, false)}
+            disabled={connectSaving}
+          >
+            {connectSaving
+              ? (t(lang, "calConnectSaving" as any) ?? "Saving…")
+              : (t(lang, "calConnectSave" as any) ?? "Save")}
+          </button>
+
+          <button
+            type="button"
+            className="rounded-2xl bg-ew-accent px-4 py-2 text-sm font-semibold text-ew-primary shadow-sm transition hover:opacity-95 disabled:opacity-60"
+            onClick={() => addIntegration(connectDraft, true)}
+            disabled={connectSaving}
+          >
+            {t(lang, "calConnectSaveAndSync" as any) ?? "Save & sync"}
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null}
     </main>
   );
 }
