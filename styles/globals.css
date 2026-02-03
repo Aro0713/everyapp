@@ -15,60 +15,33 @@
    FULLCALENDAR – EVENT COLOR OVERRIDES
    ===================================== */
 
-/* Ujednolicenie wyglądu eventów w różnych widokach FullCalendar */
+/* Wspólne: bez cieni, bez pasków, normalny radius */
 .fc .fc-event {
-  border-radius: 0.6rem !important;   
-  box-shadow: none !important;        
+  border-radius: 0.75rem !important;
+  box-shadow: none !important;
   overflow: hidden;
 }
 
-/* Czytelność tekstu w eventach */
-.fc .fc-event-title,
-.fc .fc-event-time {
-  font-weight: 600;
-  line-height: 1.2;
-}
-
 /* === Firmowe (EveryAPP / Biuro) === */
-/* Styl: "chip" – jasne tło + mocny akcent */
 .fc-event--office {
-  background-color: rgba(var(--ew-primary), 0.10) !important;
-  border: 1px solid rgba(var(--ew-primary), 0.35) !important;
-  color: rgb(var(--ew-primary)) !important;
-  opacity: 1 !important;
-}
-
-/* Pasek akcentu po lewej + padding działa niezależnie od wrapperów */
-.fc-event--office .fc-event-main,
-.fc-event--office .fc-event-main-frame,
-.fc-event--office .fc-event-content {
-  border-left: 4px solid rgb(var(--ew-primary)) !important;
-  padding-left: 8px;
-}
-
-/* Hover – delikatny */
-.fc-event--office:hover {
-  background-color: rgba(var(--ew-primary), 0.14) !important;
-  border-color: rgba(var(--ew-primary), 0.55) !important;
+  background-color: rgb(var(--ew-primary)) !important;
+  border-color: rgb(var(--ew-primary)) !important;
+  color: #ffffff !important;
 }
 
 /* === Prywatne (Mój / ICS) === */
 .fc-event--private {
-  background-color: rgba(95, 168, 160, 0.12) !important;
-  border: 1px solid rgba(95, 168, 160, 0.45) !important;
-  color: #0F3D3A !important;
-  opacity: 0.95 !important;
+  background-color: #5FA8A0 !important; /* zielony/teal */
+  border-color: #5FA8A0 !important;
+  color: #ffffff !important;
 }
 
-.fc-event--private .fc-event-main,
-.fc-event--private .fc-event-main-frame,
-.fc-event--private .fc-event-content {
-  border-left: 4px solid #5FA8A0 !important;
-  padding-left: 8px;
+/* Hover: delikatne przyciemnienie */
+.fc-event--office:hover {
+  background-color: rgba(var(--ew-primary), 0.92) !important;
 }
 
 .fc-event--private:hover {
-  background-color: rgba(95, 168, 160, 0.16) !important;
-  border-color: rgba(95, 168, 160, 0.60) !important;
-  opacity: 1 !important;
+  background-color: #4C8F88 !important;
+  border-color: #4C8F88 !important;
 }
