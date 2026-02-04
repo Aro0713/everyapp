@@ -7,7 +7,7 @@ function optString(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null;
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     if (req.method !== "GET") {
       res.setHeader("Allow", "GET");
@@ -20,11 +20,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const officeId = await getOfficeIdForUserId(userId);
 
     const q = optString(req.query.q);
-    const source = optString(req.query.source); // otodom/olx/no/owner/other
-    const status = optString(req.query.status); // new/saved/rejected/converted
+    const source = optString(req.query.source);
+    const status = optString(req.query.status);
 
-    const limitRaw = typeof req.query.limit === "string" ? parseInt(req.query.limit, 10) : 50;
-    const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 50;
+    const limitRaw =
+      typeof req.query.limit === "string"
+        ? parseInt(req.query.limit, 10)
+        : 50;
+    const limit =
+      Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 50;
 
     const { rows } = await pool.query(
       `
@@ -47,8 +51,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(200).json({ rows });
   } catch (e: any) {
-    if (e?.message === "NO_OFFICE_MEMBERSHIP") return res.status(403).json({ error: "NO_OFFICE_MEMBERSHIP" });
+    if (e?.message === "NO_OFFICE_MEMBERSHIP") {
+      return res.status(403).json({ error: "NO_OFFICE_MEMBERSHIP" });
+    }
     console.error("EVERYBOT_LIST_ERROR", e);
     return res.status(400).json({ error: e?.message ?? "Bad request" });
   }
 }
+
+/**
+ * ⛔️ WAŻNE
+ * Ten export MUSI być jawny, żeby Next 16 uznał plik za moduł API
+ */
+export default handler;
