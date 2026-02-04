@@ -4054,6 +4054,241 @@ calLegendPrivate: {
   lt: "Asmeniniai",
   vi: "Cá nhân",
 },
+/* =========================
+   OFERTY – NAV / HEADER
+   ========================= */
+
+offersSubtitle: {
+  pl: "Oferty i poszukiwania nieruchomości",
+  en: "Property listings and searches",
+  de: "Immobilienangebote und Suchanfragen",
+  cs: "Nabídky a poptávky nemovitostí",
+  sk: "Ponuky a dopyty nehnuteľností",
+  ua: "Пропозиції та пошук нерухомості",
+  lt: "Nekilnojamojo turto pasiūlymai ir paieškos",
+  vi: "Danh sách và nhu cầu bất động sản",
+},
+
+/* =========================
+   OFERTY – VIEW
+   ========================= */
+
+offersTitle: {
+  pl: "Oferty",
+  en: "Listings",
+  de: "Angebote",
+  cs: "Nabídky",
+  sk: "Ponuky",
+  ua: "Пропозиції",
+  lt: "Pasiūlymai",
+  vi: "Danh sách",
+},
+
+offersSub: {
+  pl: "Zarządzaj ofertami sprzedaży, najmu i poszukiwaniami",
+  en: "Manage sales, rentals and property searches",
+  de: "Verwalten Sie Verkäufe, Vermietungen und Suchanfragen",
+  cs: "Správa prodejů, pronájmů a poptávek",
+  sk: "Správa predajov, prenájmov a dopytov",
+  ua: "Керування продажем, орендою та пошуком",
+  lt: "Pardavimų, nuomos ir paieškų valdymas",
+  vi: "Quản lý bán, cho thuê và nhu cầu",
+},
+
+offersRefresh: {
+  pl: "Odśwież",
+  en: "Refresh",
+  de: "Aktualisieren",
+  cs: "Obnovit",
+  sk: "Obnoviť",
+  ua: "Оновити",
+  lt: "Atnaujinti",
+  vi: "Làm mới",
+},
+
+offersNew: {
+  pl: "Nowa oferta",
+  en: "New listing",
+  de: "Neues Angebot",
+  cs: "Nová nabídka",
+  sk: "Nová ponuka",
+  ua: "Нова пропозиція",
+  lt: "Naujas pasiūlymas",
+  vi: "Tin mới",
+},
+
+offersImport: {
+  pl: "Importuj",
+  en: "Import",
+  de: "Importieren",
+  cs: "Importovat",
+  sk: "Importovať",
+  ua: "Імпорт",
+  lt: "Importuoti",
+  vi: "Nhập dữ liệu",
+},
+
+offersLoading: {
+  pl: "Ładowanie ofert…",
+  en: "Loading listings…",
+  de: "Angebote werden geladen…",
+  cs: "Načítání nabídek…",
+  sk: "Načítanie ponúk…",
+  ua: "Завантаження пропозицій…",
+  lt: "Įkeliami pasiūlymai…",
+  vi: "Đang tải danh sách…",
+},
+
+offersLoadError: {
+  pl: "Błąd ładowania ofert",
+  en: "Failed to load listings",
+  de: "Fehler beim Laden der Angebote",
+  cs: "Chyba při načítání nabídek",
+  sk: "Chyba pri načítaní ponúk",
+  ua: "Помилка завантаження пропозицій",
+  lt: "Nepavyko įkelti pasiūlymų",
+  vi: "Lỗi tải danh sách",
+},
+
+offersEmpty: {
+  pl: "Brak ofert w tym biurze",
+  en: "No listings in this office",
+  de: "Keine Angebote in diesem Büro",
+  cs: "V této kanceláři nejsou žádné nabídky",
+  sk: "V tejto kancelárii nie sú žiadne ponuky",
+  ua: "У цьому офісі немає пропозицій",
+  lt: "Šiame biure nėra pasiūlymų",
+  vi: "Không có tin nào trong văn phòng này",
+},
+
+/* =========================
+   OFERTY – TABELA
+   ========================= */
+
+offersColType: {
+  pl: "Typ",
+  en: "Type",
+  de: "Typ",
+  cs: "Typ",
+  sk: "Typ",
+  ua: "Тип",
+  lt: "Tipas",
+  vi: "Loại",
+},
+
+offersColTxn: {
+  pl: "Transakcja",
+  en: "Transaction",
+  de: "Transaktion",
+  cs: "Transakce",
+  sk: "Transakcia",
+  ua: "Транзакція",
+  lt: "Sandoris",
+  vi: "Giao dịch",
+},
+
+offersColParties: {
+  pl: "Strony",
+  en: "Parties",
+  de: "Parteien",
+  cs: "Strany",
+  sk: "Strany",
+  ua: "Сторони",
+  lt: "Šalys",
+  vi: "Các bên",
+},
+
+offersColOwner: {
+  pl: "Opiekun",
+  en: "Owner",
+  de: "Betreuer",
+  cs: "Správce",
+  sk: "Správca",
+  ua: "Відповідальний",
+  lt: "Atsakingas",
+  vi: "Phụ trách",
+},
+
+offersColStatus: {
+  pl: "Status",
+  en: "Status",
+  de: "Status",
+  cs: "Stav",
+  sk: "Stav",
+  ua: "Статус",
+  lt: "Būsena",
+  vi: "Trạng thái",
+},
+
+offersColCreated: {
+  pl: "Utworzono",
+  en: "Created",
+  de: "Erstellt",
+  cs: "Vytvořeno",
+  sk: "Vytvorené",
+  ua: "Створено",
+  lt: "Sukurta",
+  vi: "Tạo lúc",
+},
+
+/* =========================
+   OFERTY – IMPORT
+   ========================= */
+
+offersImportTitle: {
+  pl: "Import ofert",
+  en: "Import listings",
+  de: "Angebote importieren",
+  cs: "Import nabídek",
+  sk: "Import ponúk",
+  ua: "Імпорт пропозицій",
+  lt: "Pasiūlymų importas",
+  vi: "Nhập danh sách",
+},
+
+offersImportDesc: {
+  pl: "Pobieraj i synchronizuj oferty z portali ogłoszeniowych",
+  en: "Import and synchronize listings from property portals",
+  de: "Importieren und synchronisieren Sie Angebote aus Immobilienportalen",
+  cs: "Import a synchronizace nabídek z realitních portálů",
+  sk: "Import a synchronizácia ponúk z realitných portálov",
+  ua: "Імпорт та синхронізація з порталів нерухомості",
+  lt: "Importuokite ir sinchronizuokite pasiūlymus iš portalų",
+  vi: "Nhập và đồng bộ tin từ các cổng bất động sản",
+},
+
+offersImportHint1: {
+  pl: "Obsługiwane są oficjalne integracje partnerskie",
+  en: "Official partner integrations are supported",
+  de: "Offizielle Partnerintegrationen werden unterstützt",
+  cs: "Podporovány jsou oficiální partnerské integrace",
+  sk: "Podporované sú oficiálne partnerské integrácie",
+  ua: "Підтримуються офіційні партнерські інтеграції",
+  lt: "Palaikomos oficialios partnerių integracijos",
+  vi: "Hỗ trợ tích hợp đối tác chính thức",
+},
+
+offersImportHint2: {
+  pl: "Możliwy import CSV / XML / XLSX",
+  en: "CSV / XML / XLSX import available",
+  de: "CSV / XML / XLSX-Import verfügbar",
+  cs: "K dispozici je import CSV / XML / XLSX",
+  sk: "K dispozícii je import CSV / XML / XLSX",
+  ua: "Доступний імпорт CSV / XML / XLSX",
+  lt: "Galimas CSV / XML / XLSX importas",
+  vi: "Hỗ trợ nhập CSV / XML / XLSX",
+},
+
+offersImportHint3: {
+  pl: "Każda oferta jest walidowana przed zapisaniem",
+  en: "Each listing is validated before saving",
+  de: "Jedes Angebot wird vor dem Speichern validiert",
+  cs: "Každá nabídka je ověřena před uložením",
+  sk: "Každá ponuka je overená pred uložením",
+  ua: "Кожна пропозиція перевіряється перед збереженням",
+  lt: "Kiekvienas pasiūlymas tikrinamas prieš išsaugojimą",
+  vi: "Mỗi tin được kiểm tra trước khi lưu",
+},
 
 } as const);
 

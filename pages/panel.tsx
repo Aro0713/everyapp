@@ -7,6 +7,7 @@ import LanguageSwitcher from "@/components/LanguageSwitcher";
 import CalendarPage from "./calendar";
 import { useRouter } from "next/router";
 import TeamView from "@/components/TeamView";
+import OffersView from "@/components/OffersView";
 
 function getCookie(name: string) {
   if (typeof document === "undefined") return null;
@@ -14,7 +15,7 @@ function getCookie(name: string) {
   return m ? decodeURIComponent(m[2]) : null;
 }
 
-type PanelView = "dashboard" | "calendar" | "team";
+type PanelView = "dashboard" | "calendar" | "team" | "offers";
 
 type NavItem = {
   key: string;
@@ -91,7 +92,7 @@ const nav = useMemo<NavItem[]>(
     { key: "panelNavCalendar", view: "calendar", subKey: "panelCalendarSub" },
 
     // widoczne, ale jeszcze nieaktywne moduły
-    { key: "panelNavListings", disabled: true },
+    { key: "panelNavListings", view: "offers", subKey: "offersSubtitle" },
     { key: "panelNavBuyers", disabled: true },
     { key: "panelNavClients", disabled: true },
     { key: "panelNavTeam", view: "team", subKey: "teamSubtitle" },
@@ -458,12 +459,15 @@ const activeNavItem = useMemo(() => {
                 <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
                     <CalendarPage />
                 </div>
-                ) : activeView === "team" ? (
+                ) : activeView === "offers" ? (
                 <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
-                    <TeamView />
+                  <OffersView lang={lang} />
                 </div>
-                ) : null}
-
+              ) : activeView === "team" ? (
+                <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
+                  <TeamView />
+                </div>
+              ) : null}
           </section>
         </div>
       </main>
