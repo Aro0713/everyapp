@@ -68,7 +68,28 @@ export default function OffersView({ lang }: { lang: LangKey }) {
             <button
               type="button"
               className="rounded-2xl bg-ew-accent px-4 py-2 text-sm font-extrabold text-ew-primary shadow-sm transition hover:opacity-95"
-              onClick={() => alert("TODO: modal tworzenia oferty")}
+              onClick={async () => {
+                try {
+                    const r = await fetch("/api/offers/create", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        recordType: "offer",
+                        transactionType: "sale",
+                        status: "draft",
+                    }),
+                    });
+
+                    if (!r.ok) {
+                    const j = await r.json().catch(() => null);
+                    throw new Error(j?.error ?? `HTTP ${r.status}`);
+                    }
+
+                    await load(); // odśwież listę
+                } catch (e: any) {
+                    alert(`Nie udało się utworzyć oferty: ${e?.message ?? "Unknown error"}`);
+                }
+                }}
             >
               + {t(lang, "offersNew" as any)}
             </button>
