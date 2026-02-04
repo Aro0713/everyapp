@@ -7,7 +7,7 @@ function optString(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null;
 }
 
-async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     if (req.method !== "GET") {
       res.setHeader("Allow", "GET");
@@ -23,12 +23,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     const source = optString(req.query.source);
     const status = optString(req.query.status);
 
-    const limitRaw =
-      typeof req.query.limit === "string"
-        ? parseInt(req.query.limit, 10)
-        : 50;
-    const limit =
-      Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 50;
+    const limitRaw = typeof req.query.limit === "string" ? parseInt(req.query.limit, 10) : 50;
+    const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 50;
 
     const { rows } = await pool.query(
       `
@@ -58,9 +54,3 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     return res.status(400).json({ error: e?.message ?? "Bad request" });
   }
 }
-
-/**
- * ⛔️ WAŻNE
- * Ten export MUSI być jawny, żeby Next 16 uznał plik za moduł API
- */
-export default handler;

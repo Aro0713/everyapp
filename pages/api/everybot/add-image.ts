@@ -13,7 +13,7 @@ function optNumber(v: unknown): number | null {
   return null;
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     if (req.method !== "POST") {
       res.setHeader("Allow", "POST");
@@ -30,7 +30,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const sourceImageUrl = mustString(body.sourceImageUrl, "sourceImageUrl");
     const sortOrder = optNumber(body.sortOrder) ?? 0;
 
-    // twarda kontrola biura: external listing musi należeć do officeId usera
     const chk = await pool.query(
       `SELECT 1 FROM external_listings WHERE id = $1 AND office_id = $2 LIMIT 1`,
       [externalId, officeId]
@@ -53,3 +52,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: e?.message ?? "Bad request" });
   }
 }
+
+export default handler;

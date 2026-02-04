@@ -25,7 +25,7 @@ function detectSource(url: string): string {
   return "other";
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     if (req.method !== "POST") {
       res.setHeader("Allow", "POST");
@@ -41,7 +41,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const sourceUrl = mustString(body.url, "url");
     const source = optString(body.source) ?? detectSource(sourceUrl);
 
-    // opcjonalne meta pod MVP
     const title = optString(body.title);
     const description = optString(body.description);
     const locationText = optString(body.locationText);
@@ -52,10 +51,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       importedFrom: "manual-link",
       source,
       sourceUrl,
-      title,
-      locationText,
-      priceAmount,
-      currency,
       at: new Date().toISOString(),
     };
 
@@ -89,3 +84,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: e?.message ?? "Bad request" });
   }
 }
+
+export default handler;
