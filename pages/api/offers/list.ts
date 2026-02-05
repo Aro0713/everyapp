@@ -10,15 +10,19 @@ function optString(v: unknown): string | null {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     if (req.method !== "GET") {
-      res.setHeader("Allow", "GET");
-      return res.status(405).json({ error: "Method not allowed" });
+    res.setHeader("Allow", "GET");
+    return res.status(405).json({ error: "Method not allowed" });
     }
 
-    // ⬇⬇⬇ KLUCZOWA POPRAWKA — WYŁĄCZENIE CACHE (1:1)
-    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    // ⬇⬇⬇ DODAJ TO DOKŁADNIE TU
+    res.removeHeader("ETag");
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("CDN-Cache-Control", "no-store");
+    res.setHeader("Vercel-CDN-Cache-Control", "no-store");
     res.setHeader("Pragma", "no-cache");
     res.setHeader("Expires", "0");
     // ⬆⬆⬆
+
 
     const userId = getUserIdFromRequest(req);
     if (!userId) return res.status(401).json({ error: "UNAUTHORIZED" });
