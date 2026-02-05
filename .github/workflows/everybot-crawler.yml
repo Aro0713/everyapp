@@ -36,7 +36,7 @@ jobs:
         env:
           NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
           EVERYAPP_BASE_URL: ${{ secrets.EVERYAPP_BASE_URL }}
-          EVERYAPP_API_KEY: ${{ secrets.EVERYAPP_API_KEY }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
           BATCH_SIZE: "30"
           HEADLESS: "true"
         run: npm run crawl
