@@ -1,0 +1,42 @@
+name: EveryBOT Crawler
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: everybot-crawler
+  cancel-in-progress: true
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install crawler deps
+        working-directory: crawler
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: crawler
+        run: npx playwright install --with-deps chromium
+
+      - name: Run crawler
+        working-directory: crawler
+        env:
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+          EVERYAPP_BASE_URL: ${{ secrets.EVERYAPP_BASE_URL }}
+          EVERYAPP_API_KEY: ${{ secrets.EVERYAPP_API_KEY }}
+          BATCH_SIZE: "30"
+          HEADLESS: "true"
+        run: npm run crawl
