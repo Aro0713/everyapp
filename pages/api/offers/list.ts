@@ -50,23 +50,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Jeżeli masz już gdzieś thumb_url jako URL, to dopasujemy później.
     const { rows } = await pool.query(
       `
-      select
-        el.id as external_id,
-        el.office_id,
-        el.source,
-        el.source_url,
-        el.title,
-        el.price_amount,
-        el.currency,
-        el.location_text,
-        el.status,
-        el.created_at as imported_at,
-        el.updated_at,
-        null::text as thumb_url
-      from external_listings el
-      where ${where.join(" and ")}
-      order by el.created_at desc
-      limit $${p}
+    select
+    el.id as external_id,
+    el.office_id,
+    el.source,
+    el.source_url,
+    el.title,
+    el.price_amount,
+    el.currency,
+    el.location_text,
+    el.status,
+    el.imported_at as imported_at,
+    el.updated_at,
+    null::text as thumb_url
+    from external_listings el
+    where ${where.join(" and ")}
+    order by el.imported_at desc
+    limit $${p}
       `,
       [...params, limit]
     );
