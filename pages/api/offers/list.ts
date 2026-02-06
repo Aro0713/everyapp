@@ -7,32 +7,38 @@ function optString(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null;
 }
 
+function optNumber(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim() && Number.isFinite(Number(v))) return Number(v);
+  return null;
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
-    if (req.method !== "GET") {
-    res.setHeader("Allow", "GET");
-    return res.status(405).json({ error: "Method not allowed" });
+    // ✅ POST zamiast GET → brak ETag/304 na Vercel dla list endpointu
+    if (req.method !== "POST") {
+      res.setHeader("Allow", "POST");
+      return res.status(405).json({ error: "Method not allowed" });
     }
 
-    // ⬇⬇⬇ DODAJ TO DOKŁADNIE TU
+    // (Zostawiamy, ale to już nie jest krytyczne przy POST)
     res.removeHeader("ETag");
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("CDN-Cache-Control", "no-store");
     res.setHeader("Vercel-CDN-Cache-Control", "no-store");
     res.setHeader("Pragma", "no-cache");
     res.setHeader("Expires", "0");
-    // ⬆⬆⬆
-
 
     const userId = getUserIdFromRequest(req);
     if (!userId) return res.status(401).json({ error: "UNAUTHORIZED" });
 
     const officeId = await getOfficeIdForUserId(userId);
 
-    const q = optString(req.query.q);
-    const source = optString(req.query.source);
-    const status = optString(req.query.status);
-    const limit = Math.min(Math.max(Number(req.query.limit ?? 50) || 50, 1), 200);
+    const body = req.body ?? {};
+    const q = optString(body.q);
+    const source = optString(body.source);
+    const status = optString(body.status);
+    const limit = Math.min(Math.max(optNumber(body.limit) ?? 50, 1), 200);
 
     const where: string[] = ["el.office_id = $1"];
     const params: any[] = [officeId];
@@ -48,8 +54,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     if (q) {
       where.push(
-        `(coalesce(el.title,'') ilike $${p} 
-          or coalesce(el.location_text,'') ilike $${p} 
+        `(coalesce(el.title,'') ilike $${p}
+          or coalesce(el.location_text,'') ilike $${p}
           or coalesce(el.source_url,'') ilike $${p})`
       );
       params.push(`%${q}%`);
@@ -81,7 +87,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(200).json({ rows });
   } catch (e: any) {
-    if (e?.message === "NO_OFFICE_MEMBERSHIP") return res.status(403).json({ error: "NO_OFFICE_MEMBERSHIP" });
+    if (e?.message === "NO_OFFICE_MEMBERSHIP") {
+      return res.status(403).json({ error: "NO_OFFICE_MEMBERSHIP" });
+    }
     console.error("EVERYBOT_LIST_ERROR", e);
     return res.status(400).json({ error: e?.message ?? "Bad request" });
   }
