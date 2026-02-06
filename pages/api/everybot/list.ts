@@ -7,10 +7,17 @@ function optString(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null;
 }
 
+function optNumber(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim() && Number.isFinite(Number(v))) return Number(v);
+  return null;
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
-    if (req.method !== "GET") {
-      res.setHeader("Allow", "GET");
+    // ✅ POST zamiast GET → brak ETag/304 na Vercel dla list endpointu
+    if (req.method !== "POST") {
+      res.setHeader("Allow", "POST");
       return res.status(405).json({ error: "Method not allowed" });
     }
 
@@ -19,11 +26,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const officeId = await getOfficeIdForUserId(userId);
 
-    const q = optString(req.query.q);
-    const source = optString(req.query.source);
-    const status = optString(req.query.status);
+    const body = req.body ?? {};
+    const q = optString(body.q);
+    const source = optString(body.source);
+    const status = optString(body.status);
 
-    const limitRaw = typeof req.query.limit === "string" ? parseInt(req.query.limit, 10) : 50;
+    const limitRaw = optNumber(body.limit) ?? 50;
     const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 50;
 
     const { rows } = await pool.query(
