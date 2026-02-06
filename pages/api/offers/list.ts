@@ -16,9 +16,9 @@ function optNumber(v: unknown): number | null {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     // ✅ POST zamiast GET → brak ETag/304 na Vercel dla list endpointu
-       if (req.method !== "POST") {
-    res.setHeader("Allow", "POST");
-    return res.status(405).json({ error: "Method not allowed" });
+    if (req.method !== "POST") {
+      res.setHeader("Allow", "POST");
+      return res.status(405).json({ error: "Method not allowed" });
     }
 
     // (Zostawiamy, ale to już nie jest krytyczne przy POST)
