@@ -365,10 +365,31 @@ function isHttpUrl(v: unknown): v is string {
                   className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
                 />
               </div>
+              {/* Otodom live URL (C3) */}
+                {botSource === "otodom" && (
+                <div className="mt-3">
+                    <input
+                    value={botUrl}
+                    onChange={(e) => setBotUrl(e.target.value)}
+                    placeholder="Wklej URL wyników Otodom (np. https://www.otodom.pl/pl/wyniki/...)"
+                    className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                    Podgląd na żywo (bez zapisu). Zapiszesz dopiero wybraną ofertę.
+                    </p>
+                </div>
+                )}
+
               <div className="md:col-span-4">
                 <select
                   value={botSource}
-                  onChange={(e) => setBotSource(e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setBotSource(v);
+                    if (v === "otodom") {
+                        setBotQ("");
+                    }
+                    }}
                   className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
                 >
                   <option value="all">{t(lang, "everybotSourceAll" as any)}</option>
@@ -384,11 +405,17 @@ function isHttpUrl(v: unknown): v is string {
             <div className="mt-3 flex justify-end">
               <button
                 type="button"
-                className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-ew-primary shadow-sm transition hover:bg-ew-accent/10"
+                disabled={botSource === "otodom" && !botUrl.trim()}
+                className={clsx(
+                    "rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm transition",
+                    botSource === "otodom" && !botUrl.trim()
+                    ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
+                    : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
+                )}
                 onClick={() => loadEverybot()}
-              >
+                >
                 {t(lang, "everybotSearchBtn" as any)}
-              </button>
+                </button>
             </div>
 
             {/* Results */}
