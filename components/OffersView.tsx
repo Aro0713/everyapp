@@ -249,7 +249,14 @@ function isHttpUrl(v: unknown): v is string {
             onClick={() => {
               setTab("everybot");
               // ładuj dopiero gdy user wejdzie pierwszy raz
-              if (botRows.length === 0 && !botLoading && !botErr) loadEverybot();
+              const isLive = botSource === "otodom" && isHttpUrl(botUrl);
+
+                if (isLive) {
+                // pokazuj wyniki z /api/everybot/search
+                } else {
+                // pokazuj zapisane z /api/everybot/list
+                }
+
             }}
           >
             🤖 {t(lang, "offersTabEverybot" as any)}
@@ -391,7 +398,7 @@ function isHttpUrl(v: unknown): v is string {
                 <input
                     value={botUrl}
                     onChange={(e) => setBotUrl(e.target.value)}
-                    placeholder="Wklej URL wyników Otodom (https://www.otodom.pl/pl/wyniki/...)"
+                    placeholder="Wklej URL wyników Otodom (https://www.otodom.pl/pl/wyniki/sprzedaz/mieszkanie/warszawa)"
                     className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
                 />
                 <p className="mt-1 text-xs text-gray-500">
@@ -411,7 +418,13 @@ function isHttpUrl(v: unknown): v is string {
                     ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
                     : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
                 )}
-                onClick={() => loadEverybot()}
+                onClick={() =>
+                loadEverybot({
+                    source: botSource,
+                    url: botUrl,
+                    q: botQ,
+                })
+                }
             >
                 {t(lang, "everybotSearchBtn" as any)}
             </button>
