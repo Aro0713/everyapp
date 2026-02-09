@@ -357,65 +357,64 @@ function isHttpUrl(v: unknown): v is string {
 
             {/* Filters */}
             <div className="mt-3 grid gap-3 md:grid-cols-12">
-              <div className="md:col-span-8">
+            <div className="md:col-span-8">
                 <input
-                  value={botQ}
-                  onChange={(e) => setBotQ(e.target.value)}
-                  placeholder={t(lang, "everybotFilterPlaceholder" as any)}
-                  className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
+                value={botQ}
+                onChange={(e) => setBotQ(e.target.value)}
+                placeholder={t(lang, "everybotFilterPlaceholder" as any)}
+                className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
                 />
-              </div>
-              {/* Otodom live URL (C3) */}
-                {botSource === "otodom" && (
-                <div className="mt-3">
-                    <input
-                    value={botUrl}
-                    onChange={(e) => setBotUrl(e.target.value)}
-                    placeholder="Wklej URL wyników Otodom (np. https://www.otodom.pl/pl/wyniki/...)"
-                    className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
-                    />
-                    <p className="mt-1 text-xs text-gray-500">
-                    Podgląd na żywo (bez zapisu). Zapiszesz dopiero wybraną ofertę.
-                    </p>
-                </div>
-                )}
+            </div>
 
-              <div className="md:col-span-4">
+            <div className="md:col-span-4">
                 <select
-                  value={botSource}
-                  onChange={(e) => {
+                value={botSource}
+                onChange={(e) => {
                     const v = e.target.value;
                     setBotSource(v);
-                    if (v === "otodom") {
-                        setBotQ("");
-                    }
-                    }}
-                  className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
+                    if (v !== "otodom") setBotUrl(""); // czyścimy URL gdy nie otodom
+                }}
+                className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
                 >
-                  <option value="all">{t(lang, "everybotSourceAll" as any)}</option>
-                  <option value="otodom">Otodom</option>
-                  <option value="olx">OLX</option>
-                  <option value="no">Nieruchomosci-online</option>
-                  <option value="owner">{t(lang, "everybotSourceOwner" as any)}</option>
-                  <option value="other">Other</option>
+                <option value="all">{t(lang, "everybotSourceAll" as any)}</option>
+                <option value="otodom">Otodom</option>
+                <option value="olx">OLX</option>
+                <option value="no">Nieruchomosci-online</option>
+                <option value="owner">{t(lang, "everybotSourceOwner" as any)}</option>
+                <option value="other">Other</option>
                 </select>
-              </div>
+            </div>
+
+            {/* ✅ Otodom live URL (pełna szerokość, pod spodem) */}
+            {botSource === "otodom" && (
+                <div className="md:col-span-12">
+                <input
+                    value={botUrl}
+                    onChange={(e) => setBotUrl(e.target.value)}
+                    placeholder="Wklej URL wyników Otodom (https://www.otodom.pl/pl/wyniki/...)"
+                    className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                    Podgląd na żywo (bez zapisu). Zapiszesz dopiero wybraną ofertę.
+                </p>
+                </div>
+            )}
             </div>
 
             <div className="mt-3 flex justify-end">
-              <button
+            <button
                 type="button"
                 disabled={botSource === "otodom" && !botUrl.trim()}
                 className={clsx(
-                    "rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm transition",
-                    botSource === "otodom" && !botUrl.trim()
+                "rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm transition",
+                botSource === "otodom" && !botUrl.trim()
                     ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
                     : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
                 )}
                 onClick={() => loadEverybot()}
-                >
+            >
                 {t(lang, "everybotSearchBtn" as any)}
-                </button>
+            </button>
             </div>
 
             {/* Results */}
