@@ -4,6 +4,21 @@ import { getUserIdFromRequest } from "../../../lib/session";
 import { getOfficeIdForUserId } from "../../../lib/office";
 import crypto from "crypto";
 
+function mustHttpUrl(v: unknown, name: string) {
+  if (typeof v !== "string" || !v.trim()) throw new Error(`Invalid ${name}`);
+  const s = v.trim();
+  let u: URL;
+  try {
+    u = new URL(s);
+  } catch {
+    throw new Error(`Invalid ${name}: must be full URL (https://...)`);
+  }
+  if (u.protocol !== "http:" && u.protocol !== "https:") {
+    throw new Error(`Invalid ${name}: only http/https allowed`);
+  }
+  return u.toString();
+}
+
 function mustString(v: unknown, name: string) {
   if (typeof v !== "string" || !v.trim()) throw new Error(`Invalid ${name}`);
   return v.trim();
@@ -106,7 +121,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     const officeId = await getOfficeIdForUserId(userId);
 
     const body = req.body ?? {};
-    const sourceUrl = mustString(body.url, "url");
+    const sourceUrl = mustHttpUrl(body.url, "url");
     const source = optString(body.source) ?? detectSource(sourceUrl);
 
     const title = optString(body.title);
