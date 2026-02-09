@@ -417,7 +417,7 @@ function isHttpUrl(v: unknown): v is string {
             <div className="mt-3 flex justify-end">
             <button
                 type="button"
-                disabled={!botQ.trim() && !botUrl.trim()}
+                disabled={!botQ.trim() && !(botSource === "otodom" && botUrl.trim())}
                 className={clsx(
                 "rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm transition",
                 botSource === "otodom" && !botUrl.trim()

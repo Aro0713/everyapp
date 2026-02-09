@@ -25,8 +25,11 @@ function isHttpUrl(s: string) {
   }
 }
 
-function detectSource(url: string): "otodom" | "other" {
-  return url.toLowerCase().includes("otodom.") ? "otodom" : "other";
+function detectSource(url: string): "otodom" | "olx" | "other" {
+  const u = url.toLowerCase();
+  if (u.includes("otodom.")) return "otodom";
+  if (u.includes("olx.")) return "olx";
+  return "other";
 }
 
 function absUrl(base: string, href: string | null | undefined): string | null {
@@ -171,6 +174,66 @@ function parseOtodomListing(pageUrl: string, html: string): ExternalRow[] {
   ];
 }
 
+function parseOlxResults(pageUrl: string, html: string, limit: number): ExternalRow[] {
+  const $ = cheerio.load(html);
+  const now = new Date().toISOString();
+  const rows: ExternalRow[] = [];
+  const seen = new Set<string>();
+
+  $("a[href]").each((_, el) => {
+    const href = $(el).attr("href");
+    const full = absUrl(pageUrl, href);
+    if (!full) return;
+
+    // OLX oferty zwykle mają /d/oferta/
+    if (!full.includes("/d/oferta/")) return;
+    if (seen.has(full)) return;
+    seen.add(full);
+
+    const card = $(el).closest("article, div").first();
+
+    const title =
+      card.find("h6, h5, h4, h3").first().text().trim() ||
+      $(el).text().trim() ||
+      null;
+
+    const priceText =
+      card.find('[data-testid="ad-price"], [class*="price"]').first().text().trim() || null;
+
+    const locationText =
+      card.find('[data-testid="location-date"], [class*="location"]').first().text().trim() || null;
+
+    const img =
+      card.find("img").first().attr("src") ||
+      card.find("img").first().attr("data-src") ||
+      null;
+
+    const currency =
+      priceText?.includes("€") ? "EUR" :
+      priceText?.toLowerCase().includes("zł") ? "PLN" :
+      null;
+
+    const priceAmount = parseNumberLoose(priceText);
+
+    rows.push({
+      external_id: full,
+      office_id: null,
+      source: "olx",
+      source_url: full,
+      title: title || null,
+      price_amount: priceAmount,
+      currency,
+      location_text: locationText || null,
+      status: "preview",
+      imported_at: now,
+      updated_at: now,
+      thumb_url: img ? absUrl(pageUrl, img) : null,
+    });
+  });
+
+  return rows.slice(0, limit);
+}
+
 async function fetchHtml(url: string): Promise<string> {
   const r = await fetch(url, {
     method: "GET",
@@ -192,19 +255,25 @@ async function fetchHtml(url: string): Promise<string> {
 
 /**
  * Minimalny builder URL dla Otodom.
- * To jest MVP: fraza idzie w search[phrase]. Resztę filtrów dodamy potem / przez AI.
+ * MVP: fraza idzie w search[phrase].
  */
 function buildOtodomSearchUrl(q: string): string {
-  const u = new URL("https://www.otodom.pl/pl/wyniki/sprzedaz/mieszkanie/cala-polska");
+  // szerokie wyniki (bez narzuconego "mieszkanie" i "sprzedaż")
+  const u = new URL("https://www.otodom.pl/pl/wyniki");
   u.searchParams.set("viewType", "listing");
   u.searchParams.set("search[phrase]", q);
   return u.toString();
 }
 
+function buildOlxSearchUrl(q: string): string {
+  const slug = encodeURIComponent(q.trim().replace(/\s+/g, "-"));
+  return `https://www.olx.pl/oferty/q-${slug}/`;
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
-    // GET: kompatybilność z obecnym "url parser"
-    // POST: nowy tryb "q search" lub "url parser" (body)
+    // GET: url parser
+    // POST: q search lub url parser (body)
     if (req.method !== "GET" && req.method !== "POST") {
       res.setHeader("Allow", "GET, POST");
       return res.status(405).json({ error: "Method not allowed" });
@@ -224,24 +293,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const urlFromPost = req.method === "POST" ? optString(body.url) : null;
     const q = req.method === "POST" ? optString(body.q) : null;
 
-    // ✅ Priorytet: jeśli podano url → parsujemy url; jeśli nie, ale jest q → budujemy search url
+    const sourceParam =
+      req.method === "POST" ? (optString(body.source) ?? "otodom") : null;
+    const sourceWanted = (sourceParam ?? "otodom").toLowerCase(); // otodom|olx|all
+
+    // Priorytet: url → parsujemy url; jeśli nie ma url, ale jest q → budujemy search url
     const url =
       urlFromPost ||
       urlFromGet ||
-      (q ? buildOtodomSearchUrl(q) : null);
+      (q
+        ? (sourceWanted === "olx"
+            ? buildOlxSearchUrl(q)
+            : buildOtodomSearchUrl(q)) // default: otodom
+        : null);
 
     if (!url) return res.status(400).json({ error: "Provide url (GET/POST) or q (POST)" });
     if (!isHttpUrl(url)) return res.status(400).json({ error: "Invalid url" });
 
-    const source = detectSource(url);
-    if (source !== "otodom") return res.status(400).json({ error: "Only otodom supported" });
+    const detected = detectSource(url);
+    if (detected === "other") return res.status(400).json({ error: "Unsupported source url" });
 
     const html = await fetchHtml(url);
 
     const lower = url.toLowerCase();
-    const rows = lower.includes("/pl/oferta/")
-      ? parseOtodomListing(url, html)
-      : parseOtodomResults(url, html, limit);
+    let rows: ExternalRow[] = [];
+
+    if (detected === "otodom") {
+      rows = lower.includes("/pl/oferta/")
+        ? parseOtodomListing(url, html)
+        : parseOtodomResults(url, html, limit);
+    } else if (detected === "olx") {
+      rows = parseOlxResults(url, html, limit);
+    }
 
     const debug =
       rows.length === 0
