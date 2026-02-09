@@ -143,6 +143,9 @@ export default function OffersView({ lang }: { lang: LangKey }) {
   const empty = !loading && rows.length === 0 && !err;
 
   const botEmpty = !botLoading && botRows.length === 0 && !botErr;
+function isHttpUrl(v: unknown): v is string {
+  return typeof v === "string" && /^https?:\/\//i.test(v.trim());
+}
 
   return (
     <div className="space-y-6">
@@ -424,15 +427,20 @@ export default function OffersView({ lang }: { lang: LangKey }) {
                           <td className="px-4 py-3">{fmtPrice(r.price_amount, r.currency)}</td>
                           <td className="px-4 py-3">{r.location_text ?? "-"}</td>
                           <td className="px-4 py-3">
-                            <a
-                              href={r.source_url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-ew-accent underline underline-offset-2"
-                            >
-                              {t(lang, "everybotOpen" as any)}
-                            </a>
-                          </td>
+                            {isHttpUrl(r.source_url) ? (
+                                <a
+                                href={r.source_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-ew-accent underline underline-offset-2"
+                                >
+                                {t(lang, "everybotOpen" as any)}
+                                </a>
+                            ) : (
+                                <span className="text-xs text-gray-400">—</span>
+                            )}
+                            </td>
+
                         </tr>
                       ))}
                     </tbody>
