@@ -17,7 +17,7 @@ type OffersTab = "office" | "everybot";
 
 type ExternalRow = {
   external_id: string;
-  office_id: string;
+  office_id: string | null;
   source: string;
   source_url: string;
   title: string | null;
@@ -70,60 +70,52 @@ export default function OffersView({ lang }: { lang: LangKey }) {
   const [botLoading, setBotLoading] = useState(false);
   const [botErr, setBotErr] = useState<string | null>(null);
   const [botRows, setBotRows] = useState<ExternalRow[]>([]);
+  const [botCursor, setBotCursor] = useState<string | null>(null);
+  const [botHasMore, setBotHasMore] = useState(false);
 
   const [importUrl, setImportUrl] = useState("");
   const [importing, setImporting] = useState(false);
 
-async function loadEverybot(opts?: { q?: string; source?: string })
- {
+async function loadEverybot(opts?: {
+  q?: string;
+  source?: string;
+  cursor?: string | null;
+  append?: boolean;
+}) {
   const q = (opts?.q ?? botQ).trim();
   const source = opts?.source ?? botSource;
+  const cursor = opts?.cursor ?? null;
+  const append = !!opts?.append;
 
   setBotLoading(true);
   setBotErr(null);
 
   try {
-    // ✅ LIVE SEARCH: q → backend fetch+parse (bez DB)
-if (q) {
-  const r = await fetch("/api/everybot/search", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      q,
-      source: source === "all" ? "otodom" : source, // MVP: search.ts obsługuje otodom
-      limit: 50,
-    }),
-  });
-
-  const j = await r.json().catch(() => null);
-  if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
-
-  setBotRows((j?.rows ?? []) as ExternalRow[]);
-  return;
-}
-
-
-    // ✅ fallback: Twoja baza zapisanych linków (external_listings)
-    const r = await fetch("/api/everybot/list", {
+    const r = await fetch("/api/everybot/search", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         q,
         source: source === "all" ? null : source,
-        limit: 50,
+        cursor,
       }),
     });
 
     const j = await r.json().catch(() => null);
     if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
-    setBotRows((j?.rows ?? []) as ExternalRow[]);
+
+    const newRows = (j?.rows ?? []) as ExternalRow[];
+    const nextCursor = (j?.nextCursor ?? null) as string | null;
+
+    setBotRows((prev) => (append ? [...prev, ...newRows] : newRows));
+    setBotCursor(nextCursor);
+    setBotHasMore(!!nextCursor);
   } catch (e: any) {
     setBotErr(e?.message ?? "Failed to load");
   } finally {
     setBotLoading(false);
   }
 }
-
   async function importLink() {
     const url = importUrl.trim();
     if (!url) return;
@@ -182,7 +174,7 @@ function isHttpUrl(v: unknown): v is string {
               className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-ew-primary shadow-sm transition hover:bg-ew-accent/10"
               onClick={() => {
                 if (tab === "office") load();
-                else loadEverybot();
+                else loadEverybot({ source: botSource, q: botQ, cursor: null, append: false });
               }}
             >
               {t(lang, "offersRefresh" as any)}
@@ -252,15 +244,8 @@ function isHttpUrl(v: unknown): v is string {
                 : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
             )}
             onClick={() => {
-              setTab("everybot");
-              // ładuj dopiero gdy user wejdzie pierwszy raz
-              const isLive = false;
-                if (isLive) {
-                // pokazuj wyniki z /api/everybot/search
-                } else {
-                // pokazuj zapisane z /api/everybot/list
-                }
-
+            setTab("everybot");
+            loadEverybot({ source: botSource, q: botQ, cursor: null, append: false });
             }}
           >
             🤖 {t(lang, "offersTabEverybot" as any)}
@@ -400,66 +385,71 @@ function isHttpUrl(v: unknown): v is string {
 
             <div className="mt-3 flex justify-end">
             <button
-                type="button"
-                disabled={!botQ.trim()}
-                className={clsx(
+            type="button"
+            disabled={botLoading}
+            onClick={() =>
+                loadEverybot({ source: botSource, q: botQ, cursor: null, append: false })
+            }
+            className={clsx(
                 "rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm transition",
-                !botQ.trim()
-                    ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
-                    : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
-                )}
-
+                botLoading
+                ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
+                : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
+            )}
             >
-                {t(lang, "everybotSearchBtn" as any)}
+            {t(lang, "everybotSearchBtn" as any)}
             </button>
             </div>
 
-            {/* Results */}
+                        {/* Results */}
             <div className="mt-6 rounded-2xl border border-gray-200 bg-white">
-              {botLoading ? (
+            {botLoading && botRows.length === 0 ? (
                 <div className="p-4 text-sm text-gray-500">{t(lang, "everybotLoading" as any)}</div>
-              ) : botErr ? (
-                <div className="p-4 text-sm text-red-700">{t(lang, "everybotLoadError" as any)}: {botErr}</div>
-              ) : botEmpty ? (
-                <div className="flex h-40 items-center justify-center rounded-2xl bg-ew-accent/5">
-                  <p className="text-sm text-gray-500">{t(lang, "everybotEmpty" as any)}</p>
+            ) : botErr ? (
+                <div className="p-4 text-sm text-red-700">
+                {t(lang, "everybotLoadError" as any)}: {botErr}
                 </div>
-              ) : (
+            ) : botRows.length === 0 ? (
+                <div className="flex h-40 items-center justify-center rounded-2xl bg-ew-accent/5">
+                <p className="text-sm text-gray-500">{t(lang, "everybotEmpty" as any)}</p>
+                </div>
+            ) : (
+                <>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
+                    <table className="w-full text-left text-sm">
                     <thead className="text-xs text-gray-500">
-                      <tr>
+                        <tr>
                         <th className="px-4 py-3">{t(lang, "everybotColPhoto" as any)}</th>
                         <th className="px-4 py-3">{t(lang, "everybotColTitle" as any)}</th>
                         <th className="px-4 py-3">{t(lang, "everybotColSource" as any)}</th>
                         <th className="px-4 py-3">{t(lang, "everybotColPrice" as any)}</th>
                         <th className="px-4 py-3">{t(lang, "everybotColLocation" as any)}</th>
                         <th className="px-4 py-3">{t(lang, "everybotColLink" as any)}</th>
-                      </tr>
+                        </tr>
                     </thead>
                     <tbody>
-                      {botRows.map((r) => (
+                        {botRows.map((r) => (
                         <tr key={r.external_id} className="border-t border-gray-100">
-                          <td className="px-4 py-3">
+                            <td className="px-4 py-3">
                             {r.thumb_url ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
                                 src={r.thumb_url}
                                 alt=""
                                 className="h-10 w-14 rounded-lg object-cover ring-1 ring-gray-200"
-                              />
+                                />
                             ) : (
-                              <div className="h-10 w-14 rounded-lg bg-gray-100 ring-1 ring-gray-200" />
+                                <div className="h-10 w-14 rounded-lg bg-gray-100 ring-1 ring-gray-200" />
                             )}
-                          </td>
-                          <td className="px-4 py-3 font-semibold text-ew-primary">
+                            </td>
+                            <td className="px-4 py-3 font-semibold text-ew-primary">
                             {r.title ?? "-"}
                             <div className="mt-1 text-xs text-gray-500">{r.status}</div>
-                          </td>
-                          <td className="px-4 py-3">{r.source}</td>
-                          <td className="px-4 py-3">{fmtPrice(r.price_amount, r.currency)}</td>
-                          <td className="px-4 py-3">{r.location_text ?? "-"}</td>
-                          <td className="px-4 py-3">
+                            </td>
+                            <td className="px-4 py-3">{r.source}</td>
+                            <td className="px-4 py-3">{fmtPrice(r.price_amount, r.currency)}</td>
+                            <td className="px-4 py-3">{r.location_text ?? "-"}</td>
+                            <td className="px-4 py-3">
                             {isHttpUrl(r.source_url) ? (
                                 <a
                                 href={r.source_url}
@@ -473,13 +463,46 @@ function isHttpUrl(v: unknown): v is string {
                                 <span className="text-xs text-gray-400">—</span>
                             )}
                             </td>
-
                         </tr>
-                      ))}
+                        ))}
                     </tbody>
-                  </table>
+                    </table>
                 </div>
-              )}
+
+                {/* Load more */}
+                {botHasMore && (
+                    <div className="flex justify-center border-t border-gray-100 p-4">
+                    <button
+                        type="button"
+                        disabled={botLoading}
+                        onClick={() =>
+                        loadEverybot({
+                            source: botSource,
+                            q: botQ,
+                            cursor: botCursor,
+                            append: true,
+                        })
+                        }
+                        className={clsx(
+                        "rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm transition",
+                        botLoading
+                            ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
+                            : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
+                        )}
+                    >
+                        Pokaż więcej
+                    </button>
+                    </div>
+                )}
+
+                {/* Inline loading indicator for next page */}
+                {botLoading && botRows.length > 0 && (
+                    <div className="border-t border-gray-100 p-4 text-center text-xs text-gray-500">
+                    {t(lang, "everybotLoading" as any)}
+                    </div>
+                )}
+                </>
+            )}
             </div>
 
             <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-4">

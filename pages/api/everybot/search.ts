@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import * as cheerio from "cheerio";
 
+/* -------------------- utils -------------------- */
 function mustString(v: unknown, name: string) {
   if (typeof v !== "string" || !v.trim()) throw new Error(`Invalid ${name}`);
   return v.trim();
@@ -48,6 +49,7 @@ function parseNumberLoose(s: string | null | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/* -------------------- types -------------------- */
 type ExternalRow = {
   external_id: string;
   office_id: string | null;
@@ -63,6 +65,7 @@ type ExternalRow = {
   thumb_url: string | null;
 };
 
+/* -------------------- parsers -------------------- */
 function parseOtodomResults(pageUrl: string, html: string, limit: number): ExternalRow[] {
   const $ = cheerio.load(html);
   const now = new Date().toISOString();
@@ -111,7 +114,7 @@ function parseOtodomResults(pageUrl: string, html: string, limit: number): Exter
     const priceAmount = parseNumberLoose(priceText);
 
     rows.push({
-      external_id: full, // preview id
+      external_id: full,
       office_id: null,
       source: "otodom",
       source_url: full,
@@ -134,7 +137,6 @@ function parseOtodomListing(pageUrl: string, html: string): ExternalRow[] {
   const now = new Date().toISOString();
 
   const canonical = $('link[rel="canonical"]').attr("href") || pageUrl;
-
   const ogTitle = $('meta[property="og:title"]').attr("content")?.trim() || null;
   const metaTitle = $("title").text()?.trim() || null;
   const title = ogTitle || metaTitle;
@@ -156,22 +158,20 @@ function parseOtodomListing(pageUrl: string, html: string): ExternalRow[] {
     ? locMatch.slice(1).filter(Boolean).join(", ").trim()
     : null;
 
-  return [
-    {
-      external_id: canonical,
-      office_id: null,
-      source: "otodom",
-      source_url: canonical,
-      title: title || null,
-      price_amount: priceAmount,
-      currency,
-      location_text: locationText,
-      status: "preview",
-      imported_at: now,
-      updated_at: now,
-      thumb_url: ogImage,
-    },
-  ];
+  return [{
+    external_id: canonical,
+    office_id: null,
+    source: "otodom",
+    source_url: canonical,
+    title: title || null,
+    price_amount: priceAmount,
+    currency,
+    location_text: locationText,
+    status: "preview",
+    imported_at: now,
+    updated_at: now,
+    thumb_url: ogImage,
+  }];
 }
 
 function parseOlxResults(pageUrl: string, html: string, limit: number): ExternalRow[] {
@@ -184,8 +184,6 @@ function parseOlxResults(pageUrl: string, html: string, limit: number): External
     const href = $(el).attr("href");
     const full = absUrl(pageUrl, href);
     if (!full) return;
-
-    // OLX oferty zwykle mają /d/oferta/
     if (!full.includes("/d/oferta/")) return;
     if (seen.has(full)) return;
     seen.add(full);
@@ -234,6 +232,7 @@ function parseOlxResults(pageUrl: string, html: string, limit: number): External
   return rows.slice(0, limit);
 }
 
+/* -------------------- fetch -------------------- */
 async function fetchHtml(url: string): Promise<string> {
   const r = await fetch(url, {
     method: "GET",
@@ -253,15 +252,11 @@ async function fetchHtml(url: string): Promise<string> {
   return html;
 }
 
-/**
- * Minimalny builder URL dla Otodom.
- * MVP: fraza idzie w search[phrase].
- */
+/* -------------------- builders -------------------- */
 function buildOtodomSearchUrl(q: string): string {
-  // szerokie wyniki (bez narzuconego "mieszkanie" i "sprzedaż")
   const u = new URL("https://www.otodom.pl/pl/wyniki");
   u.searchParams.set("viewType", "listing");
-  u.searchParams.set("search[phrase]", q);
+  if (q) u.searchParams.set("search[phrase]", q);
   return u.toString();
 }
 
@@ -270,10 +265,16 @@ function buildOlxSearchUrl(q: string): string {
   return `https://www.olx.pl/oferty/q-${slug}/`;
 }
 
+function withPage(url: string, page: number) {
+  const u = new URL(url);
+  if (page > 1) u.searchParams.set("page", String(page));
+  else u.searchParams.delete("page");
+  return u.toString();
+}
+
+/* -------------------- handler -------------------- */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
-    // GET: url parser
-    // POST: q search lub url parser (body)
     if (req.method !== "GET" && req.method !== "POST") {
       res.setHeader("Allow", "GET, POST");
       return res.status(405).json({ error: "Method not allowed" });
@@ -295,48 +296,45 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const sourceParam =
       req.method === "POST" ? (optString(body.source) ?? "otodom") : null;
-    const sourceWanted = (sourceParam ?? "otodom").toLowerCase(); // otodom|olx|all
+    const sourceWanted = (sourceParam ?? "otodom").toLowerCase();
 
-    // Priorytet: url → parsujemy url; jeśli nie ma url, ale jest q → budujemy search url
-    const url =
+    const cursorStr = req.method === "POST" ? optString(body.cursor) : null;
+    const page = Math.max(1, Number(cursorStr ?? "1") || 1);
+
+    const baseUrl =
       urlFromPost ||
       urlFromGet ||
       (q
         ? (sourceWanted === "olx"
             ? buildOlxSearchUrl(q)
-            : buildOtodomSearchUrl(q)) // default: otodom
-        : null);
+            : buildOtodomSearchUrl(q))
+        : buildOtodomSearchUrl(""));
 
-    if (!url) return res.status(400).json({ error: "Provide url (GET/POST) or q (POST)" });
-    if (!isHttpUrl(url)) return res.status(400).json({ error: "Invalid url" });
+    if (!baseUrl || !isHttpUrl(baseUrl)) {
+      return res.status(400).json({ error: "Invalid or missing url/q" });
+    }
+
+    const url = withPage(baseUrl, page);
 
     const detected = detectSource(url);
-    if (detected === "other") return res.status(400).json({ error: "Unsupported source url" });
+    if (detected === "other") {
+      return res.status(400).json({ error: "Unsupported source url" });
+    }
 
     const html = await fetchHtml(url);
 
-    const lower = url.toLowerCase();
     let rows: ExternalRow[] = [];
-
     if (detected === "otodom") {
-      rows = lower.includes("/pl/oferta/")
+      rows = url.toLowerCase().includes("/pl/oferta/")
         ? parseOtodomListing(url, html)
         : parseOtodomResults(url, html, limit);
     } else if (detected === "olx") {
       rows = parseOlxResults(url, html, limit);
     }
 
-    const debug =
-      rows.length === 0
-        ? {
-            hint:
-              "No offer links parsed. The page may be JS-rendered/blocked. Next step: add Playwright fallback or accept user-provided search URL from portal.",
-            sample: html.slice(0, 300),
-            url,
-          }
-        : undefined;
+    const nextCursor = rows.length >= limit ? String(page + 1) : null;
 
-    return res.status(200).json({ rows, ...(debug ? { debug } : {}) });
+    return res.status(200).json({ rows, nextCursor });
   } catch (e: any) {
     return res.status(400).json({ error: e?.message ?? "Bad request" });
   }
