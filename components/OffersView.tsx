@@ -67,7 +67,6 @@ export default function OffersView({ lang }: { lang: LangKey }) {
   // --- EveryBOT external ---
   const [botQ, setBotQ] = useState("");
   const [botSource, setBotSource] = useState("all");
-  const [botUrl, setBotUrl] = useState("");
   const [botLoading, setBotLoading] = useState(false);
   const [botErr, setBotErr] = useState<string | null>(null);
   const [botRows, setBotRows] = useState<ExternalRow[]>([]);
@@ -75,10 +74,10 @@ export default function OffersView({ lang }: { lang: LangKey }) {
   const [importUrl, setImportUrl] = useState("");
   const [importing, setImporting] = useState(false);
 
-async function loadEverybot(opts?: { q?: string; source?: string; url?: string }) {
+async function loadEverybot(opts?: { q?: string; source?: string })
+ {
   const q = (opts?.q ?? botQ).trim();
   const source = opts?.source ?? botSource;
-  const url = (opts?.url ?? botUrl).trim();
 
   setBotLoading(true);
   setBotErr(null);
@@ -255,8 +254,7 @@ function isHttpUrl(v: unknown): v is string {
             onClick={() => {
               setTab("everybot");
               // ładuj dopiero gdy user wejdzie pierwszy raz
-              const isLive = botSource === "otodom" && isHttpUrl(botUrl);
-
+              const isLive = false;
                 if (isLive) {
                 // pokazuj wyniki z /api/everybot/search
                 } else {
@@ -385,7 +383,7 @@ function isHttpUrl(v: unknown): v is string {
                 onChange={(e) => {
                     const v = e.target.value;
                     setBotSource(v);
-                    if (v !== "otodom") setBotUrl(""); // czyścimy URL gdy nie otodom
+                    
                 }}
                 className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
                 >
@@ -398,39 +396,19 @@ function isHttpUrl(v: unknown): v is string {
                 </select>
             </div>
 
-            {/* ✅ Otodom live URL (pełna szerokość, pod spodem) */}
-            {botSource === "otodom" && (
-                <div className="md:col-span-12">
-                <input
-                    value={botUrl}
-                    onChange={(e) => setBotUrl(e.target.value)}
-                    placeholder="Wklej URL wyników Otodom (https://www.otodom.pl/pl/wyniki/sprzedaz/mieszkanie/warszawa)"
-                    className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
-                />
-                <p className="mt-1 text-xs text-gray-500">
-                    Podgląd na żywo (bez zapisu). Zapiszesz dopiero wybraną ofertę.
-                </p>
-                </div>
-            )}
             </div>
 
             <div className="mt-3 flex justify-end">
             <button
                 type="button"
-                disabled={!botQ.trim() && !(botSource === "otodom" && botUrl.trim())}
+                disabled={!botQ.trim()}
                 className={clsx(
                 "rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm transition",
-                botSource === "otodom" && !botUrl.trim()
+                !botQ.trim()
                     ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
                     : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
                 )}
-                onClick={() =>
-                loadEverybot({
-                    source: botSource,
-                    url: botUrl,
-                    q: botQ,
-                })
-                }
+
             >
                 {t(lang, "everybotSearchBtn" as any)}
             </button>
