@@ -67,6 +67,7 @@ export default function OffersView({ lang }: { lang: LangKey }) {
   // --- EveryBOT external ---
   const [botQ, setBotQ] = useState("");
   const [botSource, setBotSource] = useState("all");
+  const [botUrl, setBotUrl] = useState("");
   const [botLoading, setBotLoading] = useState(false);
   const [botErr, setBotErr] = useState<string | null>(null);
   const [botRows, setBotRows] = useState<ExternalRow[]>([]);
@@ -74,40 +75,49 @@ export default function OffersView({ lang }: { lang: LangKey }) {
   const [importUrl, setImportUrl] = useState("");
   const [importing, setImporting] = useState(false);
 
-  async function loadEverybot(opts?: { q?: string; source?: string }) {
-    const q = (opts?.q ?? botQ).trim();
-    const source = opts?.source ?? botSource;
+async function loadEverybot(opts?: { q?: string; source?: string; url?: string }) {
+  const q = (opts?.q ?? botQ).trim();
+  const source = opts?.source ?? botSource;
+  const url = (opts?.url ?? botUrl).trim();
 
-    setBotLoading(true);
-    setBotErr(null);
-    try {
-      const params = new URLSearchParams();
-      if (q) params.set("q", q);
-      if (source && source !== "all") params.set("source", source);
-      params.set("limit", "50");
+  setBotLoading(true);
+  setBotErr(null);
 
-      const r = await fetch("/api/everybot/list", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            q,
-            source,
-            status,
-            limit: 50,
-        }),
-        });
-      if (!r.ok) {
-        const j = await r.json().catch(() => null);
-        throw new Error(j?.error ?? `HTTP ${r.status}`);
-      }
-      const data = (await r.json()) as { rows: ExternalRow[] };
-      setBotRows(data.rows ?? []);
-    } catch (e: any) {
-      setBotErr(e?.message ?? "Failed to load");
-    } finally {
-      setBotLoading(false);
+  try {
+    // ✅ C3 live: Otodom URL wyników → backend fetch+parse (bez DB)
+    if (source === "otodom" && url) {
+      const u = new URL("/api/everybot/search", window.location.origin);
+      u.searchParams.set("url", url);
+      u.searchParams.set("limit", "50");
+
+      const r = await fetch(u.toString(), { cache: "no-store" });
+      const j = await r.json().catch(() => null);
+      if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
+
+      setBotRows((j?.rows ?? []) as ExternalRow[]);
+      return;
     }
+
+    // ✅ fallback: Twoja baza zapisanych linków (external_listings)
+    const r = await fetch("/api/everybot/list", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        q,
+        source: source === "all" ? null : source,
+        limit: 50,
+      }),
+    });
+
+    const j = await r.json().catch(() => null);
+    if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
+    setBotRows((j?.rows ?? []) as ExternalRow[]);
+  } catch (e: any) {
+    setBotErr(e?.message ?? "Failed to load");
+  } finally {
+    setBotLoading(false);
   }
+}
 
   async function importLink() {
     const url = importUrl.trim();
