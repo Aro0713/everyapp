@@ -10,10 +10,10 @@ export default async function handler(
   res: NextApiResponse
 ) {
   try {
-    if (req.method !== "POST") {
-      res.setHeader("Allow", "POST");
-      return res.status(405).json({ error: "Method not allowed" });
-    }
+ if (req.method !== "POST" && req.method !== "GET") {
+  res.setHeader("Allow", "POST, GET");
+  return res.status(405).json({ error: "Method not allowed" });
+}
 
     const userId = getUserIdFromRequest(req);
     if (!userId) return res.status(401).json({ error: "UNAUTHORIZED" });
