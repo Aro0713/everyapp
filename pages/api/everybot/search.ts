@@ -6,6 +6,16 @@ function mustString(v: unknown, name: string) {
   return v.trim();
 }
 
+function optString(v: unknown): string | null {
+  return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+
+function optNumber(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim() && Number.isFinite(Number(v))) return Number(v);
+  return null;
+}
+
 function isHttpUrl(s: string) {
   try {
     const u = new URL(s);
@@ -116,11 +126,6 @@ function parseOtodomResults(pageUrl: string, html: string, limit: number): Exter
   return rows.slice(0, limit);
 }
 
-/**
- * Otodom – pojedyncza oferta:
- * Stabilnie bierzemy z meta/og/canonical + opis (fallback).
- * JSON-LD też bywa, ale nie zawsze łatwo go wyciągnąć przy SSR; meta działa “wszędzie”.
- */
 function parseOtodomListing(pageUrl: string, html: string): ExternalRow[] {
   const $ = cheerio.load(html);
   const now = new Date().toISOString();
@@ -132,18 +137,14 @@ function parseOtodomListing(pageUrl: string, html: string): ExternalRow[] {
   const title = ogTitle || metaTitle;
 
   const ogImage = $('meta[property="og:image"]').attr("content")?.trim() || null;
-
   const desc = $('meta[name="description"]').attr("content")?.trim() || "";
 
-  // Cena: w title/description często jest "1 280 000 zł"
   const priceAmount = parseNumberLoose(desc) ?? parseNumberLoose(title ?? "");
   const currency =
     desc.toLowerCase().includes("zł") || (title ?? "").toLowerCase().includes("zł") ? "PLN" :
     desc.includes("€") || (title ?? "").includes("€") ? "EUR" :
     null;
 
-  // Lokalizacja: z opisu meta (MVP)
-  // przykład: "... w miejscowości ul. ..., Lublin, lubelskie, za cenę ..."
   const locMatch =
     desc.match(/w miejscowości\s+([^,]+),\s*([^,]+),\s*([^,]+),\s*za cenę/i) ||
     desc.match(/w miejscowości\s+([^,]+),\s*([^,]+),\s*za cenę/i);
@@ -170,7 +171,7 @@ function parseOtodomListing(pageUrl: string, html: string): ExternalRow[] {
   ];
 }
 
-async function fetchHtml(url: string): Promise<{ html: string; status: number }> {
+async function fetchHtml(url: string): Promise<string> {
   const r = await fetch(url, {
     method: "GET",
     headers: {
@@ -185,49 +186,70 @@ async function fetchHtml(url: string): Promise<{ html: string; status: number }>
   });
 
   const html = await r.text().catch(() => "");
-  if (!r.ok) {
-    throw new Error(`FETCH_FAILED ${r.status} ${r.statusText} ${html.slice(0, 200)}`);
-  }
-  return { html, status: r.status };
+  if (!r.ok) throw new Error(`FETCH_FAILED ${r.status} ${r.statusText} ${html.slice(0, 200)}`);
+  return html;
+}
+
+/**
+ * Minimalny builder URL dla Otodom.
+ * To jest MVP: fraza idzie w search[phrase]. Resztę filtrów dodamy potem / przez AI.
+ */
+function buildOtodomSearchUrl(q: string): string {
+  const u = new URL("https://www.otodom.pl/pl/wyniki/sprzedaz/mieszkanie/cala-polska");
+  u.searchParams.set("viewType", "listing");
+  u.searchParams.set("search[phrase]", q);
+  return u.toString();
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
-    if (req.method !== "GET") {
-      res.setHeader("Allow", "GET");
+    // GET: kompatybilność z obecnym "url parser"
+    // POST: nowy tryb "q search" lub "url parser" (body)
+    if (req.method !== "GET" && req.method !== "POST") {
+      res.setHeader("Allow", "GET, POST");
       return res.status(405).json({ error: "Method not allowed" });
     }
 
     res.setHeader("Cache-Control", "no-store");
 
-    const url = mustString(req.query.url, "url");
+    const limitRaw =
+      req.method === "GET"
+        ? (typeof req.query.limit === "string" ? Number(req.query.limit) : 50)
+        : (optNumber((req.body ?? {}).limit) ?? 50);
+
+    const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 50, 1), 200);
+
+    const body = req.method === "POST" ? (req.body ?? {}) : {};
+    const urlFromGet = req.method === "GET" ? optString(req.query.url) : null;
+    const urlFromPost = req.method === "POST" ? optString(body.url) : null;
+    const q = req.method === "POST" ? optString(body.q) : null;
+
+    // ✅ Priorytet: jeśli podano url → parsujemy url; jeśli nie, ale jest q → budujemy search url
+    const url =
+      urlFromPost ||
+      urlFromGet ||
+      (q ? buildOtodomSearchUrl(q) : null);
+
+    if (!url) return res.status(400).json({ error: "Provide url (GET/POST) or q (POST)" });
     if (!isHttpUrl(url)) return res.status(400).json({ error: "Invalid url" });
 
     const source = detectSource(url);
     if (source !== "otodom") return res.status(400).json({ error: "Only otodom supported" });
 
-    const limitRaw = typeof req.query.limit === "string" ? Number(req.query.limit) : 50;
-    const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 50, 1), 200);
+    const html = await fetchHtml(url);
 
-    const { html } = await fetchHtml(url);
-
-    // ✅ routing: oferta vs wyniki
     const lower = url.toLowerCase();
-    let rows: ExternalRow[] = [];
+    const rows = lower.includes("/pl/oferta/")
+      ? parseOtodomListing(url, html)
+      : parseOtodomResults(url, html, limit);
 
-    if (lower.includes("/pl/oferta/")) {
-      rows = parseOtodomListing(url, html);
-    } else {
-      rows = parseOtodomResults(url, html, limit);
-    }
-
-    // ✅ debug jeśli wyniki puste (często oznacza "shell" bez linków)
     const debug =
       rows.length === 0
         ? {
             hint:
-              "No offer links parsed. The page may be JS-rendered/blocked. Try another URL or implement HTML-paste fallback.",
+              "No offer links parsed. The page may be JS-rendered/blocked. Next step: add Playwright fallback or accept user-provided search URL from portal.",
             sample: html.slice(0, 300),
+            url,
           }
         : undefined;
 
