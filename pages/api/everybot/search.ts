@@ -711,10 +711,9 @@ const url =
 
 const html = await fetchHtml(url);
 
-// DEBUG – tylko na czas diagnozy
 console.log("otodom html head:", html.slice(0, 500));
 
-// DEBUG – paginacja Otodom
+// DEBUG – paginacja
 const next = extractNextData(html);
 const s = next ? JSON.stringify(next) : "";
 const cp = s.match(/"currentPage"\s*:\s*(\d+)/i)?.[1] ?? null;
@@ -726,8 +725,14 @@ console.log("otodom pagination:", {
   totalPages: tp,
 });
 
-let rows: ExternalRow[] = [];
+// DEBUG – struktura danych wyników Otodom
+const nd = extractNextData(html);
+console.log(
+  "otodom data keys:",
+  Object.keys(nd?.props?.pageProps?.data ?? {})
+);
 
+let rows: ExternalRow[] = [];
 
 if (detected === "otodom") {
   if (url.toLowerCase().includes("/pl/oferta/")) {
@@ -749,13 +754,26 @@ if (detected === "otodom") {
   rows = parseOlxResults(url, html, limit);
 }
 
-   let nextCursor: string | null = null;
+let nextCursor: string | null = null;
 
 if (detected === "otodom" && !url.toLowerCase().includes("/pl/oferta/")) {
+  // 1) spróbuj nextUrl z __NEXT_DATA__
   nextCursor = getOtodomNextUrlFromNextData(url, html);
+
+  // 2) fallback: jeśli nextUrl brak, ale totalPages>currentPage => dawaj "page+1"
+  if (!nextCursor) {
+    const next = extractNextData(html);
+    const s = next ? JSON.stringify(next) : "";
+    const cp = Number(s.match(/"currentPage"\s*:\s*(\d+)/i)?.[1] ?? "1");
+    const tp = Number(s.match(/"totalPages"\s*:\s*(\d+)/i)?.[1] ?? "1");
+    if (Number.isFinite(cp) && Number.isFinite(tp) && tp > cp) {
+      nextCursor = String(page + 1);
+    }
+  }
 } else {
   nextCursor = hasNextPage(html, page) ? String(page + 1) : null;
 }
+
 
     return res.status(200).json({ rows, nextCursor });
   } catch (e: any) {
