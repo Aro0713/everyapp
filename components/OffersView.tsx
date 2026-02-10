@@ -111,6 +111,7 @@ async function loadEverybot(opts?: {
     const qs = new URLSearchParams();
     qs.set("limit", "50");
     qs.set("status", "active");
+    qs.set("includeInactive", "1");
 
     if (q) qs.set("q", q);
     if (source && source !== "all") qs.set("source", source);
