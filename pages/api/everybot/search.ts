@@ -77,8 +77,205 @@ function cleanTitle(s: string | null): string | null {
   if (t.includes(".css-") || t.includes("@media") || t.includes("{") || t.includes("}") || t.length > 160) return null;
   return t;
 }
+function extractNextData(html: string): any | null {
+  const m = html.match(/<script[^>]+id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
+  if (!m) return null;
+  try {
+    return JSON.parse(m[1]);
+  } catch {
+    return null;
+  }
+}
+
+function deepCollectObjects(root: any, pick: (o: any) => boolean, out: any[] = [], seen = new Set<any>()) {
+  if (!root || typeof root !== "object") return out;
+  if (seen.has(root)) return out;
+  seen.add(root);
+
+  if (Array.isArray(root)) {
+    for (const it of root) deepCollectObjects(it, pick, out, seen);
+    return out;
+  }
+
+  if (pick(root)) out.push(root);
+
+  for (const k of Object.keys(root)) {
+    deepCollectObjects((root as any)[k], pick, out, seen);
+  }
+  return out;
+}
+
+function firstString(...xs: Array<unknown>): string | null {
+  for (const x of xs) {
+    if (typeof x === "string" && x.trim()) return x.trim();
+  }
+  return null;
+}
+function parseOtodomResultsFromNextData(pageUrl: string, html: string, limit: number): { rows: ExternalRow[]; hasNext: boolean | null } {
+  const next = extractNextData(html);
+  if (!next) return { rows: [], hasNext: null };
+
+  // 1) zbierz kandydatów na "listing/ad/offer" – heurystyka po polach
+  const candidates = deepCollectObjects(next, (o) => {
+    if (!o || typeof o !== "object" || Array.isArray(o)) return false;
+
+    const hasTitle =
+      typeof (o as any).title === "string" ||
+      typeof (o as any).name === "string" ||
+      typeof (o as any).heading === "string";
+
+    const hasUrl =
+      typeof (o as any).url === "string" ||
+      typeof (o as any).href === "string" ||
+      typeof (o as any).link === "string" ||
+      typeof (o as any).canonical === "string";
+
+    const hasPrice =
+      (typeof (o as any).price === "number" || typeof (o as any).price === "string" || typeof (o as any).totalPrice === "number") ||
+      (o as any).price?.amount != null ||
+      (o as any).totalPrice?.amount != null;
+
+    // Otodom zwykle ma też jakieś "location"/"address"/"city"
+    const hasLoc =
+      typeof (o as any).location === "string" ||
+      typeof (o as any).address === "string" ||
+      typeof (o as any).city === "string" ||
+      typeof (o as any).region === "string" ||
+      typeof (o as any).district === "string";
+
+    // nie wymagamy wszystkiego naraz, ale ograniczamy śmieci
+    return (hasTitle && hasUrl) || (hasTitle && hasPrice) || (hasUrl && hasPrice && hasLoc);
+  });
+
+  const now = new Date().toISOString();
+  const rows: ExternalRow[] = [];
+  const seen = new Set<string>();
+
+  for (const o of candidates) {
+    const rawUrl = firstString((o as any).url, (o as any).href, (o as any).link, (o as any).canonical);
+    if (!rawUrl) continue;
+
+    const full = absUrl(pageUrl, rawUrl);
+    if (!full) continue;
+
+    const norm = normalizeOtodomUrl(full);
+
+    // filtr: interesują nas oferty
+    if (!norm.includes("/pl/oferta/")) continue;
+    if (seen.has(norm)) continue;
+    seen.add(norm);
+
+    const rawTitle = firstString((o as any).title, (o as any).name, (o as any).heading);
+    const title = cleanTitle(rawTitle);
+
+    // cena – kilka możliwych struktur
+    const priceText = firstString(
+      (o as any).price?.formatted,
+      (o as any).totalPrice?.formatted,
+      (o as any).price,
+      (o as any).totalPrice
+    );
+    const priceAmount =
+      optNumber((o as any).price?.amount) ??
+      optNumber((o as any).totalPrice?.amount) ??
+      parseNumberLoose(priceText);
+
+    const currency =
+      firstString((o as any).price?.currency, (o as any).totalPrice?.currency) ??
+      (priceText?.includes("€") ? "EUR" : priceText?.toLowerCase().includes("zł") ? "PLN" : null);
+
+    const locationText = firstString(
+      (o as any).location,
+      (o as any).address,
+      (o as any).city,
+      (o as any).district,
+      (o as any).region
+    );
+
+    // miniaturka
+    const img = firstString(
+      (o as any).thumbnail,
+      (o as any).thumb,
+      (o as any).image,
+      (o as any).coverImage,
+      (o as any).images?.[0]?.url,
+      (o as any).photos?.[0]?.url
+    );
+
+    // metry / pokoje / cena za m2 (jeśli są w obiekcie)
+    const area_m2 =
+      optNumber((o as any).area) ??
+      optNumber((o as any).areaM2) ??
+      parseNumberLoose(firstString((o as any).area?.value, (o as any).area?.formatted));
+
+    const roomsRaw = optNumber((o as any).rooms) ?? parseNumberLoose(firstString((o as any).rooms?.formatted));
+    const rooms = roomsRaw != null ? Math.round(roomsRaw) : null;
+
+    const price_per_m2 =
+      optNumber((o as any).pricePerM2) ??
+      optNumber((o as any).price_per_m2) ??
+      parseNumberLoose(firstString((o as any).pricePerM2?.formatted));
+
+    rows.push({
+      external_id: norm,
+      office_id: null,
+      source: "otodom",
+      source_url: norm,
+
+      title: title || null,
+      price_amount: priceAmount ?? null,
+      currency,
+      location_text: locationText || null,
+
+      status: "preview",
+      imported_at: now,
+      updated_at: now,
+
+      thumb_url: img ? absUrl(pageUrl, img) : null,
+
+      area_m2: area_m2 ?? null,
+      rooms: rooms ?? null,
+      price_per_m2: price_per_m2 ?? null,
+    });
+
+    if (rows.length >= limit) break;
+  }
+
+  // 2) paginacja – szukamy totalPages / page / currentPage w __NEXT_DATA__
+  let hasNext: boolean | null = null;
+  try {
+    const s = JSON.stringify(next);
+    const tp = s.match(/"totalPages"\s*:\s*(\d+)/i) || s.match(/"total_pages"\s*:\s*(\d+)/i);
+    const cp = s.match(/"currentPage"\s*:\s*(\d+)/i) || s.match(/"page"\s*:\s*(\d+)/i);
+    if (tp && cp) {
+      const totalPages = Number(tp[1]);
+      const currentPage = Number(cp[1]);
+      if (Number.isFinite(totalPages) && Number.isFinite(currentPage)) hasNext = totalPages > currentPage;
+    }
+  } catch {}
+
+  return { rows, hasNext };
+}
 
 /* -------------------- parsers -------------------- */
+function normalizeOtodomUrl(u: string): string {
+  // /hpr/ -> /
+  let out = u.replace("://www.otodom.pl/hpr/", "://www.otodom.pl/");
+
+  // czasem trafiają się linki bez /pl/ (albo z inną wersją)
+  // nie ruszamy ofert (/pl/oferta/), bo to i tak jest OK
+  // ale wyniki chcemy trzymać kanonicznie w /pl/wyniki
+  try {
+    const url = new URL(out);
+    if (url.hostname.includes("otodom.") && url.pathname.startsWith("/wyniki")) {
+      url.pathname = "/pl" + url.pathname;
+      out = url.toString();
+    }
+  } catch {}
+  return out;
+}
+
+
 function parseOtodomResults(pageUrl: string, html: string, limit: number): ExternalRow[] {
   const $ = cheerio.load(html);
   const now = new Date().toISOString();
@@ -89,6 +286,7 @@ function parseOtodomResults(pageUrl: string, html: string, limit: number): Exter
     const href = $(el).attr("href");
     const full = absUrl(pageUrl, href);
     if (!full) return;
+    const norm = normalizeOtodomUrl(full);
     if (!full.includes("/pl/oferta/")) return;
     if (seen.has(full)) return;
     seen.add(full);
@@ -225,9 +423,10 @@ function parseOlxResults(pageUrl: string, html: string, limit: number): External
     const card = $(el).closest("article, div").first();
 
     const title =
-      card.find("h6, h5, h4, h3").first().text().trim() ||
-      $(el).text().trim() ||
-      null;
+    card.find("h2, h3").first().text().trim() ||
+    $(el).attr("aria-label")?.trim() ||
+    $(el).attr("title")?.trim() ||
+    null;
 
     const priceText =
       card.find('[data-testid="ad-price"], [class*="price"]').first().text().trim() || null;
@@ -305,39 +504,40 @@ function withPage(url: string, page: number) {
   else u.searchParams.delete("page");
   return u.toString();
 }
+function hasNextFromNextData(html: string, currentPage: number): boolean | null {
+  const next = extractNextData(html);
+  if (!next) return null;
+
+  // szukamy totalPages w JSON
+  try {
+    const s = JSON.stringify(next);
+    const tp = s.match(/"totalPages"\s*:\s*(\d+)/i) || s.match(/"total_pages"\s*:\s*(\d+)/i);
+    if (tp) {
+      const totalPages = Number(tp[1]);
+      if (Number.isFinite(totalPages)) return totalPages > currentPage;
+    }
+  } catch {}
+
+  return null;
+}
+
+
 function hasNextPage(html: string, currentPage: number): boolean {
+  const byNext = hasNextFromNextData(html, currentPage);
+  if (byNext !== null) return byNext;
+
   const $ = cheerio.load(html);
 
-  // 1) standard SEO pagination
-  const relNext =
-    $('link[rel="next"]').attr("href") ||
-    $('a[rel="next"]').attr("href");
+  const relNext = $('link[rel="next"]').attr("href") || $('a[rel="next"]').attr("href");
   if (relNext) return true;
 
-  // 2) "Następna" w aria-label
-  const ariaNext =
-    $('a[aria-label*="Następ"], button[aria-label*="Następ"]').length > 0;
+  const ariaNext = $('a[aria-label*="Następ"], button[aria-label*="Następ"]').length > 0;
   if (ariaNext) return true;
 
-  // 3) "Następna" w tekście
-  const textNext =
-    $("a,button")
-      .filter((_, el) => (($(el).text() || "").toLowerCase().includes("następ")))
-      .length > 0;
+  const textNext = $("a,button").filter((_, el) => (($(el).text() || "").toLowerCase().includes("następ"))).length > 0;
   if (textNext) return true;
 
-  // 4) fallback: wykryj max page= z linków w HTML
-  const pages = new Set<number>();
-  const re = /[?&]page=(\d+)/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(html))) {
-    const n = Number(m[1]);
-    if (Number.isFinite(n)) pages.add(n);
-  }
-  if (pages.size === 0) return false;
-
-  const maxPage = Math.max(...pages);
-  return maxPage > currentPage;
+  return false;
 }
 
 
@@ -394,14 +594,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     let rows: ExternalRow[] = [];
     if (detected === "otodom") {
-      rows = url.toLowerCase().includes("/pl/oferta/")
-        ? parseOtodomListing(url, html)
-        : parseOtodomResults(url, html, limit);
+      if (url.toLowerCase().includes("/pl/oferta/")) {
+        rows = parseOtodomListing(url, html);
+        } else {
+        const fromNext = parseOtodomResultsFromNextData(url, html, limit);
+        rows = fromNext.rows.length ? fromNext.rows : parseOtodomResults(url, html, limit);
+        }
     } else if (detected === "olx") {
       rows = parseOlxResults(url, html, limit);
     }
 
-    const nextCursor = hasNextPage(html, page) ? String(page + 1) : null;
+   const nextCursor = hasNextPage(html, page) ? String(page + 1) : null;
+
 
     return res.status(200).json({ rows, nextCursor });
   } catch (e: any) {
