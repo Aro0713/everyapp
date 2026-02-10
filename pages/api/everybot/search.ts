@@ -286,6 +286,7 @@ function parseOtodomResults(pageUrl: string, html: string, limit: number): Exter
     const href = $(el).attr("href");
     const full = absUrl(pageUrl, href);
     if (!full) return;
+
     const norm = normalizeOtodomUrl(full);
     if (!norm.includes("/pl/oferta/")) return;
     if (seen.has(norm)) return;
@@ -294,14 +295,19 @@ function parseOtodomResults(pageUrl: string, html: string, limit: number): Exter
     const card = $(el).closest("article, li, div").first();
 
     const rawTitle =
-    card.find("h2, h3").first().text().trim() ||
-    $(el).attr("title")?.trim() ||
-    $(el).attr("aria-label")?.trim() ||
-    $(el).text().trim() ||
-    null;
+      card.find("h2, h3").first().text().trim() ||
+      $(el).attr("title")?.trim() ||
+      $(el).attr("aria-label")?.trim() ||
+      $(el).text().trim() ||
+      null;
 
-    const title = cleanTitle(rawTitle);
-
+    // tytuł + fallback na „cechy” (żeby nie było '-')
+    let title = cleanTitle(rawTitle);
+    if (!title) {
+      const cardTextForTitle = card.text().replace(/\s+/g, " ").trim();
+      // bierzemy pierwsze ~120 znaków jako „opis cech”
+      if (cardTextForTitle) title = cleanTitle(cardTextForTitle.slice(0, 140)) ?? null;
+    }
 
     const priceText =
       card
@@ -330,39 +336,39 @@ function parseOtodomResults(pageUrl: string, html: string, limit: number): Exter
     const priceAmount = parseNumberLoose(priceText);
     const cardText = card.text().replace(/\s+/g, " ");
 
-        const area_m2 = parseNumberLoose(cardText.match(/(\d+(?:[.,]\d+)?)\s*m²/i)?.[0]);
-        const roomsRaw = parseNumberLoose(cardText.match(/(\d+(?:[.,]\d+)?)\s*pok/i)?.[0]);
-        const rooms = roomsRaw ? Math.round(roomsRaw) : null;
+    const area_m2 = parseNumberLoose(cardText.match(/(\d+(?:[.,]\d+)?)\s*m²/i)?.[0]);
+    const roomsRaw = parseNumberLoose(cardText.match(/(\d+(?:[.,]\d+)?)\s*pok/i)?.[0]);
+    const rooms = roomsRaw ? Math.round(roomsRaw) : null;
 
-        const price_per_m2 = parseNumberLoose(cardText.match(/(\d[\d\s.,]+)\s*zł\/m²/i)?.[0]);
+    const price_per_m2 = parseNumberLoose(cardText.match(/(\d[\d\s.,]+)\s*zł\/m²/i)?.[0]);
 
-rows.push({
-  external_id: norm,
-  office_id: null,
-  source: "otodom",
-  source_url: norm,
+    rows.push({
+      external_id: norm,
+      office_id: null,
+      source: "otodom",
+      source_url: norm,
 
-  title: title || null,
-  price_amount: priceAmount ?? null,
-  currency,
-  location_text: locationText || null,
+      title: title || null,
+      price_amount: priceAmount ?? null,
+      currency,
+      location_text: locationText || null,
 
-  status: "preview",
-  imported_at: now,
-  updated_at: now,
+      status: "preview",
+      imported_at: now,
+      updated_at: now,
 
-  thumb_url: img ? absUrl(pageUrl, img) : null,
+      thumb_url: img ? absUrl(pageUrl, img) : null,
 
-  // === POLA DO TABELI (MVP) ===
-  area_m2: area_m2 ?? null,
-  rooms: rooms ?? null,
-  price_per_m2: price_per_m2 ?? null,
-});
-
+      // === POLA DO TABELI (MVP) ===
+      area_m2: area_m2 ?? null,
+      rooms: rooms ?? null,
+      price_per_m2: price_per_m2 ?? null,
+    });
   });
 
   return rows.slice(0, limit);
 }
+
 function parseOtodomListingFromNextData(pageUrl: string, html: string): ExternalRow[] {
   const next = extractNextData(html);
   if (!next?.props?.pageProps) return [];
@@ -625,6 +631,21 @@ function hasNextPage(html: string, currentPage: number): boolean {
 
   return false;
 }
+function getOtodomNextUrlFromNextData(pageUrl: string, html: string): string | null {
+  const next = extractNextData(html);
+  const data = next?.props?.pageProps?.data;
+  if (!data) return null;
+
+  const raw =
+    data.nextUrl ||
+    data.links?.next ||
+    data.pagination?.nextUrl ||
+    data.pagination?.links?.next ||
+    null;
+
+  const full = typeof raw === "string" ? absUrl(pageUrl, raw) : null;
+  return full ? normalizeOtodomUrl(full) : null;
+}
 
 
 /* -------------------- handler -------------------- */
@@ -673,7 +694,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: "Invalid or missing url/q" });
     }
 
-    const url = withPage(baseUrl, page);
+    const cursorUrl =
+  req.method === "POST" ? optString(body.cursor) : optString(req.query.cursor);
+
+const url =
+  cursorUrl && isHttpUrl(cursorUrl)
+    ? cursorUrl
+    : withPage(baseUrl, page);
+
     console.log("everybot request:", { baseUrl, page, url });
 
     const detected = detectSource(url);
@@ -721,9 +749,13 @@ if (detected === "otodom") {
   rows = parseOlxResults(url, html, limit);
 }
 
+   let nextCursor: string | null = null;
 
-   const nextCursor = hasNextPage(html, page) ? String(page + 1) : null;
-
+if (detected === "otodom" && !url.toLowerCase().includes("/pl/oferta/")) {
+  nextCursor = getOtodomNextUrlFromNextData(url, html);
+} else {
+  nextCursor = hasNextPage(html, page) ? String(page + 1) : null;
+}
 
     return res.status(200).json({ rows, nextCursor });
   } catch (e: any) {
