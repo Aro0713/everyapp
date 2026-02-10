@@ -63,6 +63,9 @@ type ExternalRow = {
   imported_at: string;
   updated_at: string;
   thumb_url: string | null;
+  created_at?: string;
+    transaction_type?: "sale" | "rent" | null;
+    price?: number | null;
 
   // MVP – dane do tabeli
   area_m2?: number | null;
@@ -74,7 +77,7 @@ function cleanTitle(s: string | null): string | null {
   if (!s) return null;
   const t = s.replace(/\s+/g, " ").trim();
   if (!t) return null;
-  if (t.includes(".css-") || t.includes("@media") || t.includes("{") || t.includes("}") || t.length > 160) return null;
+  if (t.includes(".css-") || t.includes("@media") || t.length > 260) return null;
   return t;
 }
 function extractNextData(html: string): any | null {
@@ -119,6 +122,9 @@ function parseOtodomResultsFromNextData(pageUrl: string, html: string, limit: nu
   const ads = p?.data?.searchAds;
 
   if (Array.isArray(ads) && ads.length) {
+    console.log("otodom searchAd keys:", Object.keys(ads[0] ?? {}));
+    console.log("otodom searchAd sample:", JSON.stringify(ads[0] ?? {}).slice(0, 1200));
+
     const rows: ExternalRow[] = [];
     const seen = new Set<string>();
 
@@ -139,6 +145,12 @@ function parseOtodomResultsFromNextData(pageUrl: string, html: string, limit: nu
         optNumber(ad?.totalPrice?.amount) ??
         optNumber(ad?.priceAmount) ??
         null;
+        const priceText =
+        firstString(ad?.price?.formatted, ad?.totalPrice?.formatted, ad?.priceText) ?? null;
+
+        const transaction_type =
+        (ad?.transactionType === "rent" || ad?.transactionType === "sale" ? ad.transactionType : null) ??
+        inferTransactionTypeFromPriceText(priceText);
 
       const currency =
         firstString(ad?.price?.currency, ad?.totalPrice?.currency, ad?.currency) ?? null;
@@ -162,7 +174,7 @@ function parseOtodomResultsFromNextData(pageUrl: string, html: string, limit: nu
       const img =
         firstString(ad?.thumbnail, ad?.thumb, ad?.image, ad?.images?.[0]?.url, ad?.photos?.[0]?.url) ?? null;
 
-      rows.push({
+          rows.push({
         external_id: norm,
         office_id: null,
         source: "otodom",
@@ -182,7 +194,12 @@ function parseOtodomResultsFromNextData(pageUrl: string, html: string, limit: nu
         area_m2,
         rooms,
         price_per_m2,
-      });
+
+        // ALIASES dla tabeli (MVP)
+        created_at: now,
+        transaction_type: transaction_type ?? null,
+        price: priceAmount ?? null,
+        });
 
       if (rows.length >= limit) break;
     }
@@ -290,6 +307,8 @@ function parseOtodomResultsFromNextData(pageUrl: string, html: string, limit: nu
       optNumber((o as any).pricePerM2) ??
       optNumber((o as any).price_per_m2) ??
       parseNumberLoose(firstString((o as any).pricePerM2?.formatted));
+    
+      const transaction_type = inferTransactionTypeFromPriceText(priceText);
 
     rows.push({
       external_id: norm,
@@ -311,6 +330,10 @@ function parseOtodomResultsFromNextData(pageUrl: string, html: string, limit: nu
       area_m2: area_m2 ?? null,
       rooms: rooms ?? null,
       price_per_m2: price_per_m2 ?? null,
+      created_at: now,
+        transaction_type,
+        price: priceAmount ?? null,
+
     });
 
     if (rows.length >= limit) break;
@@ -348,6 +371,21 @@ function normalizeOtodomUrl(u: string): string {
     }
   } catch {}
   return out;
+}
+function inferTransactionTypeFromPriceText(
+  s: string | null
+): "rent" | "sale" | null {
+  if (!s) return null;
+  const t = s.toLowerCase();
+  if (
+    t.includes("/mies") ||
+    t.includes("miesiąc") ||
+    t.includes("mc") ||
+    t.includes("month")
+  ) {
+    return "rent";
+  }
+  return "sale";
 }
 
 
@@ -390,6 +428,8 @@ function parseOtodomResults(pageUrl: string, html: string, limit: number): Exter
         .first()
         .text()
         .trim() || null;
+        
+    const transaction_type = inferTransactionTypeFromPriceText(priceText);
 
     const locationText =
       card
@@ -417,28 +457,34 @@ function parseOtodomResults(pageUrl: string, html: string, limit: number): Exter
 
     const price_per_m2 = parseNumberLoose(cardText.match(/(\d[\d\s.,]+)\s*zł\/m²/i)?.[0]);
 
-    rows.push({
-      external_id: norm,
-      office_id: null,
-      source: "otodom",
-      source_url: norm,
+rows.push({
+  external_id: norm,
+  office_id: null,
+  source: "otodom",
+  source_url: norm,
 
-      title: title || null,
-      price_amount: priceAmount ?? null,
-      currency,
-      location_text: locationText || null,
+  title: title || null,
+  price_amount: priceAmount ?? null,
+  currency,
+  location_text: locationText || null,
 
-      status: "preview",
-      imported_at: now,
-      updated_at: now,
+  status: "preview",
+  imported_at: now,
+  updated_at: now,
 
-      thumb_url: img ? absUrl(pageUrl, img) : null,
+  thumb_url: img ? absUrl(pageUrl, img) : null,
 
-      // === POLA DO TABELI (MVP) ===
-      area_m2: area_m2 ?? null,
-      rooms: rooms ?? null,
-      price_per_m2: price_per_m2 ?? null,
-    });
+  // === POLA DO TABELI (MVP) ===
+  area_m2: area_m2 ?? null,
+  rooms: rooms ?? null,
+  price_per_m2: price_per_m2 ?? null,
+
+  // ALIASES dla tabeli (MVP)
+  created_at: now,
+  transaction_type,
+  price: priceAmount ?? null,
+});
+
   });
 
   return rows.slice(0, limit);
@@ -578,13 +624,15 @@ function parseOlxResults(pageUrl: string, html: string, limit: number): External
     const card = $(el).closest("article, div").first();
 
     const title =
-    card.find("h2, h3").first().text().trim() ||
-    $(el).attr("aria-label")?.trim() ||
-    $(el).attr("title")?.trim() ||
-    null;
+      card.find("h2, h3").first().text().trim() ||
+      $(el).attr("aria-label")?.trim() ||
+      $(el).attr("title")?.trim() ||
+      null;
 
     const priceText =
       card.find('[data-testid="ad-price"], [class*="price"]').first().text().trim() || null;
+
+    const transaction_type = inferTransactionTypeFromPriceText(priceText);
 
     const locationText =
       card.find('[data-testid="location-date"], [class*="location"]').first().text().trim() || null;
@@ -607,13 +655,18 @@ function parseOlxResults(pageUrl: string, html: string, limit: number): External
       source: "olx",
       source_url: full,
       title: title || null,
-      price_amount: priceAmount,
+      price_amount: priceAmount ?? null,
       currency,
       location_text: locationText || null,
       status: "preview",
       imported_at: now,
       updated_at: now,
       thumb_url: img ? absUrl(pageUrl, img) : null,
+
+      // ALIASES dla tabeli (MVP)
+      created_at: now,
+      transaction_type,
+      price: priceAmount ?? null,
     });
   });
 
@@ -749,33 +802,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       req.method === "POST" ? (optString(body.source) ?? "otodom") : null;
     const sourceWanted = (sourceParam ?? "otodom").toLowerCase();
 
-    const cursorStr =
-    req.method === "POST"
-        ? optString(body.cursor)
-        : optString(req.query.cursor);
-
-    const page = Math.max(1, Number(cursorStr ?? "1") || 1);
-
-    const baseUrl =
-      urlFromPost ||
-      urlFromGet ||
-      (q
-        ? (sourceWanted === "olx"
-            ? buildOlxSearchUrl(q)
-            : buildOtodomSearchUrl(q))
-        : buildOtodomSearchUrl(""));
-
-    if (!baseUrl || !isHttpUrl(baseUrl)) {
-      return res.status(400).json({ error: "Invalid or missing url/q" });
-    }
-
-    const cursorUrl =
+    const cursor =
   req.method === "POST" ? optString(body.cursor) : optString(req.query.cursor);
+    const baseUrl =
+  urlFromPost ||
+  urlFromGet ||
+  (q
+    ? (sourceWanted === "olx"
+        ? buildOlxSearchUrl(q)
+        : buildOtodomSearchUrl(q))
+    : buildOtodomSearchUrl(""));
+
+if (!baseUrl || !isHttpUrl(baseUrl)) {
+  return res.status(400).json({ error: "Invalid or missing url/q" });
+}
+
+// cursor może być URL albo numerem
+const page = cursor && isHttpUrl(cursor) ? 1 : Math.max(1, Number(cursor ?? "1") || 1);
 
 const url =
-  cursorUrl && isHttpUrl(cursorUrl)
-    ? cursorUrl
+  cursor && isHttpUrl(cursor)
+    ? cursor
     : withPage(baseUrl, page);
+
 
     console.log("everybot request:", { baseUrl, page, url });
 
@@ -834,21 +883,13 @@ if (detected === "otodom") {
 let nextCursor: string | null = null;
 
 if (detected === "otodom" && !url.toLowerCase().includes("/pl/oferta/")) {
-  nextCursor = getOtodomNextUrlFromNextData(url, html);
-
-  if (!nextCursor) {
-    const next = extractNextData(html);
-    const s = next ? JSON.stringify(next) : "";
-    const cp = Number(s.match(/"currentPage"\s*:\s*(\d+)/i)?.[1] ?? "1");
-    const tp = Number(s.match(/"totalPages"\s*:\s*(\d+)/i)?.[1] ?? "1");
-
-    if (Number.isFinite(cp) && Number.isFinite(tp) && tp > cp) {
-      nextCursor = String(page + 1);
-    }
-  }
+  // data ma tylko: searchAds, searchLinksRelatedLocations => brak nextUrl
+  // SSR ignoruje page=2 => fallback page+1 robi duplikaty
+  nextCursor = null;
 } else {
   nextCursor = hasNextPage(html, page) ? String(page + 1) : null;
 }
+
 
 return res.status(200).json({ rows, nextCursor });
 
