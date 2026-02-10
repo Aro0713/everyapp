@@ -363,6 +363,63 @@ function parseOtodomResults(pageUrl: string, html: string, limit: number): Exter
 
   return rows.slice(0, limit);
 }
+function parseOtodomListingFromNextData(pageUrl: string, html: string): ExternalRow[] {
+  const next = extractNextData(html);
+  if (!next) return [];
+
+  const now = new Date().toISOString();
+
+  // heurystyka: szukamy obiektu z canonical + title
+  const candidates = deepCollectObjects(next, (o) => {
+    if (!o || typeof o !== "object" || Array.isArray(o)) return false;
+    const hasUrl = typeof (o as any).canonical === "string" || typeof (o as any).url === "string";
+    const hasTitle = typeof (o as any).title === "string" || typeof (o as any).name === "string";
+    return hasUrl && hasTitle;
+  });
+
+  for (const o of candidates) {
+    const canonical = firstString((o as any).canonical, (o as any).url) ?? pageUrl;
+    const title = cleanTitle(firstString((o as any).title, (o as any).name));
+    if (!title) continue;
+
+    const priceText = firstString((o as any).price?.formatted, (o as any).totalPrice?.formatted, (o as any).price);
+    const priceAmount =
+      optNumber((o as any).price?.amount) ??
+      optNumber((o as any).totalPrice?.amount) ??
+      parseNumberLoose(priceText);
+
+    const currency =
+      firstString((o as any).price?.currency, (o as any).totalPrice?.currency) ??
+      (priceText?.includes("€") ? "EUR" : priceText?.toLowerCase().includes("zł") ? "PLN" : null);
+
+    const locationText = firstString((o as any).location, (o as any).address, (o as any).city, (o as any).district);
+
+    const img = firstString(
+      (o as any).ogImage,
+      (o as any).image,
+      (o as any).coverImage,
+      (o as any).images?.[0]?.url,
+      (o as any).photos?.[0]?.url
+    );
+
+    return [{
+      external_id: normalizeOtodomUrl(canonical),
+      office_id: null,
+      source: "otodom",
+      source_url: normalizeOtodomUrl(canonical),
+      title,
+      price_amount: priceAmount ?? null,
+      currency,
+      location_text: locationText ?? null,
+      status: "preview",
+      imported_at: now,
+      updated_at: now,
+      thumb_url: img ? absUrl(pageUrl, img) : null,
+    }];
+  }
+
+  return [];
+}
 
 function parseOtodomListing(pageUrl: string, html: string): ExternalRow[] {
   const $ = cheerio.load(html);
@@ -590,19 +647,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: "Unsupported source url" });
     }
 
-    const html = await fetchHtml(url);
+ const html = await fetchHtml(url);
 
-    let rows: ExternalRow[] = [];
-    if (detected === "otodom") {
-      if (url.toLowerCase().includes("/pl/oferta/")) {
-        rows = parseOtodomListing(url, html);
-        } else {
-        const fromNext = parseOtodomResultsFromNextData(url, html, limit);
-        rows = fromNext.rows.length ? fromNext.rows : parseOtodomResults(url, html, limit);
-        }
-    } else if (detected === "olx") {
-      rows = parseOlxResults(url, html, limit);
-    }
+// DEBUG – tylko na czas diagnozy
+console.log("otodom html head:", html.slice(0, 500));
+
+let rows: ExternalRow[] = [];
+
+
+if (detected === "otodom") {
+  if (url.toLowerCase().includes("/pl/oferta/")) {
+    // 1️⃣ Najpierw próbujemy __NEXT_DATA__ (listing)
+    const fromNext = parseOtodomListingFromNextData(url, html);
+
+    // 2️⃣ Fallback: meta / cheerio
+    rows = fromNext.length ? fromNext : parseOtodomListing(url, html);
+  } else {
+    // 1️⃣ Najpierw __NEXT_DATA__ (wyniki)
+    const fromNext = parseOtodomResultsFromNextData(url, html, limit);
+
+    // 2️⃣ Fallback: cheerio
+    rows = fromNext.rows.length
+      ? fromNext.rows
+      : parseOtodomResults(url, html, limit);
+  }
+} else if (detected === "olx") {
+  rows = parseOlxResults(url, html, limit);
+}
+
 
    const nextCursor = hasNextPage(html, page) ? String(page + 1) : null;
 
