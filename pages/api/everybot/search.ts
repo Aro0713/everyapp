@@ -63,7 +63,20 @@ type ExternalRow = {
   imported_at: string;
   updated_at: string;
   thumb_url: string | null;
+
+  // MVP – dane do tabeli
+  area_m2?: number | null;
+  rooms?: number | null;
+  price_per_m2?: number | null;
 };
+
+function cleanTitle(s: string | null): string | null {
+  if (!s) return null;
+  const t = s.replace(/\s+/g, " ").trim();
+  if (!t) return null;
+  if (t.includes(".css-") || t.includes("@media") || t.includes("{") || t.includes("}") || t.length > 160) return null;
+  return t;
+}
 
 /* -------------------- parsers -------------------- */
 function parseOtodomResults(pageUrl: string, html: string, limit: number): ExternalRow[] {
@@ -82,10 +95,15 @@ function parseOtodomResults(pageUrl: string, html: string, limit: number): Exter
 
     const card = $(el).closest("article, li, div").first();
 
-    const title =
-      card.find("h2, h3").first().text().trim() ||
-      $(el).text().trim() ||
-      null;
+    const rawTitle =
+    card.find("h2, h3").first().text().trim() ||
+    $(el).attr("title")?.trim() ||
+    $(el).attr("aria-label")?.trim() ||
+    $(el).text().trim() ||
+    null;
+
+    const title = cleanTitle(rawTitle);
+
 
     const priceText =
       card
@@ -112,21 +130,37 @@ function parseOtodomResults(pageUrl: string, html: string, limit: number): Exter
       null;
 
     const priceAmount = parseNumberLoose(priceText);
+    const cardText = card.text().replace(/\s+/g, " ");
 
-    rows.push({
-      external_id: full,
-      office_id: null,
-      source: "otodom",
-      source_url: full,
-      title: title || null,
-      price_amount: priceAmount,
-      currency,
-      location_text: locationText || null,
-      status: "preview",
-      imported_at: now,
-      updated_at: now,
-      thumb_url: img ? absUrl(pageUrl, img) : null,
-    });
+        const area_m2 = parseNumberLoose(cardText.match(/(\d+(?:[.,]\d+)?)\s*m²/i)?.[0]);
+        const roomsRaw = parseNumberLoose(cardText.match(/(\d+(?:[.,]\d+)?)\s*pok/i)?.[0]);
+        const rooms = roomsRaw ? Math.round(roomsRaw) : null;
+
+        const price_per_m2 = parseNumberLoose(cardText.match(/(\d[\d\s.,]+)\s*zł\/m²/i)?.[0]);
+
+  rows.push({
+  external_id: full,
+  office_id: null,
+  source: "otodom",
+  source_url: full,
+
+  title: title || null,
+  price_amount: priceAmount,
+  currency,
+  location_text: locationText || null,
+
+  status: "preview",
+  imported_at: now,
+  updated_at: now,
+
+  thumb_url: img ? absUrl(pageUrl, img) : null,
+
+  // === POLA DO TABELI (MVP) ===
+  area_m2: area_m2 ?? null,
+  rooms: rooms ?? null,
+  price_per_m2: price_per_m2 ?? null,
+});
+
   });
 
   return rows.slice(0, limit);
