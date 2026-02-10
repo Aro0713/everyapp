@@ -365,60 +365,77 @@ function parseOtodomResults(pageUrl: string, html: string, limit: number): Exter
 }
 function parseOtodomListingFromNextData(pageUrl: string, html: string): ExternalRow[] {
   const next = extractNextData(html);
-  if (!next) return [];
+  if (!next?.props?.pageProps) return [];
 
+  const p = next.props.pageProps;
   const now = new Date().toISOString();
 
-  // heurystyka: szukamy obiektu z canonical + title
-  const candidates = deepCollectObjects(next, (o) => {
-    if (!o || typeof o !== "object" || Array.isArray(o)) return false;
-    const hasUrl = typeof (o as any).canonical === "string" || typeof (o as any).url === "string";
-    const hasTitle = typeof (o as any).title === "string" || typeof (o as any).name === "string";
-    return hasUrl && hasTitle;
-  });
+  const title = cleanTitle(p.pageTitle || p.pageHeading || null);
 
-  for (const o of candidates) {
-    const canonical = firstString((o as any).canonical, (o as any).url) ?? pageUrl;
-    const title = cleanTitle(firstString((o as any).title, (o as any).name));
-    if (!title) continue;
+  const priceAmount =
+    optNumber(p.transaction?.price?.amount) ??
+    optNumber(p.transaction?.totalPrice?.amount) ??
+    null;
 
-    const priceText = firstString((o as any).price?.formatted, (o as any).totalPrice?.formatted, (o as any).price);
-    const priceAmount =
-      optNumber((o as any).price?.amount) ??
-      optNumber((o as any).totalPrice?.amount) ??
-      parseNumberLoose(priceText);
+  const currency =
+    p.transaction?.price?.currency ??
+    p.transaction?.totalPrice?.currency ??
+    null;
 
-    const currency =
-      firstString((o as any).price?.currency, (o as any).totalPrice?.currency) ??
-      (priceText?.includes("€") ? "EUR" : priceText?.toLowerCase().includes("zł") ? "PLN" : null);
+  const area_m2 =
+    optNumber(p.estate?.area) ??
+    optNumber(p.estate?.areaM2) ??
+    null;
 
-    const locationText = firstString((o as any).location, (o as any).address, (o as any).city, (o as any).district);
+  const rooms =
+    optNumber(p.estate?.rooms) != null
+      ? Math.round(optNumber(p.estate?.rooms)!)
+      : null;
 
-    const img = firstString(
-      (o as any).ogImage,
-      (o as any).image,
-      (o as any).coverImage,
-      (o as any).images?.[0]?.url,
-      (o as any).photos?.[0]?.url
-    );
+  const price_per_m2 =
+    optNumber(p.transaction?.pricePerM2) ??
+    null;
 
-    return [{
-      external_id: normalizeOtodomUrl(canonical),
-      office_id: null,
-      source: "otodom",
-      source_url: normalizeOtodomUrl(canonical),
-      title,
-      price_amount: priceAmount ?? null,
-      currency,
-      location_text: locationText ?? null,
-      status: "preview",
-      imported_at: now,
-      updated_at: now,
-      thumb_url: img ? absUrl(pageUrl, img) : null,
-    }];
-  }
+  const locationText = [
+    p.location?.city,
+    p.location?.district,
+    p.location?.street,
+  ].filter(Boolean).join(", ") || null;
 
-  return [];
+  const img =
+    p.data?.images?.[0]?.url ??
+    p.estate?.images?.[0]?.url ??
+    null;
+
+  const canonical =
+    p.canonicalURL
+      ? normalizeOtodomUrl(p.canonicalURL)
+      : normalizeOtodomUrl(pageUrl);
+
+  // HARD FILTER – prawdziwa oferta musi mieć cokolwiek merytorycznego
+  if (!title && !priceAmount && !area_m2 && !rooms) return [];
+
+  return [{
+    external_id: canonical,
+    office_id: null,
+    source: "otodom",
+    source_url: canonical,
+
+    title,
+    price_amount: priceAmount,
+    currency,
+    location_text: locationText,
+
+    status: "preview",
+    imported_at: now,
+    updated_at: now,
+
+    thumb_url: img ? absUrl(pageUrl, img) : null,
+
+    area_m2,
+    rooms,
+    price_per_m2,
+  }];
 }
 
 function parseOtodomListing(pageUrl: string, html: string): ExternalRow[] {
