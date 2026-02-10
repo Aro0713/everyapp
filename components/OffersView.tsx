@@ -106,16 +106,17 @@ async function loadEverybot(opts?: {
   setBotLoading(true);
   setBotErr(null);
 
-  try {
-    const r = await fetch("/api/everybot/search", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        q,
-        source: source === "all" ? null : source,
-        cursor,
-      }),
-    });
+try {
+  const r = await fetch("/api/everybot/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      q,
+      source: source === "all" ? null : source,
+      cursor: cursor ?? "1",
+      limit: 50,
+    }),
+  });
 
     const j = await r.json().catch(() => null);
     if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);

@@ -653,7 +653,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       req.method === "POST" ? (optString(body.source) ?? "otodom") : null;
     const sourceWanted = (sourceParam ?? "otodom").toLowerCase();
 
-    const cursorStr = req.method === "POST" ? optString(body.cursor) : null;
+    const cursorStr =
+    req.method === "POST"
+        ? optString(body.cursor)
+        : optString(req.query.cursor);
+
     const page = Math.max(1, Number(cursorStr ?? "1") || 1);
 
     const baseUrl =
