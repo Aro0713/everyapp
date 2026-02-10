@@ -287,9 +287,9 @@ function parseOtodomResults(pageUrl: string, html: string, limit: number): Exter
     const full = absUrl(pageUrl, href);
     if (!full) return;
     const norm = normalizeOtodomUrl(full);
-    if (!full.includes("/pl/oferta/")) return;
-    if (seen.has(full)) return;
-    seen.add(full);
+    if (!norm.includes("/pl/oferta/")) return;
+    if (seen.has(norm)) return;
+    seen.add(norm);
 
     const card = $(el).closest("article, li, div").first();
 
@@ -336,14 +336,14 @@ function parseOtodomResults(pageUrl: string, html: string, limit: number): Exter
 
         const price_per_m2 = parseNumberLoose(cardText.match(/(\d[\d\s.,]+)\s*zł\/m²/i)?.[0]);
 
-  rows.push({
-  external_id: full,
+rows.push({
+  external_id: norm,
   office_id: null,
   source: "otodom",
-  source_url: full,
+  source_url: norm,
 
   title: title || null,
-  price_amount: priceAmount,
+  price_amount: priceAmount ?? null,
   currency,
   location_text: locationText || null,
 
@@ -574,10 +574,22 @@ function buildOlxSearchUrl(q: string): string {
 
 function withPage(url: string, page: number) {
   const u = new URL(url);
-  if (page > 1) u.searchParams.set("page", String(page));
-  else u.searchParams.delete("page");
+
+  if (page > 1) {
+    u.searchParams.set("page", String(page));
+
+    // Otodom czasem czyta paginację z search[page]
+    if (u.hostname.includes("otodom.") && u.pathname.includes("/pl/wyniki")) {
+      u.searchParams.set("search[page]", String(page));
+    }
+  } else {
+    u.searchParams.delete("page");
+    u.searchParams.delete("search[page]");
+  }
+
   return u.toString();
 }
+
 function hasNextFromNextData(html: string, currentPage: number): boolean | null {
   const next = extractNextData(html);
   if (!next) return null;
@@ -658,6 +670,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const url = withPage(baseUrl, page);
+    console.log("everybot request:", { baseUrl, page, url });
 
     const detected = detectSource(url);
     if (detected === "other") {
@@ -669,16 +682,17 @@ const html = await fetchHtml(url);
 // DEBUG – tylko na czas diagnozy
 console.log("otodom html head:", html.slice(0, 500));
 
-// KROK 1 – inspekcja __NEXT_DATA__ (tylko na czas diagnozy)
+// DEBUG – paginacja Otodom
 const next = extractNextData(html);
-console.log(
-  "otodom next keys:",
-  next ? Object.keys(next.props?.pageProps ?? {}) : "NO_NEXT"
-);
-console.log(
-  "otodom dehydrated:",
-  Boolean(next?.props?.pageProps?.dehydratedState)
-);
+const s = next ? JSON.stringify(next) : "";
+const cp = s.match(/"currentPage"\s*:\s*(\d+)/i)?.[1] ?? null;
+const tp = s.match(/"totalPages"\s*:\s*(\d+)/i)?.[1] ?? null;
+
+console.log("otodom pagination:", {
+  requestedPage: page,
+  currentPage: cp,
+  totalPages: tp,
+});
 
 let rows: ExternalRow[] = [];
 
