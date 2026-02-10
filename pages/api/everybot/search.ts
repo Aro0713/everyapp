@@ -271,29 +271,41 @@ function withPage(url: string, page: number) {
   else u.searchParams.delete("page");
   return u.toString();
 }
-function hasNextPage(html: string): boolean {
+function hasNextPage(html: string, currentPage: number): boolean {
   const $ = cheerio.load(html);
 
-  // standard SEO pagination
+  // 1) standard SEO pagination
   const relNext =
     $('link[rel="next"]').attr("href") ||
     $('a[rel="next"]').attr("href");
-
   if (relNext) return true;
 
-  // Otodom/OLX często mają "Następna" w aria-label lub w tekście
+  // 2) "Następna" w aria-label
   const ariaNext =
-    $('a[aria-label*="Następ"] , button[aria-label*="Następ"]').length > 0;
-
+    $('a[aria-label*="Następ"], button[aria-label*="Następ"]').length > 0;
   if (ariaNext) return true;
 
+  // 3) "Następna" w tekście
   const textNext =
     $("a,button")
-      .filter((_, el) => ($(el).text() || "").toLowerCase().includes("następ"))
+      .filter((_, el) => (($(el).text() || "").toLowerCase().includes("następ")))
       .length > 0;
+  if (textNext) return true;
 
-  return textNext;
+  // 4) fallback: wykryj max page= z linków w HTML
+  const pages = new Set<number>();
+  const re = /[?&]page=(\d+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html))) {
+    const n = Number(m[1]);
+    if (Number.isFinite(n)) pages.add(n);
+  }
+  if (pages.size === 0) return false;
+
+  const maxPage = Math.max(...pages);
+  return maxPage > currentPage;
 }
+
 
 /* -------------------- handler -------------------- */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -355,7 +367,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       rows = parseOlxResults(url, html, limit);
     }
 
-    const nextCursor = hasNextPage(html) ? String(page + 1) : null;
+    const nextCursor = hasNextPage(html, page) ? String(page + 1) : null;
 
     return res.status(200).json({ rows, nextCursor });
   } catch (e: any) {
