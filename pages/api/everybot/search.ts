@@ -647,10 +647,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: "Unsupported source url" });
     }
 
- const html = await fetchHtml(url);
+const html = await fetchHtml(url);
 
 // DEBUG – tylko na czas diagnozy
 console.log("otodom html head:", html.slice(0, 500));
+
+// KROK 1 – inspekcja __NEXT_DATA__ (tylko na czas diagnozy)
+const next = extractNextData(html);
+console.log(
+  "otodom next keys:",
+  next ? Object.keys(next.props?.pageProps ?? {}) : "NO_NEXT"
+);
+console.log(
+  "otodom dehydrated:",
+  Boolean(next?.props?.pageProps?.dehydratedState)
+);
 
 let rows: ExternalRow[] = [];
 
