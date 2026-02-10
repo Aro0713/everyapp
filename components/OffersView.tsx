@@ -16,7 +16,8 @@ type ListingRow = {
 type OffersTab = "office" | "everybot";
 
 type ExternalRow = {
-  external_id: string;
+  id: string;
+  external_id?: string; // zostaw opcjonalnie na przyszłość
   office_id: string | null;
   source: string;
   source_url: string;
@@ -121,6 +122,7 @@ async function loadEverybot(opts?: {
 
     const newRows = (j?.rows ?? []) as ExternalRow[];
     const nextCursor = (j?.nextCursor ?? null) as string | null;
+    console.log("external_listings/list rows:", newRows.length, newRows[0]);
 
     setBotRows((prev) => (append ? [...prev, ...newRows] : newRows));
     setBotCursor(nextCursor);
@@ -519,7 +521,7 @@ function isHttpUrl(v: unknown): v is string {
                     </thead>
                    <tbody>
                     {botRows.map((r) => (
-                        <tr key={r.external_id} className="border-t border-gray-100">
+                       <tr key={r.id} className="border-t border-gray-100">
                         {/* Zdjęcie */}
                         <td className="px-4 py-3">
                             {r.thumb_url ? (
