@@ -40,7 +40,6 @@ type Row = {
   last_checked_at: string | null;
   enriched_at: string | null;
 
-  created_at: string;
   updated_at: string;
 };
 
@@ -108,19 +107,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const sql = `
-      SELECT
-        id, office_id, source, source_url,
-        title, description,
-        price_amount, currency, location_text,
-        thumb_url, matched_at,
-        transaction_type, property_type,
-        area_m2, price_per_m2, rooms,
-        floor, year_built,
-        voivodeship, city, district, street,
-        owner_phone,
-        source_status, last_seen_at, last_checked_at, enriched_at,
-        created_at, updated_at
-      FROM external_listings
+  SELECT
+    id, office_id, source, source_url,
+    title, description,
+    price_amount, currency, location_text,
+    thumb_url, matched_at,
+    transaction_type, property_type,
+    area_m2, price_per_m2, rooms,
+    floor, year_built,
+    voivodeship, city, district, street,
+    owner_phone,
+    source_status, last_seen_at, last_checked_at, enriched_at,
+    updated_at
+  FROM external_listings
       WHERE ${where.join(" AND ")}
       ORDER BY updated_at DESC
       LIMIT $${p++}
