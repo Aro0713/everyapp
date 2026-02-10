@@ -55,9 +55,14 @@ function optNumber(v: unknown): number | null {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     if (req.method !== "GET") {
-      res.setHeader("Allow", "GET");
-      return res.status(405).json({ error: "Method not allowed" });
-    }
+  res.setHeader("Allow", "GET");
+  return res.status(405).json({ error: "Method not allowed" });
+}
+
+res.setHeader("Cache-Control", "no-store");
+res.setHeader("Pragma", "no-cache");
+res.setHeader("Expires", "0");
+
 
     const userId = getUserIdFromRequest(req);
     if (!userId) return res.status(401).json({ error: "UNAUTHORIZED" });
