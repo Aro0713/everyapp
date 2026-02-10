@@ -64,14 +64,28 @@ type ExternalRow = {
   updated_at: string;
   thumb_url: string | null;
   created_at?: string;
-    transaction_type?: "sale" | "rent" | null;
-    price?: number | null;
 
-  // MVP – dane do tabeli
+  // aliases / MVP
+  transaction_type?: "sale" | "rent" | null;
+  price?: number | null;
+
+  // Esti-like (dla tabeli)
+  owner_phone?: string | null;
+  matched_at?: string | null;
+  property_type?: string | null;
+
   area_m2?: number | null;
   rooms?: number | null;
   price_per_m2?: number | null;
+
+  floor?: string | null;
+  year_built?: number | null;
+  voivodeship?: string | null;
+  city?: string | null;
+  district?: string | null;
+  street?: string | null;
 };
+
 
 function cleanTitle(s: string | null): string | null {
   if (!s) return null;
@@ -114,6 +128,97 @@ function firstString(...xs: Array<unknown>): string | null {
   }
   return null;
 }
+function pickAnyStringByKeys(root: any, keys: string[]): string | null {
+  let out: string | null = null;
+  deepCollectObjects(root, (o) => {
+    if (!o || typeof o !== "object" || Array.isArray(o)) return false;
+    for (const k of keys) {
+      if (typeof (o as any)[k] === "string" && (o as any)[k].trim()) {
+        out = (o as any)[k].trim();
+        return true;
+      }
+    }
+    return false;
+  });
+  return out;
+}
+
+function pickAnyNumberByKeys(root: any, keys: string[]): number | null {
+  let out: number | null = null;
+  deepCollectObjects(root, (o) => {
+    if (!o || typeof o !== "object" || Array.isArray(o)) return false;
+    for (const k of keys) {
+      const v = (o as any)[k];
+      const n = optNumber(v);
+      if (n != null) {
+        out = n;
+        return true;
+      }
+      if (typeof v === "string") {
+        const nn = parseNumberLoose(v);
+        if (nn != null) {
+          out = nn;
+          return true;
+        }
+      }
+    }
+    return false;
+  });
+  return out;
+}
+
+function parseLocationParts(locationText: string | null): {
+  voivodeship: string | null;
+  city: string | null;
+  district: string | null;
+  street: string | null;
+} {
+  if (!locationText) return { voivodeship: null, city: null, district: null, street: null };
+
+  // Otodom zwykle: "Miasto, Dzielnica, Ulica" albo "Miasto, Dzielnica"
+  const parts = locationText.split(",").map((s) => s.trim()).filter(Boolean);
+
+  const city = parts[0] ?? null;
+  const district = parts.length >= 2 ? parts[1] : null;
+  const street = parts.length >= 3 ? parts.slice(2).join(", ") : null;
+
+  // Województwo często NIE występuje w listingu – próbujemy heurystyki
+  const voivMatch = locationText.match(/\b(woj\.?\s*[a-ząćęłńóśźż-]+)\b/i);
+  const voivodeship = voivMatch ? voivMatch[1].replace(/^woj\.?\s*/i, "").trim() : null;
+
+  return { voivodeship, city, district, street };
+}
+
+function parseFloorFromText(s: string | null): string | null {
+  if (!s) return null;
+  const t = s.toLowerCase();
+
+  // przykłady: "piętro 3", "3 piętro", "parter"
+  if (t.includes("parter")) return "0";
+  const m1 = t.match(/pi[eę]tro\s*(\d{1,2})/i);
+  if (m1?.[1]) return m1[1];
+  const m2 = t.match(/\b(\d{1,2})\s*pi[eę]tro\b/i);
+  if (m2?.[1]) return m2[1];
+
+  return null;
+}
+
+function parseYearBuiltFromText(s: string | null): number | null {
+  if (!s) return null;
+  const m = s.match(/\b(18\d{2}|19\d{2}|20\d{2})\b/);
+  return m ? Number(m[1]) : null;
+}
+
+function inferPropertyTypeFromText(s: string | null): string | null {
+  if (!s) return null;
+  const t = s.toLowerCase();
+  if (t.includes("mieszkan")) return "apartment";
+  if (t.includes("dom")) return "house";
+  if (t.includes("działk")) return "plot";
+  if (t.includes("lokal") || t.includes("biur")) return "commercial";
+  return null;
+}
+
 function parseOtodomResultsFromNextData(pageUrl: string, html: string, limit: number): { rows: ExternalRow[]; hasNext: boolean | null } {
   const next = extractNextData(html);
   if (!next) return { rows: [], hasNext: null };
@@ -170,6 +275,22 @@ function parseOtodomResultsFromNextData(pageUrl: string, html: string, limit: nu
 
       const locationText =
         firstString(ad?.locationText, ad?.location, ad?.address, ad?.city, ad?.district, ad?.region) ?? null;
+        const locParts = parseLocationParts(locationText);
+        const matched_at = now;
+
+        // próbujemy najpierw po kluczach z JSON (różne wersje danych)
+        const floor =
+        pickAnyStringByKeys(ad, ["floor", "floorNo", "floor_number", "level"]) ??
+        parseFloorFromText(firstString(ad?.description, ad?.subtitle, ad?.additionalInfo, ad?.paramsText, locationText));
+
+        const year_built =
+        pickAnyNumberByKeys(ad, ["yearBuilt", "buildYear", "constructionYear", "year_built"]) ??
+        parseYearBuiltFromText(firstString(ad?.description, ad?.subtitle, ad?.additionalInfo, ad?.paramsText));
+
+        const property_type =
+        firstString(ad?.category, ad?.propertyType, ad?.estateType, ad?.type) ??
+        inferPropertyTypeFromText(firstString(ad?.title, ad?.description));
+
 
       const img =
         firstString(ad?.thumbnail, ad?.thumb, ad?.image, ad?.images?.[0]?.url, ad?.photos?.[0]?.url) ?? null;
@@ -194,11 +315,21 @@ function parseOtodomResultsFromNextData(pageUrl: string, html: string, limit: nu
         area_m2,
         rooms,
         price_per_m2,
+        
 
         // ALIASES dla tabeli (MVP)
         created_at: now,
         transaction_type: transaction_type ?? null,
         price: priceAmount ?? null,
+        matched_at,
+property_type: property_type ?? null,
+floor: floor ?? null,
+year_built: year_built ?? null,
+voivodeship: locParts.voivodeship,
+city: locParts.city,
+district: locParts.district,
+street: locParts.street,
+
         });
 
       if (rows.length >= limit) break;
@@ -333,6 +464,7 @@ function parseOtodomResultsFromNextData(pageUrl: string, html: string, limit: nu
       created_at: now,
         transaction_type,
         price: priceAmount ?? null,
+        
 
     });
 
@@ -428,7 +560,7 @@ function parseOtodomResults(pageUrl: string, html: string, limit: number): Exter
         .first()
         .text()
         .trim() || null;
-        
+
     const transaction_type = inferTransactionTypeFromPriceText(priceText);
 
     const locationText =
@@ -456,6 +588,16 @@ function parseOtodomResults(pageUrl: string, html: string, limit: number): Exter
     const rooms = roomsRaw ? Math.round(roomsRaw) : null;
 
     const price_per_m2 = parseNumberLoose(cardText.match(/(\d[\d\s.,]+)\s*zł\/m²/i)?.[0]);
+    const locParts = parseLocationParts(locationText);
+const matched_at = now;
+
+const floor = parseFloorFromText(cardText);
+const year_built = parseYearBuiltFromText(cardText);
+
+const property_type = inferPropertyTypeFromText(
+  `${rawTitle ?? ""} ${cardText ?? ""}`
+);
+
 
 rows.push({
   external_id: norm,
@@ -483,6 +625,15 @@ rows.push({
   created_at: now,
   transaction_type,
   price: priceAmount ?? null,
+  matched_at,
+property_type,
+floor,
+year_built,
+voivodeship: locParts.voivodeship,
+city: locParts.city,
+district: locParts.district,
+street: locParts.street,
+
 });
 
   });
@@ -883,13 +1034,12 @@ if (detected === "otodom") {
 let nextCursor: string | null = null;
 
 if (detected === "otodom" && !url.toLowerCase().includes("/pl/oferta/")) {
-  // data ma tylko: searchAds, searchLinksRelatedLocations => brak nextUrl
-  // SSR ignoruje page=2 => fallback page+1 robi duplikaty
-  nextCursor = null;
+  const byNextData = hasNextFromNextData(html, page);
+  const hasNext = byNextData !== null ? byNextData : hasNextPage(html, page);
+  nextCursor = hasNext ? String(page + 1) : null;
 } else {
   nextCursor = hasNextPage(html, page) ? String(page + 1) : null;
 }
-
 
 return res.status(200).json({ rows, nextCursor });
 

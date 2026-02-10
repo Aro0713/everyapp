@@ -40,43 +40,91 @@ export default async function handler(
 
       for (const r of results) {
         await pool.query(
-          `
-          INSERT INTO external_listings (
-            office_id,
-            source,
-            source_listing_id,
-            source_url,
-            title,
-            description,
-            price_amount,
-            currency,
-            location_text,
-            status
-          ) VALUES (
-            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10
-          )
-          ON CONFLICT (office_id, source, source_listing_id)
-          DO UPDATE SET
-            title = EXCLUDED.title,
-            description = EXCLUDED.description,
-            price_amount = EXCLUDED.price_amount,
-            location_text = EXCLUDED.location_text,
-            status = EXCLUDED.status,
-            updated_at = now()
-          `,
-          [
-            officeId,
-            r.source,
-            r.source_listing_id,
-            r.source_url,
-            r.title ?? null,
-            r.description ?? null,
-            r.price_amount ?? null,
-            r.currency ?? null,
-            r.location_text ?? null,
-            r.status ?? "active",
-          ]
-        );
+  `
+  INSERT INTO external_listings (
+    office_id,
+    source,
+    source_listing_id,
+    source_url,
+    title,
+    description,
+    price_amount,
+    currency,
+    location_text,
+    status,
+
+    thumb_url,
+    matched_at,
+    transaction_type,
+    area_m2,
+    price_per_m2,
+    rooms,
+    floor,
+    year_built,
+    voivodeship,
+    city,
+    district,
+    street,
+    property_type,
+    owner_phone
+  ) VALUES (
+    $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+    $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24
+  )
+  ON CONFLICT (office_id, source, source_listing_id)
+  DO UPDATE SET
+    title = EXCLUDED.title,
+    description = EXCLUDED.description,
+    price_amount = EXCLUDED.price_amount,
+    currency = EXCLUDED.currency,
+    location_text = EXCLUDED.location_text,
+    status = EXCLUDED.status,
+
+    thumb_url = EXCLUDED.thumb_url,
+    matched_at = EXCLUDED.matched_at,
+    transaction_type = EXCLUDED.transaction_type,
+    area_m2 = EXCLUDED.area_m2,
+    price_per_m2 = EXCLUDED.price_per_m2,
+    rooms = EXCLUDED.rooms,
+    floor = EXCLUDED.floor,
+    year_built = EXCLUDED.year_built,
+    voivodeship = EXCLUDED.voivodeship,
+    city = EXCLUDED.city,
+    district = EXCLUDED.district,
+    street = EXCLUDED.street,
+    property_type = EXCLUDED.property_type,
+    owner_phone = EXCLUDED.owner_phone,
+
+    updated_at = now()
+  `,
+  [
+    officeId,
+    r.source,
+    r.source_listing_id,
+    r.source_url,
+    r.title ?? null,
+    r.description ?? null,
+    r.price_amount ?? null,
+    r.currency ?? null,
+    r.location_text ?? null,
+    r.status ?? "active",
+
+    r.thumb_url ?? null,
+    r.matched_at ?? null,
+    r.transaction_type ?? null,
+    r.area_m2 ?? null,
+    r.price_per_m2 ?? null,
+    r.rooms ?? null,
+    r.floor ?? null,
+    r.year_built ?? null,
+    r.voivodeship ?? null,
+    r.city ?? null,
+    r.district ?? null,
+    r.street ?? null,
+    r.property_type ?? null,
+    r.owner_phone ?? null,
+  ]
+);
 
         inserted++;
       }
