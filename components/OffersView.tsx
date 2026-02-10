@@ -106,18 +106,16 @@ async function loadEverybot(opts?: {
   setBotLoading(true);
   setBotErr(null);
 
-try {
-  const r = await fetch("/api/everybot/search", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      q,
-      source: source === "all" ? null : source,
-      cursor: cursor ?? "1",
-      limit: 50,
-    }),
-  });
+  try {
+    const qs = new URLSearchParams();
+    qs.set("limit", "50");
+    qs.set("status", "active");
 
+    if (q) qs.set("q", q);
+    if (source && source !== "all") qs.set("source", source);
+    if (cursor) qs.set("cursor", cursor);
+
+    const r = await fetch(`/api/external_listings/list?${qs.toString()}`);
     const j = await r.json().catch(() => null);
     if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
 
@@ -170,6 +168,68 @@ try {
 function isHttpUrl(v: unknown): v is string {
   return typeof v === "string" && /^https?:\/\//i.test(v.trim());
 }
+  async function runLiveHunter() {
+    const q = botQ.trim();
+
+    // MVP: obsługujemy live harvest dla otodom + olx (pozostałe dołożysz jak będą harvestery)
+    const sourcesToRun =
+      botSource === "all"
+        ? ["otodom", "olx"]
+        : [botSource];
+
+    setBotLoading(true);
+    setBotErr(null);
+
+    try {
+      for (const src of sourcesToRun) {
+        // 1) HARVEST (lista linków) – pobierz najnowsze
+        const r1 = await fetch("/api/everybot/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            q,
+            source: src,
+            cursor: "1",
+            limit: 50,
+          }),
+        });
+        // nie wymagamy rows w UI; ważne, żeby endpoint nie wywalił błędu
+        if (!r1.ok) {
+          const j = await r1.json().catch(() => null);
+          throw new Error(j?.error ?? `HARVEST HTTP ${r1.status}`);
+        }
+
+        // 2) ENRICH (detale) – uzupełnij kolumny
+        const r2 = await fetch("/api/everybot/enrich", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ limit: 25 }),
+        });
+        if (!r2.ok) {
+          const j = await r2.json().catch(() => null);
+          throw new Error(j?.error ?? `ENRICH HTTP ${r2.status}`);
+        }
+
+        // 3) VERIFY (aktualność) – opcjonalnie, ale zalecane
+        const r3 = await fetch("/api/everybot/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ limit: 25 }),
+        });
+        if (!r3.ok) {
+          const j = await r3.json().catch(() => null);
+          throw new Error(j?.error ?? `VERIFY HTTP ${r3.status}`);
+        }
+      }
+
+      // 4) Reload z DB
+      await loadEverybot({ source: botSource, q: botQ, cursor: null, append: false });
+    } catch (e: any) {
+      setBotErr(e?.message ?? "Live hunter failed");
+    } finally {
+      setBotLoading(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -191,7 +251,8 @@ function isHttpUrl(v: unknown): v is string {
               className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-ew-primary shadow-sm transition hover:bg-ew-accent/10"
               onClick={() => {
                 if (tab === "office") load();
-                else loadEverybot({ source: botSource, q: botQ, cursor: null, append: false });
+                else runLiveHunter();
+
               }}
             >
               {t(lang, "offersRefresh" as any)}
@@ -382,11 +443,14 @@ function isHttpUrl(v: unknown): v is string {
             <div className="md:col-span-4">
                 <select
                 value={botSource}
-                onChange={(e) => {
-                    const v = e.target.value;
-                    setBotSource(v);
-                    
+               onChange={(e) => {
+                const v = e.target.value;
+                setBotSource(v);
+                setBotCursor(null);
+                setBotHasMore(false);
+                loadEverybot({ source: v, q: botQ, cursor: null, append: false });
                 }}
+
                 className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
                 >
                 <option value="all">{t(lang, "everybotSourceAll" as any)}</option>
@@ -404,9 +468,8 @@ function isHttpUrl(v: unknown): v is string {
             <button
             type="button"
             disabled={botLoading}
-            onClick={() =>
-                loadEverybot({ source: botSource, q: botQ, cursor: null, append: false })
-            }
+            onClick={() => runLiveHunter()}
+
             className={clsx(
                 "rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm transition",
                 botLoading

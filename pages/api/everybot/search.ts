@@ -1,5 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import * as cheerio from "cheerio";
+import { pool } from "../../../lib/neonDb";
+import { getUserIdFromRequest } from "../../../lib/session";
+import { getOfficeIdForUserId } from "../../../lib/office";
+
 
 /* -------------------- utils -------------------- */
 function mustString(v: unknown, name: string) {
@@ -47,6 +51,10 @@ function parseNumberLoose(s: string | null | undefined): number | null {
   const cleaned = s.replace(/\s/g, "").replace(",", ".").replace(/[^\d.]/g, "");
   const n = Number(cleaned);
   return Number.isFinite(n) ? n : null;
+}
+function toSourceListingId(row: ExternalRow): string {
+  // MVP: stabilny identyfikator = URL (znormalizowany)
+  return row.external_id || row.source_url;
 }
 
 /* -------------------- types -------------------- */
@@ -828,6 +836,7 @@ function parseOlxResults(pageUrl: string, html: string, limit: number): External
 async function fetchHtml(url: string): Promise<string> {
   const r = await fetch(url, {
     method: "GET",
+    redirect: "follow",
     headers: {
       "User-Agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
@@ -839,10 +848,16 @@ async function fetchHtml(url: string): Promise<string> {
     },
   });
 
+  // KLUCZOWE: zobacz, czy Otodom nie robi redirecta z page=2 -> page=1
+  console.log("everybot fetch:", { requested: url, status: r.status, finalUrl: r.url });
+
   const html = await r.text().catch(() => "");
-  if (!r.ok) throw new Error(`FETCH_FAILED ${r.status} ${r.statusText} ${html.slice(0, 200)}`);
+  if (!r.ok) {
+    throw new Error(`FETCH_FAILED ${r.status} ${r.statusText} ${html.slice(0, 200)}`);
+  }
   return html;
 }
+
 
 /* -------------------- builders -------------------- */
 function buildOtodomSearchUrl(q: string): string {
@@ -863,13 +878,8 @@ function withPage(url: string, page: number) {
   if (page > 1) {
     u.searchParams.set("page", String(page));
 
-    // Otodom czasem czyta paginację z search[page]
-    if (u.hostname.includes("otodom.") && u.pathname.includes("/pl/wyniki")) {
-      u.searchParams.set("search[page]", String(page));
-    }
   } else {
     u.searchParams.delete("page");
-    u.searchParams.delete("search[page]");
   }
 
   return u.toString();
@@ -931,11 +941,15 @@ function getOtodomNextUrlFromNextData(pageUrl: string, html: string): string | n
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     if (req.method !== "GET" && req.method !== "POST") {
-      res.setHeader("Allow", "GET, POST");
-      return res.status(405).json({ error: "Method not allowed" });
-    }
+  res.setHeader("Allow", "GET, POST");
+  return res.status(405).json({ error: "Method not allowed" });
+}
 
     res.setHeader("Cache-Control", "no-store");
+    const userId = getUserIdFromRequest(req);
+    if (!userId) return res.status(401).json({ error: "UNAUTHORIZED" });
+
+    const officeId = await getOfficeIdForUserId(userId);
 
     const limitRaw =
       req.method === "GET"
@@ -1040,8 +1054,115 @@ if (detected === "otodom" && !url.toLowerCase().includes("/pl/oferta/")) {
 } else {
   nextCursor = hasNextPage(html, page) ? String(page + 1) : null;
 }
+let upserted = 0;
 
-return res.status(200).json({ rows, nextCursor });
+for (const r of rows) {
+  // filtr bezpieczeństwa
+  if (!r.source || !r.source_url) continue;
+
+  const sourceListingId = toSourceListingId(r);
+
+  await pool.query(
+    `
+    INSERT INTO external_listings (
+      office_id,
+      source,
+      source_listing_id,
+      source_url,
+      title,
+      description,
+      price_amount,
+      currency,
+      location_text,
+      status,
+
+      thumb_url,
+      matched_at,
+      transaction_type,
+      property_type,
+      area_m2,
+      price_per_m2,
+      rooms,
+      floor,
+      year_built,
+      voivodeship,
+      city,
+      district,
+      street,
+      owner_phone,
+
+      last_seen_at,
+      source_status,
+      updated_at
+    ) VALUES (
+      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+      $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,
+      now(),'active', now()
+    )
+    ON CONFLICT (office_id, source, source_listing_id)
+    DO UPDATE SET
+      source_url = EXCLUDED.source_url,
+      title = EXCLUDED.title,
+      price_amount = EXCLUDED.price_amount,
+      currency = EXCLUDED.currency,
+      location_text = EXCLUDED.location_text,
+      status = EXCLUDED.status,
+
+      thumb_url = COALESCE(EXCLUDED.thumb_url, external_listings.thumb_url),
+      matched_at = COALESCE(external_listings.matched_at, EXCLUDED.matched_at),
+      transaction_type = COALESCE(EXCLUDED.transaction_type, external_listings.transaction_type),
+      property_type = COALESCE(EXCLUDED.property_type, external_listings.property_type),
+
+      area_m2 = COALESCE(EXCLUDED.area_m2, external_listings.area_m2),
+      price_per_m2 = COALESCE(EXCLUDED.price_per_m2, external_listings.price_per_m2),
+      rooms = COALESCE(EXCLUDED.rooms, external_listings.rooms),
+      floor = COALESCE(EXCLUDED.floor, external_listings.floor),
+      year_built = COALESCE(EXCLUDED.year_built, external_listings.year_built),
+
+      voivodeship = COALESCE(EXCLUDED.voivodeship, external_listings.voivodeship),
+      city = COALESCE(EXCLUDED.city, external_listings.city),
+      district = COALESCE(EXCLUDED.district, external_listings.district),
+      street = COALESCE(EXCLUDED.street, external_listings.street),
+      owner_phone = COALESCE(EXCLUDED.owner_phone, external_listings.owner_phone),
+
+      last_seen_at = now(),
+      source_status = 'active',
+      updated_at = now()
+    `,
+    [
+      officeId,
+      r.source,
+      sourceListingId,
+      r.source_url,
+      r.title ?? null,
+      null, // description (harvest zwykle nie ma; enrich uzupełni)
+      typeof r.price_amount === "number" ? r.price_amount : r.price_amount ? Number(r.price_amount) : null,
+      r.currency ?? null,
+      r.location_text ?? null,
+      r.status ?? "preview",
+
+      r.thumb_url ?? null,
+      r.matched_at ?? null,
+      r.transaction_type ?? null,
+      r.property_type ?? null,
+      r.area_m2 ?? null,
+      r.price_per_m2 ?? null,
+      r.rooms ?? null,
+      r.floor ?? null,
+      r.year_built ?? null,
+      r.voivodeship ?? null,
+      r.city ?? null,
+      r.district ?? null,
+      r.street ?? null,
+      r.owner_phone ?? null,
+    ]
+  );
+
+  upserted += 1;
+}
+
+return res.status(200).json({ rows, nextCursor, upserted });
+
 
   } catch (e: any) {
     return res.status(400).json({ error: e?.message ?? "Bad request" });
