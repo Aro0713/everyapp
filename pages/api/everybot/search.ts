@@ -271,6 +271,29 @@ function withPage(url: string, page: number) {
   else u.searchParams.delete("page");
   return u.toString();
 }
+function hasNextPage(html: string): boolean {
+  const $ = cheerio.load(html);
+
+  // standard SEO pagination
+  const relNext =
+    $('link[rel="next"]').attr("href") ||
+    $('a[rel="next"]').attr("href");
+
+  if (relNext) return true;
+
+  // Otodom/OLX często mają "Następna" w aria-label lub w tekście
+  const ariaNext =
+    $('a[aria-label*="Następ"] , button[aria-label*="Następ"]').length > 0;
+
+  if (ariaNext) return true;
+
+  const textNext =
+    $("a,button")
+      .filter((_, el) => ($(el).text() || "").toLowerCase().includes("następ"))
+      .length > 0;
+
+  return textNext;
+}
 
 /* -------------------- handler -------------------- */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -332,7 +355,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       rows = parseOlxResults(url, html, limit);
     }
 
-    const nextCursor = rows.length >= limit ? String(page + 1) : null;
+    const nextCursor = hasNextPage(html) ? String(page + 1) : null;
 
     return res.status(200).json({ rows, nextCursor });
   } catch (e: any) {
