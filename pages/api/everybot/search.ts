@@ -114,6 +114,82 @@ function firstString(...xs: Array<unknown>): string | null {
 function parseOtodomResultsFromNextData(pageUrl: string, html: string, limit: number): { rows: ExternalRow[]; hasNext: boolean | null } {
   const next = extractNextData(html);
   if (!next) return { rows: [], hasNext: null };
+      const now = new Date().toISOString();
+  const p = next?.props?.pageProps;
+  const ads = p?.data?.searchAds;
+
+  if (Array.isArray(ads) && ads.length) {
+    const rows: ExternalRow[] = [];
+    const seen = new Set<string>();
+
+    for (const ad of ads) {
+      const rawUrl = firstString(ad?.url, ad?.href, ad?.link, ad?.canonicalUrl);
+      const full = rawUrl ? absUrl(pageUrl, rawUrl) : null;
+      if (!full) continue;
+
+      const norm = normalizeOtodomUrl(full);
+      if (!norm.includes("/pl/oferta/")) continue;
+      if (seen.has(norm)) continue;
+      seen.add(norm);
+
+      const title = cleanTitle(firstString(ad?.title, ad?.name, ad?.heading)) ?? null;
+
+      const priceAmount =
+        optNumber(ad?.price?.amount) ??
+        optNumber(ad?.totalPrice?.amount) ??
+        optNumber(ad?.priceAmount) ??
+        null;
+
+      const currency =
+        firstString(ad?.price?.currency, ad?.totalPrice?.currency, ad?.currency) ?? null;
+
+      const area_m2 =
+        optNumber(ad?.area) ?? optNumber(ad?.areaM2) ?? null;
+
+      const roomsRaw =
+        optNumber(ad?.rooms) ?? null;
+
+      const rooms = roomsRaw != null ? Math.round(roomsRaw) : null;
+
+      const price_per_m2 =
+        optNumber(ad?.pricePerM2) ??
+        optNumber(ad?.price_per_m2) ??
+        null;
+
+      const locationText =
+        firstString(ad?.locationText, ad?.location, ad?.address, ad?.city, ad?.district, ad?.region) ?? null;
+
+      const img =
+        firstString(ad?.thumbnail, ad?.thumb, ad?.image, ad?.images?.[0]?.url, ad?.photos?.[0]?.url) ?? null;
+
+      rows.push({
+        external_id: norm,
+        office_id: null,
+        source: "otodom",
+        source_url: norm,
+
+        title,
+        price_amount: priceAmount,
+        currency,
+        location_text: locationText,
+
+        status: "preview",
+        imported_at: now,
+        updated_at: now,
+
+        thumb_url: img ? absUrl(pageUrl, img) : null,
+
+        area_m2,
+        rooms,
+        price_per_m2,
+      });
+
+      if (rows.length >= limit) break;
+    }
+
+    // tu jeszcze nie ruszamy paginacji — zwracamy hasNext null
+    return { rows, hasNext: null };
+  }
 
   // 1) zbierz kandydatów na "listing/ad/offer" – heurystyka po polach
   const candidates = deepCollectObjects(next, (o) => {
@@ -147,7 +223,6 @@ function parseOtodomResultsFromNextData(pageUrl: string, html: string, limit: nu
     return (hasTitle && hasUrl) || (hasTitle && hasPrice) || (hasUrl && hasPrice && hasLoc);
   });
 
-  const now = new Date().toISOString();
   const rows: ExternalRow[] = [];
   const seen = new Set<string>();
 
@@ -754,18 +829,19 @@ if (detected === "otodom") {
   rows = parseOlxResults(url, html, limit);
 }
 
+// ... parsowanie rows powyżej
+
 let nextCursor: string | null = null;
 
 if (detected === "otodom" && !url.toLowerCase().includes("/pl/oferta/")) {
-  // 1) spróbuj nextUrl z __NEXT_DATA__
   nextCursor = getOtodomNextUrlFromNextData(url, html);
 
-  // 2) fallback: jeśli nextUrl brak, ale totalPages>currentPage => dawaj "page+1"
   if (!nextCursor) {
     const next = extractNextData(html);
     const s = next ? JSON.stringify(next) : "";
     const cp = Number(s.match(/"currentPage"\s*:\s*(\d+)/i)?.[1] ?? "1");
     const tp = Number(s.match(/"totalPages"\s*:\s*(\d+)/i)?.[1] ?? "1");
+
     if (Number.isFinite(cp) && Number.isFinite(tp) && tp > cp) {
       nextCursor = String(page + 1);
     }
@@ -774,8 +850,8 @@ if (detected === "otodom" && !url.toLowerCase().includes("/pl/oferta/")) {
   nextCursor = hasNextPage(html, page) ? String(page + 1) : null;
 }
 
+return res.status(200).json({ rows, nextCursor });
 
-    return res.status(200).json({ rows, nextCursor });
   } catch (e: any) {
     return res.status(400).json({ error: e?.message ?? "Bad request" });
   }
