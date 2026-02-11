@@ -77,27 +77,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ORDER BY updated_at DESC
           LIMIT 1
         `
-        : `
-          SELECT id, office_id, source, source_url, source_status
-          FROM external_listings
-          WHERE office_id = $1
-            AND COALESCE(source_status, 'unknown') <> 'removed'
-            AND (
-              enriched_at IS NULL
-              OR thumb_url IS NULL
-              OR transaction_type IS NULL
-              OR area_m2 IS NULL
-              OR rooms IS NULL
-              OR city IS NULL
-              OR district IS NULL
-              OR street IS NULL
-              OR floor IS NULL
-              OR year_built IS NULL
-              OR property_type IS NULL
-            )
-          ORDER BY enriched_at NULLS FIRST, last_seen_at DESC NULLS LAST, updated_at DESC
-          LIMIT $2
-        `,
+          : `
+        SELECT id, office_id, source, source_url, source_status
+        FROM external_listings
+        WHERE office_id = $1
+          AND COALESCE(source_status, 'unknown') <> 'removed'
+          AND (
+            enriched_at IS NULL
+            OR thumb_url IS NULL
+            OR transaction_type IS NULL
+            OR property_type IS NULL
+            OR area_m2 IS NULL
+            OR rooms IS NULL
+            OR city IS NULL
+          )
+        ORDER BY enriched_at NULLS FIRST, last_seen_at DESC NULLS LAST, updated_at DESC
+        LIMIT $2
+      `,
+
       onlyId || onlyUrl ? [officeId, (onlyId ?? onlyUrl)!] : [officeId, limit]
     );
 
