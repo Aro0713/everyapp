@@ -225,7 +225,7 @@ function isHttpUrl(v: unknown): v is string {
         const r2 = await fetch("/api/everybot/enrich", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ limit: 25 }),
+          body: JSON.stringify({ limit: 200 }),
         });
         if (!r2.ok) {
           const j = await r2.json().catch(() => null);
@@ -236,7 +236,7 @@ function isHttpUrl(v: unknown): v is string {
         const r3 = await fetch("/api/everybot/verify", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ limit: 25 }),
+          body: JSON.stringify({ limit: 200 }),
         });
         if (!r3.ok) {
           const j = await r3.json().catch(() => null);
