@@ -202,49 +202,24 @@ function isHttpUrl(v: unknown): v is string {
     setBotErr(null);
 
     try {
-      for (const src of sourcesToRun) {
-        // 1) HARVEST (lista linków) – pobierz najnowsze
-        const r1 = await fetch("/api/everybot/search", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-         body: JSON.stringify({
-          q,
-          source: src,
-          cursor: "1",
-          limit: 50,
-          pages: 5,
+      const r = await fetch("/api/everybot/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          harvestPages: 5,
+          harvestLimit: 50,
+          enrichLimit: 50,
+          enrichRounds: 6,
+          verifyLimit: 100,
+          verifyRounds: 2,
+          // jeśli chcesz kiedyś: q, source – dopniesz w run.ts
         }),
-        });
-        // nie wymagamy rows w UI; ważne, żeby endpoint nie wywalił błędu
-        if (!r1.ok) {
-          const j = await r1.json().catch(() => null);
-          throw new Error(j?.error ?? `HARVEST HTTP ${r1.status}`);
-        }
+      });
 
-        // 2) ENRICH (detale) – uzupełnij kolumny
-        const r2 = await fetch("/api/everybot/enrich", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ limit: 200 }),
-        });
-        if (!r2.ok) {
-          const j = await r2.json().catch(() => null);
-          throw new Error(j?.error ?? `ENRICH HTTP ${r2.status}`);
-        }
+      const j = await r.json().catch(() => null);
+      if (!r.ok) throw new Error(j?.error ?? `RUN HTTP ${r.status}`);
 
-        // 3) VERIFY (aktualność) – opcjonalnie, ale zalecane
-        const r3 = await fetch("/api/everybot/verify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ limit: 200 }),
-        });
-        if (!r3.ok) {
-          const j = await r3.json().catch(() => null);
-          throw new Error(j?.error ?? `VERIFY HTTP ${r3.status}`);
-        }
-      }
-
-      // 4) Reload z DB
+      // Reload z DB (po całym pipeline)
       await loadEverybot({ source: botSource, q: botQ, cursor: null, append: false });
     } catch (e: any) {
       setBotErr(e?.message ?? "Live hunter failed");
