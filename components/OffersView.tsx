@@ -603,30 +603,39 @@ function isHttpUrl(v: unknown): v is string {
                     </table>
                 </div>
                 {/* Load more */}
-               {botCursor && (
-                <div className="flex justify-center border-t border-gray-100 p-4">
-                  <button
-                    type="button"
-                    disabled={botLoading}
-                    onClick={() =>
-                      loadEverybot({
-                        source: botSource,
-                        q: botQ,
-                        cursor: botCursor,
-                        append: true,
-                      })
-                    }
-                    className={clsx(
-                      "rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm transition",
-                      botLoading
-                        ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
-                        : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
-                    )}
-                  >
-                    {t(lang, "everybotLoadMore" as any)}
-                  </button>
-                </div>
-              )}
+                {(botCursor || botRows.length > 0) && (
+                  <div className="flex justify-center border-t border-gray-100 p-4">
+                    <button
+                      type="button"
+                      disabled={botLoading}
+                      onClick={() => {
+                        if (botCursor) {
+                          loadEverybot({
+                            source: botSource,
+                            q: botQ,
+                            cursor: botCursor,
+                            append: true,
+                          });
+                        } else {
+                          runLiveHunter();
+                        }
+                      }}
+                      className={clsx(
+                        "rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm transition",
+                        botLoading
+                          ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
+                          : botCursor
+                          ? "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
+                          : "border-pink-200 bg-pink-50 text-pink-700 hover:bg-pink-100"
+                      )}
+                    >
+                      {botCursor
+                        ? t(lang, "everybotLoadMore" as any)
+                        : t(lang, "everybotFetchMoreFromPortals" as any)}
+                    </button>
+                  </div>
+                )}
+
                 {/* Inline loading indicator for next page */}
                 {botLoading && botRows.length > 0 && (
                 <div className="border-t border-gray-100 p-4 flex justify-center">

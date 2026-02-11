@@ -4695,6 +4695,16 @@ everybotLoadMore: {
   lt: "Rodyti daugiau",
   vi: "Xem thêm",
 },
+everybotFetchMoreFromPortals: {
+  pl: "Pobierz więcej z portali",
+  en: "Fetch more from portals",
+  de: "Mehr von Portalen laden",
+  cs: "Načíst více z portálů",
+  sk: "Načítať viac z portálov",
+  ua: "Завантажити більше з порталів",
+  lt: "Įkelti daugiau iš portalų",
+  vi: "Tải thêm từ các cổng",
+},
 
 } as const);
 
