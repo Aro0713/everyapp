@@ -79,6 +79,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const status = optString(req.query.status) ?? "active"; // domyślnie active
     const includeInactive = optString(req.query.includeInactive) === "1";
 
+    // ✅ nowy filtr: tylko rekordy po enrich (żeby nie było "dziury" z myślnikami)
+    const onlyEnriched = optString(req.query.onlyEnriched) === "1";
+
     const where: string[] = [`office_id = $1`];
     const params: any[] = [officeId];
     let p = 2;
@@ -91,6 +94,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!includeInactive) {
       where.push(`COALESCE(source_status, 'unknown') = $${p++}`);
       params.push(status);
+    }
+
+    if (onlyEnriched) {
+      where.push(`enriched_at IS NOT NULL`);
     }
 
     if (q) {
@@ -108,8 +115,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // ✅ stabilny cursor: (updated_at, id)
     if (cursorUpdatedAt && cursorId) {
       where.push(`(
-        updated_at < $${p}
-        OR (updated_at = $${p} AND id < $${p + 1})
+        updated_at < $${p}::timestamptz
+        OR (updated_at = $${p}::timestamptz AND id < $${p + 1}::uuid)
       )`);
       params.push(cursorUpdatedAt, cursorId);
       p += 2;
@@ -140,9 +147,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const last = rows.length ? rows[rows.length - 1] : null;
     const nextCursor =
-      rows.length === limit && last
-        ? { updated_at: last.updated_at, id: last.id }
-        : null;
+      rows.length === limit && last ? { updated_at: last.updated_at, id: last.id } : null;
 
     return res.status(200).json({ rows, nextCursor });
   } catch (e: any) {

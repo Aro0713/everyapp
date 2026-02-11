@@ -116,6 +116,8 @@ async function loadEverybot(opts?: {
     qs.set("limit", "50");
     qs.set("status", "active");
     qs.set("includeInactive", "1");
+    // ✅ ukryj harvest-only (bez enriched_at)
+    qs.set("onlyEnriched", "1");
 
     if (q) qs.set("q", q);
     if (source && source !== "all") qs.set("source", source);
