@@ -1,149 +1,95 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { pool } from "../../../lib/neonDb";
 import { getUserIdFromRequest } from "../../../lib/session";
 import { getOfficeIdForUserId } from "../../../lib/office";
-import { adapterRegistry } from "../../../lib/everybot/adapters";
-import { EverybotSource } from "../../../lib/everybot/adapters/types";
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  try {
- if (req.method !== "POST" && req.method !== "GET") {
-  res.setHeader("Allow", "POST, GET");
-  return res.status(405).json({ error: "Method not allowed" });
+function getBaseUrl(req: NextApiRequest) {
+  const proto = (req.headers["x-forwarded-proto"] as string) || "https";
+  const host =
+    (req.headers["x-forwarded-host"] as string) ||
+    (req.headers.host as string) ||
+    "localhost:3000";
+  return `${proto}://${host}`;
 }
+
+async function callInternal(req: NextApiRequest, path: string, body: any) {
+  const base = getBaseUrl(req);
+  const r = await fetch(`${base}${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      cookie: req.headers.cookie || "",
+    },
+    body: JSON.stringify(body),
+  });
+  const j = await r.json().catch(() => null);
+  if (!r.ok) throw new Error(j?.error ?? `${path} HTTP ${r.status}`);
+  return j;
+}
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  try {
+    if (req.method !== "POST" && req.method !== "GET") {
+      res.setHeader("Allow", "POST, GET");
+      return res.status(405).json({ error: "Method not allowed" });
+    }
 
     const userId = getUserIdFromRequest(req);
     if (!userId) return res.status(401).json({ error: "UNAUTHORIZED" });
 
     const officeId = await getOfficeIdForUserId(userId);
 
-    const { rows: sources } = await pool.query<EverybotSource>(
-      `
-      SELECT *
-      FROM everybot_sources
-      WHERE office_id = $1
-        AND enabled = true
-      `,
-      [officeId]
-    );
+    if (req.method === "GET") {
+      return res.status(200).json({ ok: true, officeId });
+    }
 
-    let inserted = 0;
+    const body = req.body ?? {};
+    const q = typeof body.q === "string" ? body.q : "";
+    const source = typeof body.source === "string" ? body.source : "all";
 
-    for (const source of sources) {
-      const adapter = adapterRegistry[source.adapter];
-      if (!adapter) continue;
+    const harvestPages = 5;
+    const harvestLimit = 50;
 
-      const results = await adapter(source);
+    // 1) HARVEST (realny Live Hunter)
+    const sourcesToRun = source === "all" ? ["otodom", "olx"] : [source];
 
-      for (const r of results) {
-        await pool.query(
-  `
-  INSERT INTO external_listings (
-    office_id,
-    source,
-    source_listing_id,
-    source_url,
-    title,
-    description,
-    price_amount,
-    currency,
-    location_text,
-    status,
+    let harvestedTotal = 0;
 
-    thumb_url,
-    matched_at,
-    transaction_type,
-    area_m2,
-    price_per_m2,
-    rooms,
-    floor,
-    year_built,
-    voivodeship,
-    city,
-    district,
-    street,
-    property_type,
-    owner_phone
-  ) VALUES (
-    $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
-    $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24
-  )
-  ON CONFLICT (office_id, source, source_listing_id)
-  DO UPDATE SET
-    title = EXCLUDED.title,
-    description = EXCLUDED.description,
-    price_amount = EXCLUDED.price_amount,
-    currency = EXCLUDED.currency,
-    location_text = EXCLUDED.location_text,
-    status = EXCLUDED.status,
+    for (const src of sourcesToRun) {
+      const j1 = await callInternal(req, "/api/everybot/search", {
+        q,
+        source: src,
+        cursor: "1",
+        limit: harvestLimit,
+        pages: harvestPages,
+      });
+      harvestedTotal += Number(j1?.upserted ?? j1?.upserted ?? 0) || 0;
+    }
 
-    thumb_url = EXCLUDED.thumb_url,
-    matched_at = EXCLUDED.matched_at,
-    transaction_type = EXCLUDED.transaction_type,
-    area_m2 = EXCLUDED.area_m2,
-    price_per_m2 = EXCLUDED.price_per_m2,
-    rooms = EXCLUDED.rooms,
-    floor = EXCLUDED.floor,
-    year_built = EXCLUDED.year_built,
-    voivodeship = EXCLUDED.voivodeship,
-    city = EXCLUDED.city,
-    district = EXCLUDED.district,
-    street = EXCLUDED.street,
-    property_type = EXCLUDED.property_type,
-    owner_phone = EXCLUDED.owner_phone,
+    // 2) ENRICH loop
+    let enrichTotal = 0;
+    for (let i = 0; i < 6; i++) {
+      const j2 = await callInternal(req, "/api/everybot/enrich", { limit: 50 });
+      const processed = Number(j2?.processed ?? 0);
+      if (!Number.isFinite(processed) || processed <= 0) break;
+      enrichTotal += processed;
+    }
 
-    updated_at = now()
-  `,
-  [
-    officeId,
-    r.source,
-    r.source_listing_id,
-    r.source_url,
-    r.title ?? null,
-    r.description ?? null,
-    r.price_amount ?? null,
-    r.currency ?? null,
-    r.location_text ?? null,
-    r.status ?? "active",
-
-    r.thumb_url ?? null,
-    r.matched_at ?? null,
-    r.transaction_type ?? null,
-    r.area_m2 ?? null,
-    r.price_per_m2 ?? null,
-    r.rooms ?? null,
-    r.floor ?? null,
-    r.year_built ?? null,
-    r.voivodeship ?? null,
-    r.city ?? null,
-    r.district ?? null,
-    r.street ?? null,
-    r.property_type ?? null,
-    r.owner_phone ?? null,
-  ]
-);
-
-        inserted++;
-      }
-
-      await pool.query(
-        `
-        UPDATE everybot_sources
-        SET last_crawled_at = now(),
-            last_status = 'ok'
-        WHERE id = $1
-        `,
-        [source.id]
-      );
+    // 3) VERIFY loop
+    let verifyTotal = 0;
+    for (let i = 0; i < 2; i++) {
+      const j3 = await callInternal(req, "/api/everybot/verify", { limit: 100 });
+      const processed = Number(j3?.processed ?? 0);
+      if (!Number.isFinite(processed) || processed <= 0) break;
+      verifyTotal += processed;
     }
 
     return res.status(200).json({
       ok: true,
-      sources: sources.length,
-      listings_processed: inserted,
+      officeId,
+      harvestedTotal,
+      enrichTotal,
+      verifyTotal,
+      config: { q, source, harvestPages, harvestLimit },
     });
   } catch (e: any) {
     console.error("EVERYBOT_RUN_ERROR", e);

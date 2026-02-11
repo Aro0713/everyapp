@@ -206,13 +206,8 @@ function isHttpUrl(v: unknown): v is string {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          harvestPages: 5,
-          harvestLimit: 50,
-          enrichLimit: 50,
-          enrichRounds: 6,
-          verifyLimit: 100,
-          verifyRounds: 2,
-          // jeśli chcesz kiedyś: q, source – dopniesz w run.ts
+          q: botQ.trim(),
+          source: botSource,
         }),
       });
 
