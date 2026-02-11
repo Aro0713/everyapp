@@ -4,7 +4,7 @@ import type { Enricher, EnrichResult } from "./types";
 /**
  * OTODOM – ENRICHER (detail page)
  * Źródło prawdy: __NEXT_DATA__.props.pageProps.ad
- * Bez deepPick / bez zgadywania po całym JSON.
+ * Mapowanie 1:1 pod realny payload (ad.adCategory.type, ad.location.address, characteristics).
  */
 
 function optString(v: unknown): string | null {
@@ -61,10 +61,18 @@ async function fetchHtml(url: string): Promise<string> {
 
 type TxType = "sale" | "rent";
 
-function normalizeTxFromTarget(target: unknown): TxType | null {
-  const t = typeof target === "string" ? target.toUpperCase() : "";
-  if (t === "SELL" || t === "SALE") return "sale";
-  if (t === "RENT") return "rent";
+function normalizeTx(v: unknown): TxType | null {
+  const s = typeof v === "string" ? v.toUpperCase() : "";
+  if (s === "SELL" || s === "SALE") return "sale";
+  if (s === "RENT") return "rent";
+  return null;
+}
+
+function normalizeTxPl(v: unknown): TxType | null {
+  const s = typeof v === "string" ? v.toLowerCase() : "";
+  if (!s) return null;
+  if (s.includes("sprzed")) return "sale";
+  if (s.includes("wynaj")) return "rent";
   return null;
 }
 
@@ -82,10 +90,14 @@ function getCharCurrency(ad: any, key: string): string | null {
   return optString(hit?.currency);
 }
 
-// floor_no bywa "0" albo "floor_5"
 function normalizeFloor(v: unknown): string | null {
   const s = optString(v);
   if (!s) return null;
+
+  const low = s.toLowerCase();
+  if (low === "ground_floor" || low.includes("parter") || low.includes("ground")) return "0";
+
+  // floor_2 / FLOOR_2 / "2"
   const m = s.match(/(\d+)/);
   return m ? m[1] : s;
 }
@@ -98,20 +110,19 @@ const otodomEnricher: Enricher = async (url: string): Promise<EnrichResult> => {
 
   const ad = next?.props?.pageProps?.ad;
   if (ad && typeof ad === "object") {
-    // --- core ids/meta
+    // --- core
     out.title = optString(ad.title) ?? optString(ad.slug) ?? null;
 
-    // --- transaction type (source of truth: ad.target)
-    out.transaction_type = normalizeTxFromTarget(ad.target);
+    // --- transaction type (REAL: ad.adCategory.type albo ad.target.OfferType)
+    out.transaction_type =
+      normalizeTx(ad?.adCategory?.type) ??
+      normalizeTxPl(ad?.target?.OfferType) ??
+      null;
 
-    // --- price & currency
-    // case A: ad.price.value + ad.price.currency (widziane na screenie)
-    const pVal = optNumber(ad.price?.value);
-    const pCur = optString(ad.price?.currency);
+    // --- price & currency (REAL: characteristics + ewentualnie ad.price.value jeśli kiedyś się pojawi)
+    const pVal = optNumber(ad?.price?.value);
+    const pCur = optString(ad?.price?.currency);
 
-    // case B: brak ad.price -> bierz z characteristics pod konkretny key
-    // SELL: "price" albo czasem "total_price"
-    // RENT: "rent"
     const priceFromChars =
       optNumber(getChar(ad, "price")) ??
       optNumber(getChar(ad, "total_price")) ??
@@ -125,86 +136,81 @@ const otodomEnricher: Enricher = async (url: string): Promise<EnrichResult> => {
     out.price_amount = pVal ?? priceFromChars ?? null;
     out.currency = pCur ?? currencyFromChars ?? null;
 
-    // --- area / rooms / price per m2
-    out.area_m2 = optNumber(getChar(ad, "m")) ?? optNumber(ad.Area) ?? null;
-    out.rooms = (() => {
-      const r = optNumber(getChar(ad, "rooms_num")) ?? optNumber(ad.Rooms_num);
-      return r != null ? Math.round(r) : null;
-    })();
+    // --- area / rooms / price per m2 (REAL: characteristics)
+    out.area_m2 = optNumber(getChar(ad, "m")) ?? null;
+
+    const roomsRaw = optNumber(getChar(ad, "rooms_num"));
+    out.rooms = roomsRaw != null ? Math.round(roomsRaw) : null;
 
     out.price_per_m2 =
       optNumber(getChar(ad, "price_per_m")) ??
       optNumber(getChar(ad, "price_per_m2")) ??
-      optNumber(ad.Price_per_m) ??
       null;
 
-    // --- floor / year built
-    out.floor = normalizeFloor(getChar(ad, "floor_no")) ?? normalizeFloor(ad.Floor_no) ?? null;
+    // --- floor / year built (REAL: characteristics)
+    out.floor = normalizeFloor(getChar(ad, "floor_no")) ?? null;
+
     out.year_built =
       optNumber(getChar(ad, "build_year")) ??
       optNumber(getChar(ad, "building_year")) ??
-      optNumber(ad.Build_year) ??
-      optNumber(ad.Building_year) ??
       null;
 
-    // --- property type
+    // --- property type (REAL: adCategory/name + property.type)
     out.property_type =
-      optString(ad.PropertyType) ??
-      optString(ad?.AdvertCategory?.name) ??
-      optString(ad?.AdvertCategory?.type) ??
+      optString(ad?.property?.type) ??        // np. FLAT / HOUSE / ...
+      optString(ad?.adCategory?.name) ??      // np. FLAT
       null;
 
-    // --- location (na screenach: City/Subregion/Province/Country; czasem w obiekcie location)
-    const city =
-      optString(ad.City) ??
-      optString(ad.location?.city?.name) ??
-      optString(ad.location?.city) ??
+    // --- location (REAL: ad.location.address.*)
+    const addr = ad?.location?.address;
+
+    out.street =
+      optString(addr?.street?.name) ??
+      optString(addr?.street?.code) ??
       null;
 
-    const district =
-      optString(ad.District) ??
-      optString(ad.Subregion) ??
-      optString(ad.location?.district?.name) ??
-      optString(ad.location?.district) ??
+    out.district =
+      optString(addr?.district?.name) ??
+      optString(addr?.district?.code) ??
       null;
 
-    const voivodeship =
-      optString(ad.Province) ??
-      optString(ad.location?.region?.name) ??
-      optString(ad.location?.region) ??
+    out.city =
+      optString(addr?.city?.name) ??
+      optString(addr?.city?.code) ??
       null;
 
-    const street =
-      optString(ad.Street) ??
-      optString(ad.location?.street?.name) ??
-      optString(ad.location?.street) ??
+    out.voivodeship =
+      optString(addr?.province?.name) ??
+      optString(addr?.province?.code) ??
       null;
 
-    out.city = city;
-    out.district = district;
-    out.voivodeship = voivodeship;
-    out.street = street;
+    // fallback: powiat jako district jeśli district brak
+    if (!out.district) out.district = optString(addr?.county?.name) ?? null;
 
-    const locParts = [street, district, city, voivodeship].filter(Boolean);
-    out.location_text = locParts.length ? locParts.join(", ") : null;
+    out.location_text =
+      [out.street, out.district, out.city, out.voivodeship].filter(Boolean).join(", ") || null;
 
-    // --- thumbnail / images
+    // --- thumbnail / images (REAL: images[*].large/medium/small/thumbnail)
     out.thumb_url =
-      optString(ad.thumbnail) ??
-      optString(ad.images?.[0]?.large) ??
-      optString(ad.images?.[0]?.medium) ??
-      optString(ad.images?.[0]?.small) ??
+      optString(ad?.images?.[0]?.large) ??
+      optString(ad?.images?.[0]?.medium) ??
+      optString(ad?.images?.[0]?.small) ??
+      optString(ad?.images?.[0]?.thumbnail) ??
       null;
 
-    // --- publish/update time (na screenach: pushedUpAt)
+    // --- publish/update time (REAL: pushedUpAt/modifiedAt/createdAt)
     out.matched_at =
-      optString(ad.pushedUpAt) ??
-      optString(ad.createdAt) ??
-      optString(ad.updatedAt) ??
+      optString(ad?.pushedUpAt) ??
+      optString(ad?.modifiedAt) ??
+      optString(ad?.createdAt) ??
       null;
 
-    // --- owner phone (zwykle brak publicznie)
-    out.owner_phone = optString(ad.owner_phone) ?? optString(ad.contact?.phone) ?? null;
+    // --- phone (REAL: contactDetails.phones / owner.phones / agency.phones)
+    out.owner_phone =
+      optString(ad?.contactDetails?.phones?.[0]) ??
+      optString(ad?.owner?.phones?.[0]) ??
+      optString(ad?.agency?.phones?.[0]) ??
+      null;
 
     return out;
   }

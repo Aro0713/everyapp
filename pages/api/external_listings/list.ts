@@ -55,14 +55,13 @@ function optNumber(v: unknown): number | null {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     if (req.method !== "GET") {
-  res.setHeader("Allow", "GET");
-  return res.status(405).json({ error: "Method not allowed" });
-}
+      res.setHeader("Allow", "GET");
+      return res.status(405).json({ error: "Method not allowed" });
+    }
 
-res.setHeader("Cache-Control", "no-store");
-res.setHeader("Pragma", "no-cache");
-res.setHeader("Expires", "0");
-
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
 
     const userId = getUserIdFromRequest(req);
     if (!userId) return res.status(401).json({ error: "UNAUTHORIZED" });
@@ -71,8 +70,9 @@ res.setHeader("Expires", "0");
     const limitRaw = optNumber(req.query.limit) ?? 50;
     const limit = Math.min(Math.max(limitRaw, 1), 200);
 
-    // cursor = updated_at ISO or created_at ISO (prosty cursor po czasie)
-    const cursor = optString(req.query.cursor);
+    // ✅ NOWY cursor (seek pagination): updated_at + id
+    const cursorUpdatedAt = optString(req.query.cursorUpdatedAt);
+    const cursorId = optString(req.query.cursorId);
 
     const q = optString(req.query.q)?.toLowerCase() ?? null;
     const source = optString(req.query.source); // "otodom"|"olx"|...
@@ -105,28 +105,32 @@ res.setHeader("Expires", "0");
       p++;
     }
 
-    if (cursor) {
-      // cursor po updated_at, desc
-      where.push(`updated_at < $${p++}`);
-      params.push(cursor);
+    // ✅ stabilny cursor: (updated_at, id)
+    if (cursorUpdatedAt && cursorId) {
+      where.push(`(
+        updated_at < $${p}
+        OR (updated_at = $${p} AND id < $${p + 1})
+      )`);
+      params.push(cursorUpdatedAt, cursorId);
+      p += 2;
     }
 
     const sql = `
-  SELECT
-    id, office_id, source, source_url,
-    title, description,
-    price_amount, currency, location_text,
-    thumb_url, matched_at,
-    transaction_type, property_type,
-    area_m2, price_per_m2, rooms,
-    floor, year_built,
-    voivodeship, city, district, street,
-    owner_phone,
-    source_status, last_seen_at, last_checked_at, enriched_at,
-    updated_at
-  FROM external_listings
+      SELECT
+        id, office_id, source, source_url,
+        title, description,
+        price_amount, currency, location_text,
+        thumb_url, matched_at,
+        transaction_type, property_type,
+        area_m2, price_per_m2, rooms,
+        floor, year_built,
+        voivodeship, city, district, street,
+        owner_phone,
+        source_status, last_seen_at, last_checked_at, enriched_at,
+        updated_at
+      FROM external_listings
       WHERE ${where.join(" AND ")}
-      ORDER BY updated_at DESC
+      ORDER BY updated_at DESC, id DESC
       LIMIT $${p++}
     `;
 
@@ -134,7 +138,11 @@ res.setHeader("Expires", "0");
 
     const { rows } = await pool.query<Row>(sql, params);
 
-    const nextCursor = rows.length === limit ? rows[rows.length - 1].updated_at : null;
+    const last = rows.length ? rows[rows.length - 1] : null;
+    const nextCursor =
+      rows.length === limit && last
+        ? { updated_at: last.updated_at, id: last.id }
+        : null;
 
     return res.status(200).json({ rows, nextCursor });
   } catch (e: any) {

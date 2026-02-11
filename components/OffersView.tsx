@@ -87,7 +87,11 @@ export default function OffersView({ lang }: { lang: LangKey }) {
   const [botLoading, setBotLoading] = useState(false);
   const [botErr, setBotErr] = useState<string | null>(null);
   const [botRows, setBotRows] = useState<ExternalRow[]>([]);
-  const [botCursor, setBotCursor] = useState<string | null>(null);
+  const [botCursor, setBotCursor] = useState<{
+  updated_at: string;
+  id: string;
+} | null>(null);
+
   const [botHasMore, setBotHasMore] = useState(false);
 
   const [importUrl, setImportUrl] = useState("");
@@ -96,7 +100,7 @@ export default function OffersView({ lang }: { lang: LangKey }) {
 async function loadEverybot(opts?: {
   q?: string;
   source?: string;
-  cursor?: string | null;
+  cursor?: { updated_at: string; id: string } | null;
   append?: boolean;
 }) {
   const q = (opts?.q ?? botQ).trim();
@@ -115,15 +119,26 @@ async function loadEverybot(opts?: {
 
     if (q) qs.set("q", q);
     if (source && source !== "all") qs.set("source", source);
-    if (cursor) qs.set("cursor", cursor);
+
+    // NOWY stabilny cursor
+    if (cursor) {
+      qs.set("cursorUpdatedAt", cursor.updated_at);
+      qs.set("cursorId", cursor.id);
+    }
 
     const r = await fetch(`/api/external_listings/list?${qs.toString()}`);
     const j = await r.json().catch(() => null);
     if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
 
     const newRows = (j?.rows ?? []) as ExternalRow[];
-    const nextCursor = (j?.nextCursor ?? null) as string | null;
-    console.log("external_listings/list rows:", newRows.length, newRows[0]);
+    const nextCursor =
+      (j?.nextCursor ?? null) as { updated_at: string; id: string } | null;
+
+    console.log(
+      "external_listings/list rows:",
+      newRows.length,
+      newRows[0]
+    );
 
     setBotRows((prev) => (append ? [...prev, ...newRows] : newRows));
     setBotCursor(nextCursor);
@@ -134,6 +149,7 @@ async function loadEverybot(opts?: {
     setBotLoading(false);
   }
 }
+
   async function importLink() {
     const url = importUrl.trim();
     if (!url) return;
