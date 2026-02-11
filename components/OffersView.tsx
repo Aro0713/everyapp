@@ -144,7 +144,7 @@ async function loadEverybot(opts?: {
 
     setBotRows((prev) => (append ? [...prev, ...newRows] : newRows));
     setBotCursor(nextCursor);
-    setBotHasMore(!!nextCursor);
+    setBotHasMore(Boolean(nextCursor) && newRows.length > 0);
   } catch (e: any) {
     setBotErr(e?.message ?? "Failed to load");
   } finally {
@@ -344,8 +344,10 @@ function isHttpUrl(v: unknown): v is string {
             )}
             onClick={() => {
             setTab("everybot");
+            setBotCursor(null);
+            setBotHasMore(false);
             loadEverybot({ source: botSource, q: botQ, cursor: null, append: false });
-            }}
+          }}
           >
             🤖 {t(lang, "offersTabEverybot" as any)}
           </button>
@@ -630,31 +632,30 @@ function isHttpUrl(v: unknown): v is string {
                     </table>
                 </div>
                 {/* Load more */}
-                {botHasMore && (
-                    <div className="flex justify-center border-t border-gray-100 p-4">
-                    <button
-                        type="button"
-                        disabled={botLoading}
-                        onClick={() =>
-                        loadEverybot({
-                            source: botSource,
-                            q: botQ,
-                            cursor: botCursor,
-                            append: true,
-                        })
-                        }
-                        className={clsx(
-                        "rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm transition",
-                        botLoading
-                            ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
-                            : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
-                        )}
-                    >
-                        {t(lang, "everybotLoadMore" as any)}
-                    </button>
-                    </div>
-                )}
-
+               {botCursor && (
+                <div className="flex justify-center border-t border-gray-100 p-4">
+                  <button
+                    type="button"
+                    disabled={botLoading}
+                    onClick={() =>
+                      loadEverybot({
+                        source: botSource,
+                        q: botQ,
+                        cursor: botCursor,
+                        append: true,
+                      })
+                    }
+                    className={clsx(
+                      "rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm transition",
+                      botLoading
+                        ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
+                        : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
+                    )}
+                  >
+                    {t(lang, "everybotLoadMore" as any)}
+                  </button>
+                </div>
+              )}
                 {/* Inline loading indicator for next page */}
                 {botLoading && botRows.length > 0 && (
                     <div className="border-t border-gray-100 p-4 text-center text-xs text-gray-500">
