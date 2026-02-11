@@ -52,18 +52,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // 1) HARVEST (realny Live Hunter)
     const sourcesToRun = source === "all" ? ["otodom", "olx"] : [source];
 
-    let harvestedTotal = 0;
+  let harvestedTotal = 0;
+const harvestBySource: Record<string, any> = {};
+const nextCursorBySource: Record<string, string | null> = {};
 
-    for (const src of sourcesToRun) {
-      const j1 = await callInternal(req, "/api/everybot/search", {
-        q,
-        source: src,
-        cursor: "1",
-        limit: harvestLimit,
-        pages: harvestPages,
-      });
-      harvestedTotal += Number(j1?.upserted ?? j1?.upserted ?? 0) || 0;
-    }
+const cursor = typeof body.cursor === "string" && body.cursor.trim() ? body.cursor.trim() : "1";
+
+for (const src of sourcesToRun) {
+  try {
+    const j1 = await callInternal(req, "/api/everybot/search", {
+      q,
+      source: src,
+      cursor,
+      limit: harvestLimit,
+      pages: harvestPages,
+    });
+
+    harvestBySource[src] = j1;
+    nextCursorBySource[src] = typeof j1?.nextCursor === "string" ? j1.nextCursor : null;
+    harvestedTotal += Number(j1?.upserted ?? 0) || 0;
+  } catch (e: any) {
+    harvestBySource[src] = { error: e?.message ?? String(e) };
+    nextCursorBySource[src] = null;
+    // ✅ nie przerywamy całego run gdy OLX/portal da 403
+  }
+}
+
 
     // 2) ENRICH loop
     let enrichTotal = 0;
@@ -84,13 +98,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     return res.status(200).json({
-      ok: true,
-      officeId,
-      harvestedTotal,
-      enrichTotal,
-      verifyTotal,
-      config: { q, source, harvestPages, harvestLimit },
-    });
+  ok: true,
+  officeId,
+  harvestedTotal,
+  harvestBySource,
+  nextCursorBySource,
+  enrichTotal,
+  verifyTotal,
+  config: { q, source, cursor, harvestPages, harvestLimit },
+});
+
   } catch (e: any) {
     console.error("EVERYBOT_RUN_ERROR", e);
     return res.status(400).json({ error: e?.message ?? "Bad request" });

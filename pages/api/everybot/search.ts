@@ -883,6 +883,11 @@ function withPage(url: string, page: number) {
 
   return u.toString();
 }
+function stripPageParam(u: string) {
+  const x = new URL(u);
+  x.searchParams.delete("page");
+  return x.toString();
+}
 
 function hasNextFromNextData(html: string, currentPage: number): boolean | null {
   const next = extractNextData(html);
@@ -1012,7 +1017,11 @@ let canonicalBaseUrl: string | null = null;
 let allRows: ExternalRow[] = [];
 let upserted = 0;
 
+// ✅ trzymamy ostatnią faktycznie pobraną stronę
+let lastFetchedPage = startPage - 1;
+
 for (let pageNo = startPage; pageNo < startPage + pages; pageNo++) {
+
   const pageUrl = canonicalBaseUrl
     ? withPage(canonicalBaseUrl, pageNo)
     : withPage(baseUrl, pageNo);
@@ -1024,12 +1033,15 @@ for (let pageNo = startPage; pageNo < startPage + pages; pageNo++) {
     return res.status(400).json({ error: "Unsupported source url" });
   }
 
-  const { html, finalUrl } = await fetchHtmlWithFinalUrl(pageUrl);
+ const { html, finalUrl } = await fetchHtmlWithFinalUrl(pageUrl);
 
-  // po pierwszym fetchu ustawiamy kanoniczny baseUrl do dalszych stron
-  if (!canonicalBaseUrl) {
-    canonicalBaseUrl = finalUrl;
-  }
+// ✅ ta strona została realnie pobrana
+lastFetchedPage = pageNo;
+
+// po pierwszym fetchu ustawiamy kanoniczny baseUrl do dalszych stron
+if (!canonicalBaseUrl) {
+  canonicalBaseUrl = stripPageParam(finalUrl);
+}
 
   // DEBUG – paginacja
   const next = extractNextData(html);
@@ -1177,9 +1189,9 @@ for (let pageNo = startPage; pageNo < startPage + pages; pageNo++) {
   }
 }
 
-// nextCursor = następna strona po ostatniej pobranej
-const lastPageFetched = startPage + pages - 1;
-const nextCursor = String(lastPageFetched + 1);
+// nextCursor = następna strona po ostatnio REALNIE pobranej
+// (pętla mogła się przerwać wcześniej przez break)
+const nextCursor = String(lastFetchedPage + 1);
 
 return res.status(200).json({
   rows: allRows.slice(0, limit),
@@ -1188,7 +1200,6 @@ return res.status(200).json({
   pagesFetched: pages,
   canonicalBaseUrl,
 });
-
 
 
   } catch (e: any) {
