@@ -1,15 +1,13 @@
-// lib/everybot/enrichers/olx.ts
 import * as cheerio from "cheerio";
 import type { Enricher, EnrichResult } from "./types";
 
-/**
- * OLX – ENRICHER (detail page)
- * OLX bywa dynamiczny, ale dużo da się wyciągnąć z meta/HTML.
- * Część pól (np. piętro/rok) często jest tylko w opisie – best effort.
- */
-
 function optString(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+function optNumber(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim() && Number.isFinite(Number(v))) return Number(v);
+  return null;
 }
 function parseNumberLoose(s: string | null | undefined): number | null {
   if (!s) return null;
@@ -17,37 +15,13 @@ function parseNumberLoose(s: string | null | undefined): number | null {
   const n = Number(cleaned);
   return Number.isFinite(n) ? n : null;
 }
-function inferTransactionTypeFromText(s?: string | null): "sale" | "rent" | null {
-  if (!s) return null;
-  const t = s.toLowerCase();
-  if (t.includes("/mies") || t.includes("miesiąc") || t.includes("mc") || t.includes("month")) {
-    return "rent";
+function absUrl(base: string, href?: string | null): string | null {
+  if (!href) return null;
+  try {
+    return new URL(href, base).toString();
+  } catch {
+    return null;
   }
-  return "sale";
-}
-function parseFloorFromText(s: string | null): string | null {
-  if (!s) return null;
-  const t = s.toLowerCase();
-  if (t.includes("parter")) return "0";
-  const m1 = t.match(/pi[eę]tro\s*(\d{1,2})/i);
-  if (m1?.[1]) return m1[1];
-  const m2 = t.match(/\b(\d{1,2})\s*pi[eę]tro\b/i);
-  if (m2?.[1]) return m2[1];
-  return null;
-}
-function parseYearBuiltFromText(s: string | null): number | null {
-  if (!s) return null;
-  const m = s.match(/\b(18\d{2}|19\d{2}|20\d{2})\b/);
-  return m ? Number(m[1]) : null;
-}
-function parseLocationParts(locationText?: string | null) {
-  if (!locationText) return { voivodeship: null, city: null, district: null, street: null };
-  // OLX często: "Miasto - Dzielnica" albo "Miasto, Dzielnica"
-  const norm = locationText.replace(" - ", ", ");
-  const parts = norm.split(",").map((s) => s.trim()).filter(Boolean);
-  const city = parts[0] ?? null;
-  const district = parts.length >= 2 ? parts[1] : null;
-  return { voivodeship: null, city, district, street: null };
 }
 
 async function fetchHtml(url: string): Promise<string> {
@@ -57,11 +31,11 @@ async function fetchHtml(url: string): Promise<string> {
     headers: {
       "User-Agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
-      "Accept":
+      Accept:
         "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
       "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.7",
       "Cache-Control": "no-cache",
-      "Pragma": "no-cache",
+      Pragma: "no-cache",
     },
   });
   const html = await r.text();
@@ -69,81 +43,158 @@ async function fetchHtml(url: string): Promise<string> {
   return html;
 }
 
+/** OLX: <script type="application/ld+json" ...>{...}</script> */
+function extractLdJson(html: string): any | null {
+  const m = html.match(
+    /<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/i
+  );
+  if (!m) return null;
+  try {
+    return JSON.parse(m[1]);
+  } catch {
+    return null;
+  }
+}
+
+type TxType = "sale" | "rent";
+
+function txFromCategory(categoryUrl: string | null): TxType | null {
+  if (!categoryUrl) return null;
+  const s = categoryUrl.toLowerCase();
+  if (s.includes("/sprzedaz/")) return "sale";
+  if (s.includes("/wynajem/")) return "rent";
+  // OLX pokoje/stancje to de facto wynajem
+  if (s.includes("stancje-pokoje")) return "rent";
+  return null;
+}
+
+function propFromCategory(categoryUrl: string | null): string | null {
+  if (!categoryUrl) return null;
+  const s = categoryUrl.toLowerCase();
+  if (s.includes("/mieszkania/")) return "flat";
+  if (s.includes("/domy/")) return "house";
+  if (s.includes("/dzialki/")) return "plot";
+  if (s.includes("stancje-pokoje")) return "room";
+  if (s.includes("/lokale/") || s.includes("/nieruchomosci/biura/") || s.includes("/komerc")) return "commercial";
+  return null;
+}
+
+// Best-effort: metraż/pokoje z opisu
+function parseAreaM2FromText(text: string | null): number | null {
+  if (!text) return null;
+  // 54,23 m2 / 55m2 / 55 m²
+  const m = text.match(/(\d{1,4}(?:[.,]\d{1,2})?)\s*(m2|m²)\b/i);
+  if (!m) return null;
+  return parseNumberLoose(m[1]);
+}
+
+function parseRoomsFromText(text: string | null): number | null {
+  if (!text) return null;
+  // "dwupokojowe", "2 pokoje", "mieszkanie 4-pokojowe"
+  const low = text.toLowerCase();
+
+  const wordMap: Record<string, number> = {
+    jednopokoj: 1,
+    dwupokoj: 2,
+    trzypokoj: 3,
+    czteropokoj: 4,
+    pieciopokoj: 5,
+    sześciopokoj: 6,
+    szesciopokoj: 6,
+  };
+  for (const k of Object.keys(wordMap)) {
+    if (low.includes(k)) return wordMap[k];
+  }
+
+  const m = low.match(/(\d+)\s*[- ]?\s*pokoj/i);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) ? n : null;
+}
+
 const olxEnricher: Enricher = async (url: string): Promise<EnrichResult> => {
   const html = await fetchHtml(url);
-  const $ = cheerio.load(html);
+  const ld = extractLdJson(html);
 
   const out: EnrichResult = {};
 
-  // title
+  // ===== Primary: LD+JSON =====
+  if (ld && typeof ld === "object") {
+    const name = optString(ld.name);
+    const desc = optString(ld.description);
+    const categoryUrl = optString(ld.category);
+
+    out.title = name ?? null;
+    out.description = desc ?? null;
+
+    // price/currency
+    const offers = ld.offers;
+    out.price_amount = optNumber(offers?.price) ?? null;
+    out.currency = optString(offers?.priceCurrency) ?? null;
+
+    // images/thumb
+    const imgs = Array.isArray(ld.image) ? ld.image : [];
+    out.thumb_url = optString(imgs?.[0]) ?? null;
+
+    // tx & property
+    out.transaction_type = txFromCategory(categoryUrl);
+    out.property_type = propFromCategory(categoryUrl);
+
+    // location (LD+JSON daje tylko areaServed.name — bywa dzielnicą/POI)
+    const areaName =
+      optString(offers?.areaServed?.name) ??
+      optString(offers?.areaServed?.address?.addressLocality) ??
+      null;
+
+    out.location_text = areaName;
+
+    // best-effort z opisu
+    out.area_m2 = parseAreaM2FromText(desc);
+    out.rooms = parseRoomsFromText(desc);
+
+    // OLX LD+JSON zwykle nie ma matched_at / floor / year_built / street/city/voivodeship
+    // zostają null, chyba że później dodamy drugi “source of truth”.
+
+    return out;
+  }
+
+  // ===== Fallback HTML (gdy nie ma ld+json) =====
+  const $ = cheerio.load(html);
+
   const title =
     $('meta[property="og:title"]').attr("content") ||
     $("h1").first().text().trim() ||
     null;
   out.title = optString(title);
 
-  // description
   const desc =
-    $('meta[property="og:description"]').attr("content") ||
-    $('[data-cy="ad_description"], [class*="description"]').first().text().trim() ||
+    $('meta[name="description"]').attr("content") ||
+    $(".description, .offer-description").text().trim() ||
     null;
   out.description = optString(desc);
 
-  // price (OLX często ma w meta albo w elemencie ceny)
   const priceText =
-    $('[data-testid="ad-price"], [class*="price"]').first().text().trim() ||
-    $('meta[property="product:price:amount"]').attr("content") ||
-    null;
-
+    $('[data-testid*="price"], [class*="price"]').first().text().trim() || null;
   out.price_amount = parseNumberLoose(priceText);
   out.currency =
     priceText?.includes("€") ? "EUR" : priceText?.toLowerCase().includes("zł") ? "PLN" : null;
-  out.transaction_type = inferTransactionTypeFromText(priceText);
 
-  // image
+  const locationText =
+    $('[data-testid*="location"], [data-testid*="address"], [class*="location"], [class*="address"]')
+      .first()
+      .text()
+      .trim() || null;
+  out.location_text = optString(locationText);
+
   const img =
     $('meta[property="og:image"]').attr("content") ||
     $("img").first().attr("src") ||
     null;
-  out.thumb_url = optString(img);
+  out.thumb_url = absUrl(url, img);
 
-  // location
-  const locText =
-    $('[data-testid="location-date"], [class*="location"]').first().text().trim() ||
-    $('meta[property="og:locality"]').attr("content") ||
-    null;
-  out.location_text = optString(locText);
-  const loc = parseLocationParts(out.location_text);
-  out.city = loc.city;
-  out.district = loc.district;
-
-  // property type (best effort)
-  const fullText = `${out.title ?? ""} ${out.description ?? ""}`.toLowerCase();
-  if (fullText.includes("mieszkan")) out.property_type = "apartment";
-  else if (fullText.includes("dom")) out.property_type = "house";
-
-  // floor/year (best effort from description)
-  out.floor = parseFloorFromText(out.description ?? null);
-  out.year_built = parseYearBuiltFromText(out.description ?? null);
-
-  // metry / pokoje (best effort - szukamy w "Szczegóły" lub opisie)
-  const detailsText = $("body").text().replace(/\s+/g, " ");
-
-  // np. "Powierzchnia: 55 m²"
-  const areaMatch = detailsText.match(/Powierzchnia[^0-9]{0,30}(\d+(?:[.,]\d+)?)\s*m²/i);
-  out.area_m2 = areaMatch ? parseNumberLoose(areaMatch[1]) : null;
-
-  // np. "Liczba pokoi: 3"
-  const roomsMatch = detailsText.match(/Liczba\s+pokoi[^0-9]{0,30}(\d{1,2})/i);
-  out.rooms = roomsMatch ? Number(roomsMatch[1]) : null;
-
-  // cena / m2 jeśli da się wyliczyć
-  if (out.price_amount != null && out.area_m2 != null && out.area_m2 > 0) {
-    out.price_per_m2 = Math.round(out.price_amount / out.area_m2);
-  }
-
-  // owner phone: zwykle ukryty / dostępny po kliknięciu, więc tu zwykle null
-  out.owner_phone = null;
+  // best-effort
+  out.area_m2 = parseAreaM2FromText(out.description ?? null);
+  out.rooms = parseRoomsFromText(out.description ?? null);
 
   return out;
 };
