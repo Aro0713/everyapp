@@ -341,7 +341,7 @@ function isHttpUrl(v: unknown): v is string {
                 <p className="text-sm text-gray-500">{t(lang, "offersEmpty" as any)}</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="w-full overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead className="text-xs text-gray-500">
                     <tr>
@@ -489,119 +489,125 @@ function isHttpUrl(v: unknown): v is string {
                 </div>
             ) : (
                 <>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
+                <div className="w-full overflow-x-auto">
+                  <table className="w-full table-fixed text-left text-sm">
                     <thead className="text-xs text-gray-500">
-                        <tr>
-                       <th className="px-4 py-3">{t(lang, "everybotColPhoto" as any)}</th>
-                        <th className="px-4 py-3">{t(lang, "everybotColTitle" as any)}</th>
-                        <th className="px-4 py-3">{t(lang, "everybotColPortal" as any)}</th>
-                        <th className="px-4 py-3">{t(lang, "everybotColMatchedAt" as any)}</th>
-                        <th className="px-4 py-3">{t(lang, "everybotColTransactionType" as any)}</th>
-                        <th className="px-4 py-3">{t(lang, "everybotColPrice" as any)}</th>
-                        <th className="px-4 py-3">{t(lang, "everybotColArea" as any)}</th>
-                        <th className="px-4 py-3">{t(lang, "everybotColPricePerM2" as any)}</th>
-                        <th className="px-4 py-3">{t(lang, "everybotColRooms" as any)}</th>
-                        <th className="px-4 py-3">{t(lang, "everybotColFloor" as any)}</th>
-                        <th className="px-4 py-3">{t(lang, "everybotColYearBuilt" as any)}</th>
-                        <th className="px-4 py-3">{t(lang, "everybotColVoivodeship" as any)}</th>
-                        <th className="px-4 py-3">{t(lang, "everybotColCity" as any)}</th>
-                        <th className="px-4 py-3">{t(lang, "everybotColDistrict" as any)}</th>
-                        <th className="px-4 py-3">{t(lang, "everybotColStreet" as any)}</th>
-                        <th className="px-4 py-3">{t(lang, "everybotColLink" as any)}</th>
-                        </tr>
+                      <tr>
+                        <th className="px-4 py-3 w-24">{t(lang, "everybotColPhoto" as any)}</th>
+                        <th className="px-4 py-3 w-72">{t(lang, "everybotColTitle" as any)}</th>
+                        <th className="px-4 py-3 w-20">{t(lang, "everybotColPortal" as any)}</th>
+                        <th className="px-4 py-3 w-28">{t(lang, "everybotColMatchedAt" as any)}</th>
+                        <th className="px-4 py-3 w-20">{t(lang, "everybotColTransactionType" as any)}</th>
+                        <th className="px-4 py-3 w-28">{t(lang, "everybotColPrice" as any)}</th>
+
+                        <th className="px-4 py-3 w-20 hidden md:table-cell">{t(lang, "everybotColArea" as any)}</th>
+                        <th className="px-4 py-3 w-28 hidden lg:table-cell">{t(lang, "everybotColPricePerM2" as any)}</th>
+                        <th className="px-4 py-3 w-20 hidden md:table-cell">{t(lang, "everybotColRooms" as any)}</th>
+                        <th className="px-4 py-3 w-20 hidden lg:table-cell">{t(lang, "everybotColFloor" as any)}</th>
+                        <th className="px-4 py-3 w-24 hidden xl:table-cell">{t(lang, "everybotColYearBuilt" as any)}</th>
+
+                        <th className="px-4 py-3 w-32 hidden xl:table-cell">{t(lang, "everybotColVoivodeship" as any)}</th>
+                        <th className="px-4 py-3 w-28 hidden lg:table-cell">{t(lang, "everybotColCity" as any)}</th>
+                        <th className="px-4 py-3 w-28 hidden xl:table-cell">{t(lang, "everybotColDistrict" as any)}</th>
+                        <th className="px-4 py-3 w-40 hidden xl:table-cell">{t(lang, "everybotColStreet" as any)}</th>
+
+                        <th className="px-4 py-3 w-20">{t(lang, "everybotColLink" as any)}</th>
+                      </tr>
                     </thead>
-                   <tbody>
-                    {botRows.map((r) => (
-                       <tr key={r.id} className="border-t border-gray-100">
-                        {/* Zdjęcie */}
-                        <td className="px-4 py-3">
+
+                    <tbody>
+                      {botRows.map((r) => (
+                        <tr key={r.id} className="border-t border-gray-100">
+                          {/* Zdjęcie */}
+                          <td className="px-4 py-3">
                             {r.thumb_url ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
                                 src={r.thumb_url}
                                 alt=""
                                 className="h-10 w-14 rounded-lg object-cover ring-1 ring-gray-200"
-                            />
+                              />
                             ) : (
-                            <div className="h-10 w-14 rounded-lg bg-gray-100 ring-1 ring-gray-200" />
+                              <div className="h-10 w-14 rounded-lg bg-gray-100 ring-1 ring-gray-200" />
                             )}
-                        </td>
+                          </td>
 
-                        {/* Tytuł */}
-                        <td className="px-4 py-3 font-semibold text-ew-primary">
-                            {r.title ?? "-"}
+                          {/* Tytuł */}
+                          <td className="px-4 py-3 font-semibold text-ew-primary">
+                            <div className="truncate">{r.title ?? "-"}</div>
                             <div className="text-xs text-gray-500">{r.status}</div>
-                        </td>
+                          </td>
 
-                        {/* Portal */}
-                        <td className="px-4 py-3">{r.source}</td>
+                          {/* Portal */}
+                          <td className="px-4 py-3">{r.source}</td>
 
-                        {/* Data */}
-                        <td className="px-4 py-3">
+                          {/* Data */}
+                          <td className="px-4 py-3">
                             {r.matched_at ? new Date(r.matched_at).toLocaleDateString() : "-"}
-                        </td>
+                          </td>
 
-                        {/* Transakcja */}
-                        <td className="px-4 py-3">{r.transaction_type ?? "-"}</td>
+                          {/* Transakcja */}
+                          <td className="px-4 py-3">{r.transaction_type ?? "-"}</td>
 
-                        {/* Cena */}
-                        <td className="px-4 py-3">{fmtPrice(r.price_amount, r.currency)}</td>
+                          {/* Cena */}
+                          <td className="px-4 py-3">{fmtPrice(r.price_amount, r.currency)}</td>
 
-                        {/* Powierzchnia */}
-                        <td className="px-4 py-3">{r.area_m2 ? `${r.area_m2}` : "-"}</td>
+                          {/* Powierzchnia */}
+                          <td className="px-4 py-3 hidden md:table-cell">
+                            {r.area_m2 ? `${r.area_m2}` : "-"}
+                          </td>
 
-                        {/* Cena / m² */}
-                        <td className="px-4 py-3">
+                          {/* Cena / m² */}
+                          <td className="px-4 py-3 hidden lg:table-cell">
                             {r.price_per_m2
-                            ? `${Math.round(r.price_per_m2).toLocaleString()} ${r.currency ?? ""}`.trim()
-                            : "-"}
-                        </td>
+                              ? `${Math.round(r.price_per_m2).toLocaleString()} ${r.currency ?? ""}`.trim()
+                              : "-"}
+                          </td>
 
-                        {/* Pokoje */}
-                        <td className="px-4 py-3">{r.rooms ?? "-"}</td>
+                          {/* Pokoje */}
+                          <td className="px-4 py-3 hidden md:table-cell">{r.rooms ?? "-"}</td>
 
-                        {/* Piętro */}
-                        <td className="px-4 py-3">{r.floor ?? "-"}</td>
+                          {/* Piętro */}
+                          <td className="px-4 py-3 hidden lg:table-cell">{r.floor ?? "-"}</td>
 
-                        {/* Rok */}
-                        <td className="px-4 py-3">{r.year_built ?? "-"}</td>
+                          {/* Rok */}
+                          <td className="px-4 py-3 hidden xl:table-cell">{r.year_built ?? "-"}</td>
 
-                        {/* Województwo */}
-                        <td className="px-4 py-3">{r.voivodeship ?? "-"}</td>
+                          {/* Województwo */}
+                          <td className="px-4 py-3 hidden xl:table-cell">{r.voivodeship ?? "-"}</td>
 
-                        {/* Miasto */}
-                        <td className="px-4 py-3">{r.city ?? "-"}</td>
+                          {/* Miasto */}
+                          <td className="px-4 py-3 hidden lg:table-cell">{r.city ?? "-"}</td>
 
-                        {/* Dzielnica */}
-                        <td className="px-4 py-3">{r.district ?? "-"}</td>
+                          {/* Dzielnica */}
+                          <td className="px-4 py-3 hidden xl:table-cell">{r.district ?? "-"}</td>
 
-                        {/* Ulica */}
-                        <td className="px-4 py-3">{r.street ?? "-"}</td>
+                          {/* Ulica */}
+                          <td className="px-4 py-3 hidden xl:table-cell">
+                            <div className="truncate">{r.street ?? "-"}</div>
+                          </td>
 
-                        {/* Link */}
-                        <td className="px-4 py-3">
+                          {/* Link */}
+                          <td className="px-4 py-3">
                             {isHttpUrl(r.source_url) ? (
-                            <a
+                              <a
                                 href={r.source_url}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="text-ew-accent underline underline-offset-2"
-                            >
+                              >
                                 {t(lang, "everybotOpen" as any)}
-                            </a>
+                              </a>
                             ) : (
-                            <span className="text-xs text-gray-400">—</span>
+                              <span className="text-xs text-gray-400">—</span>
                             )}
-                        </td>
+                          </td>
                         </tr>
-                    ))}
+                      ))}
                     </tbody>
-
-
-                    
-                    </table>
+                  </table>
                 </div>
+
                 {/* Load more */}
                 {(botCursor || botRows.length > 0) && (
                   <div className="flex justify-center border-t border-gray-100 p-4">
