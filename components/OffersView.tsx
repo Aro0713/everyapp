@@ -659,10 +659,12 @@ function isHttpUrl(v: unknown): v is string {
               )}
                 {/* Inline loading indicator for next page */}
                 {botLoading && botRows.length > 0 && (
-                    <div className="border-t border-gray-100 p-4 text-center text-xs text-gray-500">
+                <div className="border-t border-gray-100 p-4 flex justify-center">
+                  <span className="animate-pulse rounded-xl bg-pink-100 px-4 py-2 text-sm font-semibold text-pink-600">
                     {t(lang, "everybotLoading" as any)}
-                    </div>
-                )}
+                  </span>
+                </div>
+              )}
                 </>
             )}
             </div>

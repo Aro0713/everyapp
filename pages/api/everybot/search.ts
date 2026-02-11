@@ -1000,7 +1000,7 @@ const url =
 // ile stron pobrać w jednym wywołaniu (MVP: 3)
 const pagesRaw =
   req.method === "POST" ? optNumber((req.body ?? {}).pages) : optNumber(req.query.pages);
-const pages = Math.min(Math.max(pagesRaw ?? 1, 1), 10);
+const pages = Math.min(Math.max(pagesRaw ?? 1, 1), 5);
 
 // cursor może być URL albo numerem (start page)
 const cursorRaw = req.method === "POST" ? optString(body.cursor) : optString(req.query.cursor);
@@ -1064,6 +1064,7 @@ for (let pageNo = startPage; pageNo < startPage + pages; pageNo++) {
   // UPSERT do DB
   for (const r of rows) {
     if (!r.source || !r.source_url) continue;
+    if (!r.title || !String(r.title).trim()) continue; // ✅ usuwa śmieci
 
     const sourceListingId = toSourceListingId(r);
 
