@@ -28,6 +28,7 @@ export type EnrichResult = {
   owner_phone?: string | null;
 
   thumb_url?: string | null;
+  matched_at?: string | null; // data publikacji / dodania (ISO)
 
   // fallback / UX
   location_text?: string | null;

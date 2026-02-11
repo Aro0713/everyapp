@@ -136,72 +136,74 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const data = await enricher(r.source_url);
 
         // Aktualizuj tylko tym, co przyszło (COALESCE: jeśli null/undefined -> zostaw starą wartość)
-        await pool.query(
-          `
-          UPDATE external_listings
-          SET
-            thumb_url        = COALESCE($1, thumb_url),
-            matched_at       = COALESCE(matched_at, now()),
+await pool.query(
+  `
+  UPDATE external_listings
+  SET
+    thumb_url        = COALESCE($1, thumb_url),
+    matched_at       = COALESCE($2, matched_at),
 
-            transaction_type = COALESCE($2, transaction_type),
-            property_type    = COALESCE($3, property_type),
+    transaction_type = COALESCE($3, transaction_type),
+    property_type    = COALESCE($4, property_type),
 
-            price_amount     = COALESCE($4, price_amount),
-            currency         = COALESCE($5, currency),
+    price_amount     = COALESCE($5, price_amount),
+    currency         = COALESCE($6, currency),
 
-            area_m2          = COALESCE($6, area_m2),
-            price_per_m2     = COALESCE($7, price_per_m2),
-            rooms            = COALESCE($8, rooms),
+    area_m2          = COALESCE($7, area_m2),
+    price_per_m2     = COALESCE($8, price_per_m2),
+    rooms            = COALESCE($9, rooms),
 
-            floor            = COALESCE($9, floor),
-            year_built       = COALESCE($10, year_built),
+    floor            = COALESCE($10, floor),
+    year_built       = COALESCE($11, year_built),
 
-            voivodeship      = COALESCE($11, voivodeship),
-            city             = COALESCE($12, city),
-            district         = COALESCE($13, district),
-            street           = COALESCE($14, street),
+    voivodeship      = COALESCE($12, voivodeship),
+    city             = COALESCE($13, city),
+    district         = COALESCE($14, district),
+    street           = COALESCE($15, street),
 
-            owner_phone      = COALESCE($15, owner_phone),
+    owner_phone      = COALESCE($16, owner_phone),
 
-            location_text    = COALESCE($16, location_text),
-            title            = COALESCE($17, title),
-            description      = COALESCE($18, description),
+    location_text    = COALESCE($17, location_text),
+    title            = COALESCE($18, title),
+    description      = COALESCE($19, description),
 
-            source_status    = COALESCE(NULLIF(source_status, ''), 'active'),
-            enriched_at      = now(),
-            updated_at       = now()
-          WHERE office_id = $19 AND id = $20
-        `,
-          [
-            data.thumb_url ?? null,
-            data.transaction_type ?? null,
-            data.property_type ?? null,
+    source_status    = COALESCE(NULLIF(source_status, ''), 'active'),
+    enriched_at      = now(),
+    updated_at       = now()
+  WHERE office_id = $20 AND id = $21
+`,
+  [
+    data.thumb_url ?? null,
+    data.matched_at ?? null,
 
-            data.price_amount ?? null,
-            data.currency ?? null,
+    data.transaction_type ?? null,
+    data.property_type ?? null,
 
-            data.area_m2 ?? null,
-            data.price_per_m2 ?? null,
-            data.rooms ?? null,
+    data.price_amount ?? null,
+    data.currency ?? null,
 
-            data.floor ?? null,
-            data.year_built ?? null,
+    data.area_m2 ?? null,
+    data.price_per_m2 ?? null,
+    data.rooms ?? null,
 
-            data.voivodeship ?? null,
-            data.city ?? null,
-            data.district ?? null,
-            data.street ?? null,
+    data.floor ?? null,
+    data.year_built ?? null,
 
-            data.owner_phone ?? null,
+    data.voivodeship ?? null,
+    data.city ?? null,
+    data.district ?? null,
+    data.street ?? null,
 
-            data.location_text ?? null,
-            data.title ?? null,
-            data.description ?? null,
+    data.owner_phone ?? null,
 
-            officeId,
-            r.id,
-          ]
-        );
+    data.location_text ?? null,
+    data.title ?? null,
+    data.description ?? null,
+
+    officeId,
+    r.id,
+  ]
+);
 
         processed += 1;
 
