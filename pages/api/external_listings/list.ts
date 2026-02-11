@@ -70,16 +70,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const limitRaw = optNumber(req.query.limit) ?? 50;
     const limit = Math.min(Math.max(limitRaw, 1), 200);
 
-    // ✅ NOWY cursor (seek pagination): updated_at + id
+    // ✅ nowa paginacja stronami (page=1..N). Jeśli page jest podane -> używamy OFFSET.
+    const pageRaw = optNumber(req.query.page);
+    const page = pageRaw != null ? Math.min(Math.max(pageRaw, 1), 1000000) : null;
+
+    // ✅ cursor (seek pagination): updated_at + id (fallback, gdy nie ma page)
     const cursorUpdatedAt = optString(req.query.cursorUpdatedAt);
     const cursorId = optString(req.query.cursorId);
 
     const q = optString(req.query.q)?.toLowerCase() ?? null;
     const source = optString(req.query.source); // "otodom"|"olx"|...
-    const status = optString(req.query.status) ?? "active"; // domyślnie active
+    const status = optString(req.query.status) ?? "active";
     const includeInactive = optString(req.query.includeInactive) === "1";
-
-    // ✅ nowy filtr: tylko rekordy po enrich (żeby nie było "dziury" z myślnikami)
     const onlyEnriched = optString(req.query.onlyEnriched) === "1";
 
     const where: string[] = [`office_id = $1`];
@@ -112,7 +114,52 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       p++;
     }
 
-    // ✅ stabilny cursor: (updated_at, id)
+    // ====== TRYB 1: page-based (LIMIT/OFFSET) ======
+    if (page != null) {
+      // total count pod numerki stron
+      const countSql = `
+        SELECT count(*)::bigint AS cnt
+        FROM external_listings
+        WHERE ${where.join(" AND ")}
+      `;
+      const countRes = await pool.query<{ cnt: string }>(countSql, params);
+      const total = Number(countRes.rows?.[0]?.cnt ?? "0");
+      const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
+
+      const offset = (page - 1) * limit;
+
+      const sql = `
+        SELECT
+          id, office_id, source, source_url,
+          title, description,
+          price_amount, currency, location_text,
+          thumb_url, matched_at,
+          transaction_type, property_type,
+          area_m2, price_per_m2, rooms,
+          floor, year_built,
+          voivodeship, city, district, street,
+          owner_phone,
+          source_status, last_seen_at, last_checked_at, enriched_at,
+          updated_at
+        FROM external_listings
+        WHERE ${where.join(" AND ")}
+        ORDER BY updated_at DESC, id DESC
+        LIMIT $${p} OFFSET $${p + 1}
+      `;
+
+      const listParams = [...params, limit, offset];
+      const { rows } = await pool.query<Row>(sql, listParams);
+
+      return res.status(200).json({
+        rows,
+        page,
+        limit,
+        total,
+        totalPages,
+      });
+    }
+
+    // ====== TRYB 2: cursor-based (dotychczasowy) ======
     if (cursorUpdatedAt && cursorId) {
       where.push(`(
         updated_at < $${p}::timestamptz
@@ -155,3 +202,4 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: e?.message ?? "Bad request" });
   }
 }
+

@@ -46,38 +46,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const q = typeof body.q === "string" ? body.q : "";
     const source = typeof body.source === "string" ? body.source : "all";
 
+    // ✅ cursor przekazywany z UI (albo default 1)
+    const cursor =
+      typeof body.cursor === "string" && body.cursor.trim() ? body.cursor.trim() : "1";
+
     const harvestPages = 5;
     const harvestLimit = 50;
 
-    // 1) HARVEST (realny Live Hunter)
+    // 1) HARVEST (Live Hunter)
     const sourcesToRun = source === "all" ? ["otodom", "olx"] : [source];
 
-  let harvestedTotal = 0;
-const harvestBySource: Record<string, any> = {};
-const nextCursorBySource: Record<string, string | null> = {};
+    let harvestedTotal = 0;
+    const harvestBySource: Record<string, any> = {};
+    const nextCursorBySource: Record<string, string | null> = {};
 
-const cursor = typeof body.cursor === "string" && body.cursor.trim() ? body.cursor.trim() : "1";
+    for (const src of sourcesToRun) {
+      try {
+        const j1 = await callInternal(req, "/api/everybot/search", {
+          q,
+          source: src,
+          cursor, // ✅ kluczowe: nie hardcode "1"
+          limit: harvestLimit,
+          pages: harvestPages,
+        });
 
-for (const src of sourcesToRun) {
-  try {
-    const j1 = await callInternal(req, "/api/everybot/search", {
-      q,
-      source: src,
-      cursor,
-      limit: harvestLimit,
-      pages: harvestPages,
-    });
+        harvestBySource[src] = j1;
+        nextCursorBySource[src] =
+          typeof j1?.nextCursor === "string" ? j1.nextCursor : null;
 
-    harvestBySource[src] = j1;
-    nextCursorBySource[src] = typeof j1?.nextCursor === "string" ? j1.nextCursor : null;
-    harvestedTotal += Number(j1?.upserted ?? 0) || 0;
-  } catch (e: any) {
-    harvestBySource[src] = { error: e?.message ?? String(e) };
-    nextCursorBySource[src] = null;
-    // ✅ nie przerywamy całego run gdy OLX/portal da 403
-  }
-}
-
+        harvestedTotal += Number(j1?.upserted ?? 0) || 0;
+      } catch (e: any) {
+        harvestBySource[src] = { error: e?.message ?? String(e) };
+        nextCursorBySource[src] = null;
+        // ✅ nie przerywamy całego run gdy portal da 403
+      }
+    }
 
     // 2) ENRICH loop
     let enrichTotal = 0;
@@ -98,16 +101,15 @@ for (const src of sourcesToRun) {
     }
 
     return res.status(200).json({
-  ok: true,
-  officeId,
-  harvestedTotal,
-  harvestBySource,
-  nextCursorBySource,
-  enrichTotal,
-  verifyTotal,
-  config: { q, source, cursor, harvestPages, harvestLimit },
-});
-
+      ok: true,
+      officeId,
+      harvestedTotal,
+      harvestBySource,
+      nextCursorBySource,
+      enrichTotal,
+      verifyTotal,
+      config: { q, source, cursor, harvestPages, harvestLimit },
+    });
   } catch (e: any) {
     console.error("EVERYBOT_RUN_ERROR", e);
     return res.status(400).json({ error: e?.message ?? "Bad request" });

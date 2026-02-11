@@ -1193,14 +1193,16 @@ if (!canonicalBaseUrl) {
 // (pętla mogła się przerwać wcześniej przez break)
 const nextCursor = String(lastFetchedPage + 1);
 
+const pagesFetched = Math.max(0, lastFetchedPage - startPage + 1);
+
 return res.status(200).json({
-  rows: allRows.slice(0, limit),
+  rows: allRows.slice(0, limit), // UI może pokazać tylko 50 – OK
   nextCursor,
   upserted,
-  pagesFetched: pages,
+  pagesFetched,                  // ✅ realnie pobrane strony (a nie "pages" z requestu)
+  totalRowsParsed: allRows.length, // ✅ ile łącznie sparsowałeś z N stron
   canonicalBaseUrl,
 });
-
 
   } catch (e: any) {
     return res.status(400).json({ error: e?.message ?? "Bad request" });
