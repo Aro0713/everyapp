@@ -207,12 +207,13 @@ function isHttpUrl(v: unknown): v is string {
         const r1 = await fetch("/api/everybot/search", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            q,
-            source: src,
-            cursor: "1",
-            limit: 50,
-          }),
+         body: JSON.stringify({
+          q,
+          source: src,
+          cursor: "1",
+          limit: 50,
+          pages: 5,
+        }),
         });
         // nie wymagamy rows w UI; ważne, żeby endpoint nie wywalił błędu
         if (!r1.ok) {
