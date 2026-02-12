@@ -1010,21 +1010,9 @@ if (!baseUrl || !isHttpUrl(baseUrl)) {
   return res.status(400).json({ error: "Invalid or missing url/q" });
 }
 
-// cursor może być URL albo numerem
-const page = cursor && isHttpUrl(cursor) ? 1 : Math.max(1, Number(cursor ?? "1") || 1);
+// NOTE: Nie logujemy i nie wykrywamy source przed pętlą.
+// Robimy to wyłącznie w pętli, żeby nie dublować logów dla page=1.
 
-const url =
-  cursor && isHttpUrl(cursor)
-    ? cursor
-    : withPage(baseUrl, page);
-
-
-    console.log("everybot request:", { baseUrl, page, url });
-
-    const detected = detectSource(url);
-    if (detected === "other") {
-      return res.status(400).json({ error: "Unsupported source url" });
-    }
 
 // ile stron pobrać w jednym wywołaniu (MVP: 3)
 const pagesRaw =
