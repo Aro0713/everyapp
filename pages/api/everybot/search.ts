@@ -844,60 +844,73 @@ async function fetchHtmlWithFinalUrl(
   const parsed = new URL(url);
   const origin = parsed.origin;
 
-  const r = await fetch(url, {
-    method: "GET",
-    redirect: "follow",
-    headers: {
-      // UA jak realna przeglądarka
-      "user-agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+  const UA =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36";
 
-      "accept":
-        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+  async function doFetch(targetUrl: string) {
+    const r = await fetch(targetUrl, {
+      method: "GET",
+      redirect: "follow",
+      headers: {
+        "user-agent": UA,
+        "accept":
+          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "accept-language": "pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7",
+        "cache-control": "no-cache",
+        "pragma": "no-cache",
+        "referer": origin + "/",
+        "upgrade-insecure-requests": "1",
 
-      "accept-language":
-        "pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7",
+        // ✅ często stabilizuje WAF (nie szkodzi jak zignorują)
+        "sec-ch-ua": `"Chromium";v="121", "Not A(Brand";v="99", "Google Chrome";v="121"`,
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": `"Windows"`,
 
-      "cache-control": "no-cache",
-      "pragma": "no-cache",
+        // ✅ czasem pomaga
+        "sec-fetch-site": "same-origin",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-dest": "document",
+        "sec-fetch-user": "?1",
+      },
+    });
 
-      // KLUCZOWE dla WAF
-      "referer": origin + "/",
-      "upgrade-insecure-requests": "1",
+    const html = await r.text().catch(() => "");
 
-      // Czasem pomaga przy ochronach botów
-      "sec-fetch-site": "same-origin",
-      "sec-fetch-mode": "navigate",
-      "sec-fetch-dest": "document",
-      "sec-fetch-user": "?1",
-    },
-  });
+    console.log("everybot fetch:", {
+      requested: targetUrl,
+      status: r.status,
+      finalUrl: r.url,
+    });
 
-  const html = await r.text().catch(() => "");
+    return { r, html };
+  }
 
-  console.log("everybot fetch:", {
-    requested: url,
-    status: r.status,
-    finalUrl: r.url,
-  });
+  // 1) pierwszy strzał
+  let { r, html } = await doFetch(url);
 
-  // Czytelny komunikat blokady
+  // 2) jeśli 403/429 – retry z "bezpiecznym landingiem"
+  if (r.status === 403 || r.status === 429) {
+    const fallback = "https://www.otodom.pl/pl/wyniki/sprzedaz/mieszkanie/cala-polska";
+    const retryUrl = fallback + (parsed.search ? parsed.search : "?viewType=listing");
+
+    console.log("everybot retry (fallback landing):", { retryUrl });
+
+    ({ r, html } = await doFetch(retryUrl));
+  }
+
   if (r.status === 403 || r.status === 429) {
     const title =
       html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim() ?? "";
-    throw new Error(
-      `PORTAL_BLOCKED ${r.status}${title ? ` (${title})` : ""}`
-    );
+    throw new Error(`PORTAL_BLOCKED ${r.status}${title ? ` (${title})` : ""}`);
   }
 
   if (!r.ok) {
-    throw new Error(
-      `FETCH_FAILED ${r.status} ${r.statusText} ${html.slice(0, 200)}`
-    );
+    throw new Error(`FETCH_FAILED ${r.status} ${r.statusText} ${html.slice(0, 200)}`);
   }
 
   return { html, finalUrl: r.url };
 }
+
 
 /* -------------------- builders -------------------- */
 function buildOtodomSearchUrl(q: string): string {
