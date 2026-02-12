@@ -1,4 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
+import { pool } from "../../../lib/neonDb";
 import { getUserIdFromRequest } from "../../../lib/session";
 import { getOfficeIdForUserId } from "../../../lib/office";
 
@@ -26,6 +27,20 @@ async function callInternal(req: NextApiRequest, path: string, body: any) {
   return j;
 }
 
+async function tryAcquireOfficeLock(officeId: string): Promise<boolean> {
+  const k = `everybot_run:${officeId}`;
+  const { rows } = await pool.query<{ ok: boolean }>(
+    `select pg_try_advisory_lock(hashtext($1)) as ok`,
+    [k]
+  );
+  return rows?.[0]?.ok === true;
+}
+
+async function releaseOfficeLock(officeId: string): Promise<void> {
+  const k = `everybot_run:${officeId}`;
+  await pool.query(`select pg_advisory_unlock(hashtext($1))`, [k]).catch(() => null);
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     if (req.method !== "POST" && req.method !== "GET") {
@@ -42,74 +57,79 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({ ok: true, officeId });
     }
 
-    const body = req.body ?? {};
-    const q = typeof body.q === "string" ? body.q : "";
-    const source = typeof body.source === "string" ? body.source : "all";
+    // ✅ jeden lock, jeden check
+    const gotLock = await tryAcquireOfficeLock(officeId);
+    if (!gotLock) {
+      return res.status(409).json({ error: "EVERYBOT_ALREADY_RUNNING" });
+    }
 
-    // ✅ cursor przekazywany z UI (albo default 1)
-    const cursor =
-      typeof body.cursor === "string" && body.cursor.trim() ? body.cursor.trim() : "1";
+    try {
+      const body = req.body ?? {};
+      const q = typeof body.q === "string" ? body.q : "";
+      const source = typeof body.source === "string" ? body.source : "all";
 
-    const harvestPages = 5;
-    const harvestLimit = 50;
+      const cursor =
+        typeof body.cursor === "string" && body.cursor.trim() ? body.cursor.trim() : "1";
 
-    // 1) HARVEST (Live Hunter)
-    const sourcesToRun = source === "all" ? ["otodom", "olx"] : [source];
+      const harvestPages = 5;
+      const harvestLimit = 50;
 
-    let harvestedTotal = 0;
-    const harvestBySource: Record<string, any> = {};
-    const nextCursorBySource: Record<string, string | null> = {};
+      const sourcesToRun = source === "all" ? ["otodom", "olx"] : [source];
 
-    for (const src of sourcesToRun) {
-      try {
-        const j1 = await callInternal(req, "/api/everybot/search", {
-          q,
-          source: src,
-          cursor, // ✅ kluczowe: nie hardcode "1"
-          limit: harvestLimit,
-          pages: harvestPages,
-        });
+      let harvestedTotal = 0;
+      const harvestBySource: Record<string, any> = {};
+      const nextCursorBySource: Record<string, string | null> = {};
 
-        harvestBySource[src] = j1;
-        nextCursorBySource[src] =
-          typeof j1?.nextCursor === "string" ? j1.nextCursor : null;
+      for (const src of sourcesToRun) {
+        try {
+          const j1 = await callInternal(req, "/api/everybot/search", {
+            q,
+            source: src,
+            cursor,
+            limit: harvestLimit,
+            pages: harvestPages,
+          });
 
-        harvestedTotal += Number(j1?.upserted ?? 0) || 0;
-      } catch (e: any) {
-        harvestBySource[src] = { error: e?.message ?? String(e) };
-        nextCursorBySource[src] = null;
-        // ✅ nie przerywamy całego run gdy portal da 403
+          harvestBySource[src] = j1;
+          nextCursorBySource[src] =
+            typeof j1?.nextCursor === "string" ? j1.nextCursor : null;
+
+          harvestedTotal += Number(j1?.upserted ?? 0) || 0;
+        } catch (e: any) {
+          harvestBySource[src] = { error: e?.message ?? String(e) };
+          nextCursorBySource[src] = null;
+        }
       }
-    }
 
-    // 2) ENRICH loop
-    let enrichTotal = 0;
-    for (let i = 0; i < 6; i++) {
-      const j2 = await callInternal(req, "/api/everybot/enrich", { limit: 50 });
-      const processed = Number(j2?.processed ?? 0);
-      if (!Number.isFinite(processed) || processed <= 0) break;
-      enrichTotal += processed;
-    }
+      let enrichTotal = 0;
+      for (let i = 0; i < 6; i++) {
+        const j2 = await callInternal(req, "/api/everybot/enrich", { limit: 50 });
+        const processed = Number(j2?.processed ?? 0);
+        if (!Number.isFinite(processed) || processed <= 0) break;
+        enrichTotal += processed;
+      }
 
-    // 3) VERIFY loop
-    let verifyTotal = 0;
-    for (let i = 0; i < 2; i++) {
-      const j3 = await callInternal(req, "/api/everybot/verify", { limit: 100 });
-      const processed = Number(j3?.processed ?? 0);
-      if (!Number.isFinite(processed) || processed <= 0) break;
-      verifyTotal += processed;
-    }
+      let verifyTotal = 0;
+      for (let i = 0; i < 2; i++) {
+        const j3 = await callInternal(req, "/api/everybot/verify", { limit: 100 });
+        const processed = Number(j3?.processed ?? 0);
+        if (!Number.isFinite(processed) || processed <= 0) break;
+        verifyTotal += processed;
+      }
 
-    return res.status(200).json({
-      ok: true,
-      officeId,
-      harvestedTotal,
-      harvestBySource,
-      nextCursorBySource,
-      enrichTotal,
-      verifyTotal,
-      config: { q, source, cursor, harvestPages, harvestLimit },
-    });
+      return res.status(200).json({
+        ok: true,
+        officeId,
+        harvestedTotal,
+        harvestBySource,
+        nextCursorBySource,
+        enrichTotal,
+        verifyTotal,
+        config: { q, source, cursor, harvestPages, harvestLimit },
+      });
+    } finally {
+      await releaseOfficeLock(officeId);
+    }
   } catch (e: any) {
     console.error("EVERYBOT_RUN_ERROR", e);
     return res.status(400).json({ error: e?.message ?? "Bad request" });
