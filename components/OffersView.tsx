@@ -101,7 +101,11 @@ export default function OffersView({ lang }: { lang: LangKey }) {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [savedIds, setSavedIds] = useState<Set<string>>(() => new Set());
 
-  async function saveExternalListing(externalListingId: string) {
+  async function saveExternalListing(
+  externalListingId: string,
+  action: "save" | "reject" | "call" | "visit"
+  ) {
+
     if (!externalListingId) return;
     setSavingId(externalListingId);
     try {
@@ -109,9 +113,11 @@ export default function OffersView({ lang }: { lang: LangKey }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          external_listing_id: externalListingId,
-          mode: saveMode, // "agent" | "office"
-        }),
+        external_listing_id: externalListingId,
+        mode: saveMode,
+        action,
+      }),
+
       });
 
       const j = await r.json().catch(() => null);
@@ -535,25 +541,31 @@ function isHttpUrl(v: unknown): v is string {
                   <table className="w-full table-fixed text-left text-sm">
                     <thead className="text-xs text-gray-500">
                       <tr>
-                        <th className="px-4 py-3 w-24">{t(lang, "everybotColPhoto" as any)}</th>
-                        <th className="px-4 py-3 w-72">{t(lang, "everybotColTitle" as any)}</th>
-                        <th className="px-4 py-3 w-20">{t(lang, "everybotColPortal" as any)}</th>
-                        <th className="px-4 py-3 w-28">{t(lang, "everybotColMatchedAt" as any)}</th>
-                        <th className="px-4 py-3 w-20">{t(lang, "everybotColTransactionType" as any)}</th>
-                        <th className="px-4 py-3 w-28">{t(lang, "everybotColPrice" as any)}</th>
+                      <th className="px-4 py-3 w-20">{t(lang, "everybotColPhoto" as any)}</th>
 
-                        <th className="px-4 py-3 w-20 hidden md:table-cell">{t(lang, "everybotColArea" as any)}</th>
-                        <th className="px-4 py-3 w-28 hidden lg:table-cell">{t(lang, "everybotColPricePerM2" as any)}</th>
-                        <th className="px-4 py-3 w-20 hidden md:table-cell">{t(lang, "everybotColRooms" as any)}</th>
-                        <th className="px-4 py-3 w-20 hidden lg:table-cell">{t(lang, "everybotColFloor" as any)}</th>
-                        <th className="px-4 py-3 w-24 hidden xl:table-cell">{t(lang, "everybotColYearBuilt" as any)}</th>
+                      {/* ✅ NOWA KOLUMNA */}
+                      <th className="px-4 py-3 w-28">{t(lang, "everybotColActions" as any)}</th>
 
-                        <th className="px-4 py-3 w-32 hidden xl:table-cell">{t(lang, "everybotColVoivodeship" as any)}</th>
-                        <th className="px-4 py-3 w-28 hidden lg:table-cell">{t(lang, "everybotColCity" as any)}</th>
-                        <th className="px-4 py-3 w-28 hidden xl:table-cell">{t(lang, "everybotColDistrict" as any)}</th>
-                        <th className="px-4 py-3 w-40 hidden xl:table-cell">{t(lang, "everybotColStreet" as any)}</th>
+                      <th className="px-4 py-3 w-64">{t(lang, "everybotColTitle" as any)}</th>
+                      <th className="px-4 py-3 w-20">{t(lang, "everybotColPortal" as any)}</th>
+                      <th className="px-4 py-3 w-28">{t(lang, "everybotColMatchedAt" as any)}</th>
+                      <th className="px-4 py-3 w-20">{t(lang, "everybotColTransactionType" as any)}</th>
+                      <th className="px-4 py-3 w-28">{t(lang, "everybotColPrice" as any)}</th>
 
-                      </tr>
+                      <th className="px-4 py-3 w-20 hidden md:table-cell">{t(lang, "everybotColArea" as any)}</th>
+                      <th className="px-4 py-3 w-24 hidden lg:table-cell">{t(lang, "everybotColPricePerM2" as any)}</th>
+
+                      {/* ✅ zwężone */}
+                      <th className="px-4 py-3 w-14 hidden md:table-cell">{t(lang, "everybotColRooms" as any)}</th>
+                      <th className="px-4 py-3 w-14 hidden lg:table-cell">{t(lang, "everybotColFloor" as any)}</th>
+                      <th className="px-4 py-3 w-16 hidden xl:table-cell">{t(lang, "everybotColYearBuilt" as any)}</th>
+
+                      <th className="px-4 py-3 w-32 hidden xl:table-cell">{t(lang, "everybotColVoivodeship" as any)}</th>
+                      <th className="px-4 py-3 w-28 hidden lg:table-cell">{t(lang, "everybotColCity" as any)}</th>
+                      <th className="px-4 py-3 w-28 hidden xl:table-cell">{t(lang, "everybotColDistrict" as any)}</th>
+                      <th className="px-4 py-3 w-40 hidden xl:table-cell">{t(lang, "everybotColStreet" as any)}</th>
+                    </tr>
+
                     </thead>
 
                     <tbody>
@@ -561,55 +573,46 @@ function isHttpUrl(v: unknown): v is string {
                         <tr key={r.id} className="border-t border-gray-100">
                         {/* Zdjęcie + akcje */}
                         <td className="px-4 py-3">
-                          <div className="flex items-center gap-3">
-                            {r.thumb_url ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={r.thumb_url}
-                                alt=""
-                                className="h-10 w-14 rounded-lg object-cover ring-1 ring-gray-200"
-                              />
-                            ) : (
-                              <div className="h-10 w-14 rounded-lg bg-gray-100 ring-1 ring-gray-200" />
-                            )}
+                        <div className="flex flex-col gap-1">
+                          {isHttpUrl(r.source_url) ? (
+                            <a
+                              href={r.source_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-ew-accent underline underline-offset-2 text-xs"
+                            >
+                              {t(lang, "everybotOpen" as any)}
+                            </a>
+                          ) : (
+                            <span className="text-xs text-gray-400">—</span>
+                          )}
 
-                            <div className="flex flex-col gap-1">
-                              {isHttpUrl(r.source_url) ? (
-                                <a
-                                  href={r.source_url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-ew-accent underline underline-offset-2 text-sm"
-                                >
-                                  {t(lang, "everybotOpen" as any)}
-                                </a>
-                              ) : (
-                                <span className="text-xs text-gray-400">—</span>
-                              )}
-
-                              <button
-                                type="button"
-                                disabled={savingId === r.id || savedIds.has(r.id)}
-                                onClick={() => saveExternalListing(r.id)}
-                                className={clsx(
-                                  "text-left text-sm font-semibold",
-                                  savedIds.has(r.id)
-                                    ? "text-gray-400 cursor-not-allowed"
-                                    : savingId === r.id
-                                    ? "text-gray-400 cursor-wait"
-                                    : "text-ew-primary hover:underline"
-                                )}
-                                title={saveMode === "agent" ? "Dodaj do agenta" : "Dodaj do biura"}
-                              >
-                                {savedIds.has(r.id)
-                                  ? "Dodano"
-                                  : savingId === r.id
-                                  ? "Dodaję…"
-                                  : "Dodaj"}
-                              </button>
-                            </div>
-                          </div>
-                        </td>
+                        <button
+                          type="button"
+                          disabled={savingId === r.id || savedIds.has(r.id)}
+                          onClick={() => saveExternalListing(r.id, "save")}
+                          className={clsx(
+                            "text-left text-xs font-semibold",
+                            savedIds.has(r.id)
+                              ? "text-gray-400 cursor-not-allowed"
+                              : savingId === r.id
+                              ? "text-gray-400 cursor-wait"
+                              : "text-ew-primary hover:underline"
+                          )}
+                          title={
+                            saveMode === "agent"
+                              ? t(lang, "everybotAddToAgent" as any)
+                              : t(lang, "everybotAddToOffice" as any)
+                          }
+                        >
+                          {savedIds.has(r.id)
+                            ? t(lang, "everybotActionSaved" as any)
+                            : savingId === r.id
+                            ? t(lang, "everybotActionSaving" as any)
+                            : t(lang, "everybotActionSave" as any)}
+                        </button>
+                      </div>
+                    </td>
 
 
                           {/* Tytuł */}

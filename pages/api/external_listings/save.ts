@@ -4,6 +4,8 @@ import { pool } from "../../../lib/neonDb";
 import { getUserIdFromRequest } from "../../../lib/session";
 import { getOfficeIdForUserId } from "../../../lib/office";
 
+type ListingAction = "save" | "reject" | "call" | "visit";
+
 function optString(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null;
 }
@@ -46,7 +48,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     RETURNING id
     `;
 
-     const action = "save";
+     const allowedActions: ListingAction[] = ["save", "reject", "call", "visit"];
+        const action =
+        typeof body.action === "string" && allowedActions.includes(body.action as ListingAction)
+            ? (body.action as ListingAction)
+            : "save";
 
     const { rows } = await pool.query<{ id: string }>(sql, [
     officeId,

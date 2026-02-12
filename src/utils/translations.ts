@@ -4705,6 +4705,94 @@ everybotFetchMoreFromPortals: {
   lt: "Įkelti daugiau iš portalų",
   vi: "Tải thêm từ các cổng",
 },
+everybotAddToAgent: {
+  pl: "Dodaj do agenta",
+  en: "Add to agent",
+  de: "Zum Makler hinzufügen",
+  cs: "Přidat agentovi",
+  sk: "Pridať agentovi",
+  ua: "Додати агенту",
+  lt: "Pridėti agentui",
+  vi: "Thêm cho môi giới",
+},
+
+everybotAddToOffice: {
+  pl: "Dodaj do biura",
+  en: "Add to office",
+  de: "Zum Büro hinzufügen",
+  cs: "Přidat kanceláři",
+  sk: "Pridať kancelárii",
+  ua: "Додати до офісу",
+  lt: "Pridėti biurui",
+  vi: "Thêm cho văn phòng",
+},
+
+everybotActionSave: {
+  pl: "Zapisz",
+  en: "Save",
+  de: "Speichern",
+  cs: "Uložit",
+  sk: "Uložiť",
+  ua: "Зберегти",
+  lt: "Išsaugoti",
+  vi: "Lưu",
+},
+
+everybotActionSaved: {
+  pl: "Dodano",
+  en: "Saved",
+  de: "Gespeichert",
+  cs: "Uloženo",
+  sk: "Uložené",
+  ua: "Збережено",
+  lt: "Išsaugota",
+  vi: "Đã lưu",
+},
+
+everybotActionSaving: {
+  pl: "Dodaję…",
+  en: "Saving…",
+  de: "Speichert…",
+  cs: "Ukládání…",
+  sk: "Ukladá sa…",
+  ua: "Збереження…",
+  lt: "Išsaugoma…",
+  vi: "Đang lưu…",
+},
+
+everybotActionCall: {
+  pl: "Telefon",
+  en: "Call",
+  de: "Anrufen",
+  cs: "Zavolat",
+  sk: "Zavolať",
+  ua: "Дзвінок",
+  lt: "Skambinti",
+  vi: "Gọi",
+},
+
+everybotActionVisit: {
+  pl: "Wizyta",
+  en: "Visit",
+  de: "Besichtigung",
+  cs: "Prohlídka",
+  sk: "Obhliadka",
+  ua: "Візит",
+  lt: "Vizitas",
+  vi: "Xem nhà",
+},
+
+everybotActionReject: {
+  pl: "Odrzuć",
+  en: "Reject",
+  de: "Ablehnen",
+  cs: "Odmítnout",
+  sk: "Odmietnuť",
+  ua: "Відхилити",
+  lt: "Atmesti",
+  vi: "Từ chối",
+},
+
 
 } as const);
 
