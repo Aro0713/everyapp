@@ -834,28 +834,48 @@ function parseOlxResults(pageUrl: string, html: string, limit: number): External
 
 /* -------------------- fetch -------------------- */
 async function fetchHtmlWithFinalUrl(url: string): Promise<{ html: string; finalUrl: string }> {
+  const u = new URL(url);
+  const origin = `${u.protocol}//${u.host}`;
+
   const r = await fetch(url, {
     method: "GET",
     redirect: "follow",
     headers: {
+      // UA musi wyglądać jak prawdziwa przeglądarka
       "User-Agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
-      "Accept":
+      Accept:
         "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
       "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.7",
       "Cache-Control": "no-cache",
-      "Pragma": "no-cache",
+      Pragma: "no-cache",
+
+      // ✅ to często decyduje o 403
+      Referer: origin + "/",
+      "Upgrade-Insecure-Requests": "1",
+
+      // ✅ WAF lubi te nagłówki (nie zawsze potrzebne, ale pomagają)
+      "Sec-Fetch-Site": "same-origin",
+      "Sec-Fetch-Mode": "navigate",
+      "Sec-Fetch-Dest": "document",
+      "Sec-Fetch-User": "?1",
     },
   });
 
   console.log("everybot fetch:", { requested: url, status: r.status, finalUrl: r.url });
 
   const html = await r.text().catch(() => "");
+
+  // ✅ czytelny błąd blokady
+  if (r.status === 403 || r.status === 429) {
+    const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim() ?? "";
+    throw new Error(`PORTAL_BLOCKED ${r.status}${title ? ` (${title})` : ""}`);
+  }
+
   if (!r.ok) throw new Error(`FETCH_FAILED ${r.status} ${r.statusText} ${html.slice(0, 200)}`);
 
   return { html, finalUrl: r.url };
 }
-
 
 
 /* -------------------- builders -------------------- */
@@ -904,6 +924,10 @@ function hasNextFromNextData(html: string, currentPage: number): boolean | null 
   } catch {}
 
   return null;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 
@@ -1021,6 +1045,11 @@ let upserted = 0;
 let lastFetchedPage = startPage - 1;
 
 for (let pageNo = startPage; pageNo < startPage + pages; pageNo++) {
+
+  // ✅ throttle między stronami (0.8–1.4s)
+  if (pageNo !== startPage) {
+    await sleep(800 + Math.floor(Math.random() * 600));
+  }
 
   const pageUrl = canonicalBaseUrl
     ? withPage(canonicalBaseUrl, pageNo)
