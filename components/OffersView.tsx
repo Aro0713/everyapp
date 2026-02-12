@@ -175,10 +175,27 @@ async function loadEverybot(opts?: {
 
     // ✅ NOWE FILTRY (z panelu)
     if (f.transactionType) qs.set("transactionType", f.transactionType);
-    if (f.propertyType.trim()) qs.set("propertyType", f.propertyType.trim());
-    if (f.locationText.trim()) qs.set("locationText", f.locationText.trim());
+    function normalizePropertyTypeForDb(v: string) {
+      const s = v.trim().toLowerCase();
+      if (!s) return "";
+      if (s.includes("dom")) return "house";
+      if (s.includes("mieszkan")) return "flat";
+      if (s.includes("działk") || s.includes("dzialk") || s.includes("grunt")) return "plot";
+      if (s.includes("lokal") || s.includes("biur") || s.includes("komerc")) return "commercial";
+      return s;
+    }
+
+    const pt = normalizePropertyTypeForDb(f.propertyType);
+    if (pt) qs.set("propertyType", pt);
+
     if (f.city.trim()) qs.set("city", f.city.trim());
     if (f.district.trim()) qs.set("district", f.district.trim());
+
+    // locationText tylko gdy user nie podał city/district (żeby nie zabijać wyników)
+    const hasCityOrDistrict = !!(f.city.trim() || f.district.trim());
+    if (!hasCityOrDistrict && f.locationText.trim()) {
+      qs.set("locationText", f.locationText.trim());
+    }
 
     if (f.minPrice.trim()) qs.set("minPrice", f.minPrice.trim());
     if (f.maxPrice.trim()) qs.set("maxPrice", f.maxPrice.trim());
@@ -247,7 +264,9 @@ async function loadEverybot(opts?: {
 function isHttpUrl(v: unknown): v is string {
   return typeof v === "string" && /^https?:\/\//i.test(v.trim());
 }
-async function runLiveHunter() {
+async function runLiveHunter(filtersOverride?: typeof botFilters) {
+  const filters = filtersOverride ?? botFilters;
+
   setBotLoading(true);
   setBotErr(null);
 
@@ -255,13 +274,13 @@ async function runLiveHunter() {
     const r = await fetch("/api/everybot/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ filters: botFilters }),
+      body: JSON.stringify({ filters }),
     });
 
     const j = await r.json().catch(() => null);
     if (!r.ok) throw new Error(j?.error ?? `RUN HTTP ${r.status}`);
 
-    await loadEverybot({ filters: botFilters, cursor: null, append: false });
+    await loadEverybot({ filters, cursor: null, append: false });
   } catch (e: any) {
     setBotErr(e?.message ?? "Live hunter failed");
   } finally {
@@ -450,7 +469,7 @@ async function runLiveHunter() {
               setBotCursor(null);
               setBotHasMore(false);
             }}
-            onSearch={() => runLiveHunter()}
+            onSearch={(filters) => runLiveHunter(filters)}
           />
             {/* Results */}
             <div className="mt-6 rounded-2xl border border-gray-200 bg-white">

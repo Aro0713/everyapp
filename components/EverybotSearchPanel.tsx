@@ -116,7 +116,8 @@ export default function EverybotSearchPanel(props: {
   filters: EverybotFilters;
   setFilters: (next: EverybotFilters) => void;
 
-  onSearch: () => void;
+  onSearch: (filters: EverybotFilters) => void;
+
 }) {
   const { lang, loading } = props;
   const f = props.filters;
@@ -175,20 +176,26 @@ export default function EverybotSearchPanel(props: {
     }
   }
 
-  function onClickSearch() {
-    // ✅ jeśli user nie podał q, budujemy „komendę” z pól
-    const current = latestFiltersRef.current;
-    if (!isNonEmpty(current.q)) {
-      const built = buildEverybotQueryFromFilters(current);
-      if (built) {
-        props.setFilters({ ...current, q: built });
-        // odpalimy search po ustawieniu q w następnym ticku
-        setTimeout(() => props.onSearch(), 0);
-        return;
-      }
-    }
-    props.onSearch();
+function onClickSearch() {
+  const current = latestFiltersRef.current;
+
+  // jeśli user nie podał q, budujemy frazę z pól
+  if (!isNonEmpty(current.q)) {
+    const built = buildEverybotQueryFromFilters(current);
+    const next = { ...current, q: built || "" };
+
+    // zapisujemy w state (żeby UI pokazało q)
+    props.setFilters(next);
+
+    // i od razu odpalamy run na NEXT (bez czekania aż state się odświeży)
+    props.onSearch(next);
+    return;
   }
+
+  // jeśli q jest, odpalamy run na current
+  props.onSearch(current);
+}
+
 
   const inputCls =
     "w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20";
