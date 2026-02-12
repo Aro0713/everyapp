@@ -923,9 +923,12 @@ function buildOtodomSearchUrl(q: string): string {
 }
 
 function buildOlxSearchUrl(q: string): string {
-  const slug = encodeURIComponent(q.trim().replace(/\s+/g, "-"));
+  const raw = (q ?? "").trim();
+  if (!raw) return "https://www.olx.pl/oferty/";
+  const slug = encodeURIComponent(raw.replace(/\s+/g, "-"));
   return `https://www.olx.pl/oferty/q-${slug}/`;
 }
+
 
 function withPage(url: string, page: number) {
   const u = new URL(url);
@@ -1113,6 +1116,7 @@ if (!canonicalBaseUrl) {
   canonicalBaseUrl = stripPageParam(finalUrl);
 }
 
+if (detected === "otodom") {
   // DEBUG – paginacja
   const next = extractNextData(html);
   const s = next ? JSON.stringify(next) : "";
@@ -1126,8 +1130,9 @@ if (!canonicalBaseUrl) {
   });
 
   // DEBUG – struktura danych wyników Otodom
-  const nd = extractNextData(html);
+  const nd = next;
   console.log("otodom data keys:", Object.keys(nd?.props?.pageProps?.data ?? {}));
+}
 
   let rows: ExternalRow[] = [];
 
