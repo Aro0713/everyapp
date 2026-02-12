@@ -913,20 +913,53 @@ async function fetchHtmlWithFinalUrl(
 
 
 /* -------------------- builders -------------------- */
-function buildOtodomSearchUrl(q: string): string {
-  // “otwarty” landing: brak zawężenia kategorii (działki/dom/najem/hale itp.)
-  // WAF czasem tnie /pl/wyniki bez kontekstu, ale to jest najbardziej neutralne.
+function slugifyPl(s: string): string {
+  return s
+    .toLowerCase()
+    .trim()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "") // usuń akcenty
+    .replace(/ł/g, "l")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function buildOtodomSearchUrl(q: string, city?: string | null): string {
+  const phrase = (q ?? "").trim();
+  const c = (city ?? "").trim();
+
+  // ✅ jeśli mamy miasto -> budujemy path, żeby portal realnie zawęził wyniki
+  // bazujemy na kanonicznym /wyniki/sprzedaz/mieszkanie/<miasto>/<miasto>
+  // Otodom i tak zrobi redirect do właściwej struktury (województwo itp.)
+  if (c) {
+    const citySlug = slugifyPl(c);
+    const u = new URL(`https://www.otodom.pl/pl/wyniki/sprzedaz/mieszkanie/${citySlug}/${citySlug}`);
+    u.searchParams.set("viewType", "listing");
+    if (phrase) u.searchParams.set("search[phrase]", phrase);
+    return u.toString();
+  }
+
+  // fallback: szerokie wyniki
   const u = new URL("https://www.otodom.pl/pl/wyniki");
   u.searchParams.set("viewType", "listing");
-  if (q) u.searchParams.set("search[phrase]", q);
+  if (phrase) u.searchParams.set("search[phrase]", phrase);
   return u.toString();
 }
 
-function buildOlxSearchUrl(q: string): string {
-  const raw = (q ?? "").trim();
-  if (!raw) return "https://www.olx.pl/oferty/";
-  const slug = encodeURIComponent(raw.replace(/\s+/g, "-"));
-  return `https://www.olx.pl/oferty/q-${slug}/`;
+
+function buildOlxSearchUrl(q: string, city?: string | null, district?: string | null): string {
+  const rawQ = (q ?? "").trim();
+  const c = (city ?? "").trim();
+  const d = (district ?? "").trim();
+
+  // ✅ jeśli q puste, budujemy minimum z lokalizacji
+  const effectiveQ = rawQ || [c, d].filter(Boolean).join(" ").trim();
+
+  // ✅ OLX: zawsze nieruchomości (a nie /oferty/)
+  if (!effectiveQ) return "https://www.olx.pl/nieruchomosci/";
+
+  const slug = encodeURIComponent(effectiveQ.replace(/\s+/g, "-"));
+  return `https://www.olx.pl/nieruchomosci/q-${slug}/`;
 }
 
 
@@ -1034,31 +1067,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ? (optString(filters?.q) ?? optString(body.q))
       : null;
 
-  const sourceParam =
+ const sourceParam =
   req.method === "POST"
     ? (optString(filters?.source) ?? optString(body.source) ?? "otodom")
     : "otodom";
-const sourceWanted = String(sourceParam).toLowerCase();
 
-// ✅ tylko te źródła mają harvester/listing parser
-if (sourceWanted !== "otodom" && sourceWanted !== "olx") {
-  return res.status(400).json({
-    error: `UNSUPPORTED_SOURCE ${sourceWanted} (supported: otodom, olx)`,
-  });
+const sourceWanted = String(sourceParam).toLowerCase(); // "otodom" | "olx" | "all"
+
+// ✅ obsługujemy też "all" (UI ma everybotSourceAll)
+if (sourceWanted !== "otodom" && sourceWanted !== "olx" && sourceWanted !== "all") {
+  return res.status(400).json({ error: `UNSUPPORTED_SOURCE ${sourceWanted}` });
 }
 
+// ✅ lista źródeł do harvestowania w tym wywołaniu
+const harvestSources: Array<"otodom" | "olx"> =
+  sourceWanted === "all" ? ["otodom", "olx"] : [sourceWanted];
 
     const cursor =
   req.method === "POST" ? optString(body.cursor) : optString(req.query.cursor);
-   const baseUrl =
-  urlFromPost ||
-  urlFromGet ||
-  (q
-    ? (sourceWanted === "olx" ? buildOlxSearchUrl(q) : buildOtodomSearchUrl(q))
-    : (sourceWanted === "olx" ? buildOlxSearchUrl("") : buildOtodomSearchUrl("")));
 
-if (!baseUrl || !isHttpUrl(baseUrl)) {
-  return res.status(400).json({ error: "Invalid or missing url/q" });
+const cityForPortal =
+  req.method === "POST" ? (optString(filters?.city) ?? null) : null;
+
+// ✅ baseUrl budujemy PER-ŹRÓDŁO w pętli po harvestSources
+function buildBaseUrlForSource(src: "otodom" | "olx") {
+  return (
+    urlFromPost ||
+    urlFromGet ||
+    (q
+      ? (src === "olx"
+          ? buildOlxSearchUrl(q)
+          : buildOtodomSearchUrl(q, cityForPortal))
+      : (src === "olx"
+          ? buildOlxSearchUrl("")
+          : buildOtodomSearchUrl("", cityForPortal)))
+  );
 }
 
 // NOTE: Nie logujemy i nie wykrywamy source przed pętlą.
@@ -1074,16 +1117,39 @@ const pages = Math.min(Math.max(pagesRaw ?? 1, 1), 5);
 const cursorRaw = req.method === "POST" ? optString(body.cursor) : optString(req.query.cursor);
 const startPage = cursorRaw && isHttpUrl(cursorRaw) ? 1 : Math.max(1, Number(cursorRaw ?? "1") || 1);
 
-// Zawsze zaczynamy od strony startPage, ale bazę do paginacji bierzemy z finalUrl po redirect
-let canonicalBaseUrl: string | null = null;
-
 let allRows: ExternalRow[] = [];
 let upserted = 0;
 
-// ✅ trzymamy ostatnią faktycznie pobraną stronę
+// ✅ kanoniczne base URL per źródło
+const canonicalBaseUrls: Record<"otodom" | "olx", string | null> = {
+  otodom: null,
+  olx: null,
+};
+
+
+// ✅ trzymamy ostatnią faktycznie pobraną stronę (globalnie, pod nextCursor)
 let lastFetchedPage = startPage - 1;
 
-for (let pageNo = startPage; pageNo < startPage + pages; pageNo++) {
+// ✅ iterujemy po źródłach (otodom/olx lub oba)
+for (const src of harvestSources) {
+  const baseUrl = buildBaseUrlForSource(src);
+
+  if (!baseUrl || !isHttpUrl(baseUrl)) {
+    // jeśli user podał urlFromPost/urlFromGet i jest zły — kończymy
+    if (urlFromPost || urlFromGet) {
+      return res.status(400).json({ error: "Invalid or missing url/q" });
+    }
+    // jeśli to tylko brak q i pusty builder — pomijamy źródło
+    continue;
+  }
+
+  // ✅ per-źródło: baza do paginacji po redirect
+  let canonicalBaseUrl: string | null = null;
+
+  // ✅ per-źródło: ostatnia pobrana strona
+  let lastFetchedPageForSource = startPage - 1;
+
+  for (let pageNo = startPage; pageNo < startPage + pages; pageNo++) {
 
   // ✅ throttle między stronami (0.8–1.4s)
   if (pageNo !== startPage) {
@@ -1114,7 +1180,9 @@ lastFetchedPage = pageNo;
 // po pierwszym fetchu ustawiamy kanoniczny baseUrl do dalszych stron
 if (!canonicalBaseUrl) {
   canonicalBaseUrl = stripPageParam(finalUrl);
+  canonicalBaseUrls[src] = canonicalBaseUrl;
 }
+
 
 if (detected === "otodom") {
   // DEBUG – paginacja
@@ -1256,13 +1324,17 @@ if (detected === "otodom") {
 
   allRows = allRows.concat(rows);
 
-  // Jeśli nie ma następnej strony, kończymy pętlę wcześniej
-  if (detected === "otodom" && !finalUrl.toLowerCase().includes("/pl/oferta/")) {
-    const byNextData = hasNextFromNextData(html, pageNo);
-    const hasNext = byNextData !== null ? byNextData : hasNextPage(html, pageNo);
-    if (!hasNext) break;
-  }
-}
+    if (detected === "otodom" && !finalUrl.toLowerCase().includes("/pl/oferta/")) {
+      const byNextData = hasNextFromNextData(html, pageNo);
+      const hasNext = byNextData !== null ? byNextData : hasNextPage(html, pageNo);
+      if (!hasNext) break;
+    }
+
+    // ✅ per-źródło: ta strona została realnie pobrana
+    lastFetchedPageForSource = pageNo;
+    if (pageNo > lastFetchedPage) lastFetchedPage = pageNo;
+  } // end for pageNo
+} // end for src
 
 // nextCursor = następna strona po ostatnio REALNIE pobranej
 // (pętla mogła się przerwać wcześniej przez break)
@@ -1276,7 +1348,7 @@ return res.status(200).json({
   upserted,
   pagesFetched,                  // ✅ realnie pobrane strony (a nie "pages" z requestu)
   totalRowsParsed: allRows.length, // ✅ ile łącznie sparsowałeś z N stron
-  canonicalBaseUrl,
+  canonicalBaseUrls,
 });
 
   } catch (e: any) {
