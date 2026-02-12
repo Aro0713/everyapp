@@ -1,5 +1,5 @@
 // components/EverybotSearchPanel.tsx
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { t } from "@/utils/i18n";
 import type { LangKey } from "@/utils/translations";
 
@@ -23,7 +23,6 @@ function clsx(...xs: Array<string | false | null | undefined>) {
 }
 
 async function reverseGeocodeOSM(lat: number, lon: number) {
-  // Public endpoint. Bez kluczy. Zwykle działa w przeglądarce.
   const url = new URL("https://nominatim.openstreetmap.org/reverse");
   url.searchParams.set("format", "jsonv2");
   url.searchParams.set("lat", String(lat));
@@ -36,38 +35,84 @@ async function reverseGeocodeOSM(lat: number, lon: number) {
   const j = await r.json();
 
   const addr = j?.address ?? {};
-  const city =
-    addr.city || addr.town || addr.village || addr.municipality || "";
-  const district =
-    addr.suburb || addr.neighbourhood || addr.city_district || "";
+  const city = addr.city || addr.town || addr.village || addr.municipality || "";
+  const district = addr.suburb || addr.neighbourhood || addr.city_district || "";
   const road = addr.road || addr.pedestrian || "";
   const house = addr.house_number || "";
   const postcode = addr.postcode || "";
   const state = addr.state || "";
   const country = addr.country || "";
 
-  const locationText = [road && house ? `${road} ${house}` : road, district, city, state, postcode, country]
+  const locationText = [
+    road && house ? `${road} ${house}` : road,
+    district,
+    city,
+    state,
+    postcode,
+    country,
+  ]
     .filter(Boolean)
     .join(", ");
 
   return { locationText, city, district };
 }
 
+function isNonEmpty(v: unknown): v is string {
+  return typeof v === "string" && v.trim().length > 0;
+}
+
+function buildEverybotQueryFromFilters(f: EverybotFilters): string {
+  // Budujemy „komendę wyszukiwania” pod EveryBOT (fraza tekstowa),
+  // ale tylko jeśli user nie podał własnej q.
+  const parts: string[] = [];
+
+  // Transakcja
+  if (f.transactionType === "sale") parts.push("sprzedaż");
+  if (f.transactionType === "rent") parts.push("wynajem");
+
+  // Typ nieruchomości
+  if (isNonEmpty(f.propertyType)) parts.push(f.propertyType.trim());
+
+  // Lokalizacja
+  if (isNonEmpty(f.city)) parts.push(f.city.trim());
+  if (isNonEmpty(f.district)) parts.push(f.district.trim());
+
+  // Pokoje
+  if (isNonEmpty(f.rooms)) parts.push(`${f.rooms.trim()} pokoje`);
+
+  // Powierzchnia
+  if (isNonEmpty(f.minArea) || isNonEmpty(f.maxArea)) {
+    const aMin = isNonEmpty(f.minArea) ? f.minArea.trim() : "";
+    const aMax = isNonEmpty(f.maxArea) ? f.maxArea.trim() : "";
+    if (aMin && aMax) parts.push(`${aMin}-${aMax} m2`);
+    else if (aMin) parts.push(`min ${aMin} m2`);
+    else if (aMax) parts.push(`max ${aMax} m2`);
+  }
+
+  // Cena
+  if (isNonEmpty(f.minPrice) || isNonEmpty(f.maxPrice)) {
+    const pMin = isNonEmpty(f.minPrice) ? f.minPrice.trim() : "";
+    const pMax = isNonEmpty(f.maxPrice) ? f.maxPrice.trim() : "";
+    if (pMin && pMax) parts.push(`${pMin}-${pMax} PLN`);
+    else if (pMin) parts.push(`min ${pMin} PLN`);
+    else if (pMax) parts.push(`max ${pMax} PLN`);
+  }
+
+  return parts.join(", ");
+}
+
 export default function EverybotSearchPanel(props: {
   lang: LangKey;
   loading: boolean;
 
-  // import link (zostaje, ale w panelu)
   importUrl: string;
   setImportUrl: (v: string) => void;
   importing: boolean;
   onImportLink: () => void;
 
-  // saveMode
   saveMode: "agent" | "office";
   setSaveMode: (v: "agent" | "office") => void;
 
-  // filtry (zwracamy gotowy obiekt)
   filters: EverybotFilters;
   setFilters: (next: EverybotFilters) => void;
 
@@ -76,10 +121,23 @@ export default function EverybotSearchPanel(props: {
   const { lang, loading } = props;
   const f = props.filters;
 
+  // ✅ latest filters (żeby async geo nie nadpisywało source itp.)
+  const latestFiltersRef = useRef<EverybotFilters>(props.filters);
+  useEffect(() => {
+    latestFiltersRef.current = props.filters;
+  }, [props.filters]);
+
+  function patch(next: Partial<EverybotFilters>) {
+    props.setFilters({ ...latestFiltersRef.current, ...next });
+  }
+
   const [geoBusy, setGeoBusy] = useState(false);
   const [geoErr, setGeoErr] = useState<string | null>(null);
 
-  const canGeo = useMemo(() => typeof window !== "undefined" && "geolocation" in navigator, []);
+  const canGeo = useMemo(
+    () => typeof window !== "undefined" && "geolocation" in navigator,
+    []
+  );
 
   async function useMyLocation() {
     setGeoErr(null);
@@ -102,14 +160,13 @@ export default function EverybotSearchPanel(props: {
       const lat = pos.coords.latitude;
       const lon = pos.coords.longitude;
 
-      // reverse geocode -> human-readable
       const { locationText, city, district } = await reverseGeocodeOSM(lat, lon);
 
-      props.setFilters({
-        ...f,
-        locationText: locationText || f.locationText,
-        city: city || f.city,
-        district: district || f.district,
+      // ✅ patch na najnowszych filtrach (bez ...f)
+      patch({
+        locationText: locationText || latestFiltersRef.current.locationText,
+        city: city || latestFiltersRef.current.city,
+        district: district || latestFiltersRef.current.district,
       });
     } catch (e: any) {
       setGeoErr(e?.message ?? t(lang, "everybotGeoError" as any));
@@ -118,8 +175,33 @@ export default function EverybotSearchPanel(props: {
     }
   }
 
+  function onClickSearch() {
+    // ✅ jeśli user nie podał q, budujemy „komendę” z pól
+    const current = latestFiltersRef.current;
+    if (!isNonEmpty(current.q)) {
+      const built = buildEverybotQueryFromFilters(current);
+      if (built) {
+        props.setFilters({ ...current, q: built });
+        // odpalimy search po ustawieniu q w następnym ticku
+        setTimeout(() => props.onSearch(), 0);
+        return;
+      }
+    }
+    props.onSearch();
+  }
+
   const inputCls =
     "w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20";
+
+  // ✅ backend realnie obsługuje tylko te źródła w harvest
+  const supportedSources = useMemo(
+    () => [
+      { v: "all", label: t(lang, "everybotSourceAll" as any) },
+      { v: "otodom", label: "Otodom" },
+      { v: "olx", label: "OLX" },
+    ],
+    [lang]
+  );
 
   return (
     <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -133,9 +215,10 @@ export default function EverybotSearchPanel(props: {
           </p>
         </div>
 
-        {/* saveMode */}
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500">{t(lang, "everybotSaveModeLabel" as any)}</span>
+          <span className="text-xs text-gray-500">
+            {t(lang, "everybotSaveModeLabel" as any)}
+          </span>
           <select
             value={props.saveMode}
             onChange={(e) => props.setSaveMode(e.target.value as "agent" | "office")}
@@ -175,7 +258,7 @@ export default function EverybotSearchPanel(props: {
         </div>
       </div>
 
-      {/* 2) Search panel (ma wejść nad przyciskiem Szukaj) */}
+      {/* 2) Search panel */}
       <div className="mt-4 grid gap-3 md:grid-cols-12">
         <div className="md:col-span-6">
           <label className="mb-1 block text-xs font-semibold text-ew-primary">
@@ -183,7 +266,7 @@ export default function EverybotSearchPanel(props: {
           </label>
           <input
             value={f.q}
-            onChange={(e) => props.setFilters({ ...f, q: e.target.value })}
+            onChange={(e) => patch({ q: e.target.value })}
             placeholder={t(lang, "everybotSearchQueryPlaceholder" as any)}
             className={inputCls}
           />
@@ -195,15 +278,14 @@ export default function EverybotSearchPanel(props: {
           </label>
           <select
             value={f.source}
-            onChange={(e) => props.setFilters({ ...f, source: e.target.value })}
+            onChange={(e) => patch({ source: e.target.value })}
             className={inputCls}
           >
-            <option value="all">{t(lang, "everybotSourceAll" as any)}</option>
-            <option value="otodom">Otodom</option>
-            <option value="olx">OLX</option>
-            <option value="no">Nieruchomosci-online</option>
-            <option value="owner">{t(lang, "everybotSourceOwner" as any)}</option>
-            <option value="other">Other</option>
+            {supportedSources.map((s) => (
+              <option key={s.v} value={s.v}>
+                {s.label}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -213,9 +295,7 @@ export default function EverybotSearchPanel(props: {
           </label>
           <select
             value={f.transactionType}
-            onChange={(e) =>
-              props.setFilters({ ...f, transactionType: e.target.value as any })
-            }
+            onChange={(e) => patch({ transactionType: e.target.value as any })}
             className={inputCls}
           >
             <option value="">{t(lang, "everybotAny" as any)}</option>
@@ -230,7 +310,7 @@ export default function EverybotSearchPanel(props: {
           </label>
           <input
             value={f.propertyType}
-            onChange={(e) => props.setFilters({ ...f, propertyType: e.target.value })}
+            onChange={(e) => patch({ propertyType: e.target.value })}
             placeholder={t(lang, "everybotPropertyTypePlaceholder" as any)}
             className={inputCls}
           />
@@ -243,7 +323,7 @@ export default function EverybotSearchPanel(props: {
           <div className="flex gap-2">
             <input
               value={f.locationText}
-              onChange={(e) => props.setFilters({ ...f, locationText: e.target.value })}
+              onChange={(e) => patch({ locationText: e.target.value })}
               placeholder={t(lang, "everybotLocationPlaceholder" as any)}
               className={inputCls}
             />
@@ -271,7 +351,7 @@ export default function EverybotSearchPanel(props: {
           </label>
           <input
             value={f.city}
-            onChange={(e) => props.setFilters({ ...f, city: e.target.value })}
+            onChange={(e) => patch({ city: e.target.value })}
             placeholder={t(lang, "everybotCityPlaceholder" as any)}
             className={inputCls}
           />
@@ -283,7 +363,7 @@ export default function EverybotSearchPanel(props: {
           </label>
           <input
             value={f.district}
-            onChange={(e) => props.setFilters({ ...f, district: e.target.value })}
+            onChange={(e) => patch({ district: e.target.value })}
             placeholder={t(lang, "everybotDistrictPlaceholder" as any)}
             className={inputCls}
           />
@@ -296,7 +376,7 @@ export default function EverybotSearchPanel(props: {
           <input
             inputMode="numeric"
             value={f.minPrice}
-            onChange={(e) => props.setFilters({ ...f, minPrice: e.target.value })}
+            onChange={(e) => patch({ minPrice: e.target.value })}
             placeholder={t(lang, "everybotPriceMinPlaceholder" as any)}
             className={inputCls}
           />
@@ -309,7 +389,7 @@ export default function EverybotSearchPanel(props: {
           <input
             inputMode="numeric"
             value={f.maxPrice}
-            onChange={(e) => props.setFilters({ ...f, maxPrice: e.target.value })}
+            onChange={(e) => patch({ maxPrice: e.target.value })}
             placeholder={t(lang, "everybotPriceMaxPlaceholder" as any)}
             className={inputCls}
           />
@@ -322,7 +402,7 @@ export default function EverybotSearchPanel(props: {
           <input
             inputMode="numeric"
             value={f.minArea}
-            onChange={(e) => props.setFilters({ ...f, minArea: e.target.value })}
+            onChange={(e) => patch({ minArea: e.target.value })}
             placeholder={t(lang, "everybotAreaMinPlaceholder" as any)}
             className={inputCls}
           />
@@ -335,7 +415,7 @@ export default function EverybotSearchPanel(props: {
           <input
             inputMode="numeric"
             value={f.maxArea}
-            onChange={(e) => props.setFilters({ ...f, maxArea: e.target.value })}
+            onChange={(e) => patch({ maxArea: e.target.value })}
             placeholder={t(lang, "everybotAreaMaxPlaceholder" as any)}
             className={inputCls}
           />
@@ -348,19 +428,18 @@ export default function EverybotSearchPanel(props: {
           <input
             inputMode="numeric"
             value={f.rooms}
-            onChange={(e) => props.setFilters({ ...f, rooms: e.target.value })}
+            onChange={(e) => patch({ rooms: e.target.value })}
             placeholder={t(lang, "everybotRoomsPlaceholder" as any)}
             className={inputCls}
           />
         </div>
       </div>
 
-      {/* Search button under the search panel */}
       <div className="mt-4 flex justify-end">
         <button
           type="button"
           disabled={loading}
-          onClick={props.onSearch}
+          onClick={onClickSearch}
           className={clsx(
             "rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm transition",
             loading
