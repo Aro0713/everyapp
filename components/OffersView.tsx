@@ -571,49 +571,63 @@ function isHttpUrl(v: unknown): v is string {
                     <tbody>
                       {botRows.map((r) => (
                         <tr key={r.id} className="border-t border-gray-100">
-                        {/* Zdjęcie + akcje */}
-                        <td className="px-4 py-3">
-                        <div className="flex flex-col gap-1">
-                          {isHttpUrl(r.source_url) ? (
-                            <a
-                              href={r.source_url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-ew-accent underline underline-offset-2 text-xs"
-                            >
-                              {t(lang, "everybotOpen" as any)}
-                            </a>
+                       {/* Zdjęcie */}
+                        <td className="px-4 py-3 w-20">
+                          {r.thumb_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={r.thumb_url}
+                              alt=""
+                              className="h-10 w-14 rounded-lg object-cover ring-1 ring-gray-200"
+                              loading="lazy"
+                            />
                           ) : (
-                            <span className="text-xs text-gray-400">—</span>
+                            <div className="h-10 w-14 rounded-lg bg-gray-100 ring-1 ring-gray-200" />
                           )}
+                        </td>
 
-                        <button
-                          type="button"
-                          disabled={savingId === r.id || savedIds.has(r.id)}
-                          onClick={() => saveExternalListing(r.id, "save")}
-                          className={clsx(
-                            "text-left text-xs font-semibold",
-                            savedIds.has(r.id)
-                              ? "text-gray-400 cursor-not-allowed"
-                              : savingId === r.id
-                              ? "text-gray-400 cursor-wait"
-                              : "text-ew-primary hover:underline"
-                          )}
-                          title={
-                            saveMode === "agent"
-                              ? t(lang, "everybotAddToAgent" as any)
-                              : t(lang, "everybotAddToOffice" as any)
-                          }
-                        >
-                          {savedIds.has(r.id)
-                            ? t(lang, "everybotActionSaved" as any)
-                            : savingId === r.id
-                            ? t(lang, "everybotActionSaving" as any)
-                            : t(lang, "everybotActionSave" as any)}
-                        </button>
-                      </div>
-                    </td>
+                        {/* Akcje */}
+                        <td className="px-4 py-3 w-28">
+                          <div className="flex flex-col gap-1">
+                            {isHttpUrl(r.source_url) ? (
+                              <a
+                                href={r.source_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-ew-accent underline underline-offset-2 text-xs"
+                              >
+                                {t(lang, "everybotOpen" as any)}
+                              </a>
+                            ) : (
+                              <span className="text-xs text-gray-400">—</span>
+                            )}
 
+                            <button
+                              type="button"
+                              disabled={savingId === r.id || savedIds.has(r.id)}
+                              onClick={() => saveExternalListing(r.id, "save")}
+                              className={clsx(
+                                "text-left text-xs font-semibold",
+                                savedIds.has(r.id)
+                                  ? "text-gray-400 cursor-not-allowed"
+                                  : savingId === r.id
+                                  ? "text-gray-400 cursor-wait"
+                                  : "text-ew-primary hover:underline"
+                              )}
+                              title={
+                                saveMode === "agent"
+                                  ? t(lang, "everybotAddToAgent" as any)
+                                  : t(lang, "everybotAddToOffice" as any)
+                              }
+                            >
+                              {savedIds.has(r.id)
+                                ? t(lang, "everybotActionSaved" as any)
+                                : savingId === r.id
+                                ? t(lang, "everybotActionSaving" as any)
+                                : t(lang, "everybotActionSave" as any)}
+                            </button>
+                          </div>
+                        </td>
 
                           {/* Tytuł */}
                           <td className="px-4 py-3 font-semibold text-ew-primary">
