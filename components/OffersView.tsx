@@ -96,6 +96,38 @@ export default function OffersView({ lang }: { lang: LangKey }) {
 
   const [importUrl, setImportUrl] = useState("");
   const [importing, setImporting] = useState(false);
+    // --- Save external listing (agent/office) ---
+  const [saveMode, setSaveMode] = useState<"agent" | "office">("agent");
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [savedIds, setSavedIds] = useState<Set<string>>(() => new Set());
+
+  async function saveExternalListing(externalListingId: string) {
+    if (!externalListingId) return;
+    setSavingId(externalListingId);
+    try {
+      const r = await fetch("/api/external_listings/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          external_listing_id: externalListingId,
+          mode: saveMode, // "agent" | "office"
+        }),
+      });
+
+      const j = await r.json().catch(() => null);
+      if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
+
+      setSavedIds((prev) => {
+        const next = new Set(prev);
+        next.add(externalListingId);
+        return next;
+      });
+    } catch (e: any) {
+      alert(`Nie udało się dodać ogłoszenia: ${e?.message ?? "Unknown error"}`);
+    } finally {
+      setSavingId(null);
+    }
+  }
 
 async function loadEverybot(opts?: {
   q?: string;
@@ -425,37 +457,47 @@ function isHttpUrl(v: unknown): v is string {
 
             {/* Filters */}
             <div className="mt-3 grid gap-3 md:grid-cols-12">
-            <div className="md:col-span-8">
+              <div className="md:col-span-7">
                 <input
-                value={botQ}
-                onChange={(e) => setBotQ(e.target.value)}
-                placeholder={t(lang, "everybotFilterPlaceholder" as any)}
-                className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
+                  value={botQ}
+                  onChange={(e) => setBotQ(e.target.value)}
+                  placeholder={t(lang, "everybotFilterPlaceholder" as any)}
+                  className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
                 />
-            </div>
+              </div>
 
-            <div className="md:col-span-4">
+              <div className="md:col-span-3">
                 <select
-                value={botSource}
-               onChange={(e) => {
-                const v = e.target.value;
-                setBotSource(v);
-                setBotCursor(null);
-                setBotHasMore(false);
-                loadEverybot({ source: v, q: botQ, cursor: null, append: false });
-                }}
-
-                className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
+                  value={botSource}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setBotSource(v);
+                    setBotCursor(null);
+                    setBotHasMore(false);
+                    loadEverybot({ source: v, q: botQ, cursor: null, append: false });
+                  }}
+                  className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
                 >
-                <option value="all">{t(lang, "everybotSourceAll" as any)}</option>
-                <option value="otodom">Otodom</option>
-                <option value="olx">OLX</option>
-                <option value="no">Nieruchomosci-online</option>
-                <option value="owner">{t(lang, "everybotSourceOwner" as any)}</option>
-                <option value="other">Other</option>
+                  <option value="all">{t(lang, "everybotSourceAll" as any)}</option>
+                  <option value="otodom">Otodom</option>
+                  <option value="olx">OLX</option>
+                  <option value="no">Nieruchomosci-online</option>
+                  <option value="owner">{t(lang, "everybotSourceOwner" as any)}</option>
+                  <option value="other">Other</option>
                 </select>
-            </div>
+              </div>
 
+              <div className="md:col-span-2">
+                <select
+                  value={saveMode}
+                  onChange={(e) => setSaveMode(e.target.value as "agent" | "office")}
+                  className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
+                  title="Dodaj do"
+                >
+                  <option value="agent">Agent</option>
+                  <option value="office">Biuro</option>
+                </select>
+              </div>
             </div>
 
             <div className="mt-3 flex justify-end">
@@ -511,15 +553,15 @@ function isHttpUrl(v: unknown): v is string {
                         <th className="px-4 py-3 w-28 hidden xl:table-cell">{t(lang, "everybotColDistrict" as any)}</th>
                         <th className="px-4 py-3 w-40 hidden xl:table-cell">{t(lang, "everybotColStreet" as any)}</th>
 
-                        <th className="px-4 py-3 w-20">{t(lang, "everybotColLink" as any)}</th>
                       </tr>
                     </thead>
 
                     <tbody>
                       {botRows.map((r) => (
                         <tr key={r.id} className="border-t border-gray-100">
-                          {/* Zdjęcie */}
-                          <td className="px-4 py-3">
+                        {/* Zdjęcie + akcje */}
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
                             {r.thumb_url ? (
                               // eslint-disable-next-line @next/next/no-img-element
                               <img
@@ -530,7 +572,45 @@ function isHttpUrl(v: unknown): v is string {
                             ) : (
                               <div className="h-10 w-14 rounded-lg bg-gray-100 ring-1 ring-gray-200" />
                             )}
-                          </td>
+
+                            <div className="flex flex-col gap-1">
+                              {isHttpUrl(r.source_url) ? (
+                                <a
+                                  href={r.source_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-ew-accent underline underline-offset-2 text-sm"
+                                >
+                                  {t(lang, "everybotOpen" as any)}
+                                </a>
+                              ) : (
+                                <span className="text-xs text-gray-400">—</span>
+                              )}
+
+                              <button
+                                type="button"
+                                disabled={savingId === r.id || savedIds.has(r.id)}
+                                onClick={() => saveExternalListing(r.id)}
+                                className={clsx(
+                                  "text-left text-sm font-semibold",
+                                  savedIds.has(r.id)
+                                    ? "text-gray-400 cursor-not-allowed"
+                                    : savingId === r.id
+                                    ? "text-gray-400 cursor-wait"
+                                    : "text-ew-primary hover:underline"
+                                )}
+                                title={saveMode === "agent" ? "Dodaj do agenta" : "Dodaj do biura"}
+                              >
+                                {savedIds.has(r.id)
+                                  ? "Dodano"
+                                  : savingId === r.id
+                                  ? "Dodaję…"
+                                  : "Dodaj"}
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+
 
                           {/* Tytuł */}
                           <td className="px-4 py-3 font-semibold text-ew-primary">
@@ -587,21 +667,6 @@ function isHttpUrl(v: unknown): v is string {
                             <div className="truncate">{r.street ?? "-"}</div>
                           </td>
 
-                          {/* Link */}
-                          <td className="px-4 py-3">
-                            {isHttpUrl(r.source_url) ? (
-                              <a
-                                href={r.source_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-ew-accent underline underline-offset-2"
-                              >
-                                {t(lang, "everybotOpen" as any)}
-                              </a>
-                            ) : (
-                              <span className="text-xs text-gray-400">—</span>
-                            )}
-                          </td>
                         </tr>
                       ))}
                     </tbody>
