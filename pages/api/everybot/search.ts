@@ -1300,10 +1300,10 @@ if (detected === "otodom") {
         typeof r.price_amount === "number" ? r.price_amount : r.price_amount ? Number(r.price_amount) : null,
         r.currency ?? null,
         r.location_text ?? null,
-        r.status ?? "preview",
+        r.status ?? "active",
 
         r.thumb_url ?? null,
-        r.matched_at ?? null,
+        r.matched_at ?? new Date().toISOString(),
         r.transaction_type ?? null,
         r.property_type ?? null,
         r.area_m2 ?? null,
