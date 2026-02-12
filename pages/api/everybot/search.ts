@@ -227,10 +227,15 @@ function inferPropertyTypeFromText(s: string | null): string | null {
   return null;
 }
 
-function parseOtodomResultsFromNextData(pageUrl: string, html: string, limit: number): { rows: ExternalRow[]; hasNext: boolean | null } {
+function parseOtodomResultsFromNextData(
+  pageUrl: string,
+  html: string,
+  limit: number
+): { rows: ExternalRow[]; hasNext: boolean | null } {
   const next = extractNextData(html);
   if (!next) return { rows: [], hasNext: null };
-      const now = new Date().toISOString();
+
+  const now = new Date().toISOString();
   const p = next?.props?.pageProps;
   const ads = p?.data?.searchAds;
 
@@ -833,53 +838,71 @@ function parseOlxResults(pageUrl: string, html: string, limit: number): External
 }
 
 /* -------------------- fetch -------------------- */
-async function fetchHtmlWithFinalUrl(url: string): Promise<{ html: string; finalUrl: string }> {
-  const u = new URL(url);
-  const origin = `${u.protocol}//${u.host}`;
+async function fetchHtmlWithFinalUrl(
+  url: string
+): Promise<{ html: string; finalUrl: string }> {
+  const parsed = new URL(url);
+  const origin = parsed.origin;
 
   const r = await fetch(url, {
     method: "GET",
     redirect: "follow",
     headers: {
-      // UA musi wyglądać jak prawdziwa przeglądarka
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
-      Accept:
+      // UA jak realna przeglądarka
+      "user-agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+
+      "accept":
         "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-      "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.7",
-      "Cache-Control": "no-cache",
-      Pragma: "no-cache",
 
-      // ✅ to często decyduje o 403
-      Referer: origin + "/",
-      "Upgrade-Insecure-Requests": "1",
+      "accept-language":
+        "pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7",
 
-      // ✅ WAF lubi te nagłówki (nie zawsze potrzebne, ale pomagają)
-      "Sec-Fetch-Site": "same-origin",
-      "Sec-Fetch-Mode": "navigate",
-      "Sec-Fetch-Dest": "document",
-      "Sec-Fetch-User": "?1",
+      "cache-control": "no-cache",
+      "pragma": "no-cache",
+
+      // KLUCZOWE dla WAF
+      "referer": origin + "/",
+      "upgrade-insecure-requests": "1",
+
+      // Czasem pomaga przy ochronach botów
+      "sec-fetch-site": "same-origin",
+      "sec-fetch-mode": "navigate",
+      "sec-fetch-dest": "document",
+      "sec-fetch-user": "?1",
     },
   });
 
-  console.log("everybot fetch:", { requested: url, status: r.status, finalUrl: r.url });
-
   const html = await r.text().catch(() => "");
 
-  // ✅ czytelny błąd blokady
+  console.log("everybot fetch:", {
+    requested: url,
+    status: r.status,
+    finalUrl: r.url,
+  });
+
+  // Czytelny komunikat blokady
   if (r.status === 403 || r.status === 429) {
-    const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim() ?? "";
-    throw new Error(`PORTAL_BLOCKED ${r.status}${title ? ` (${title})` : ""}`);
+    const title =
+      html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim() ?? "";
+    throw new Error(
+      `PORTAL_BLOCKED ${r.status}${title ? ` (${title})` : ""}`
+    );
   }
 
-  if (!r.ok) throw new Error(`FETCH_FAILED ${r.status} ${r.statusText} ${html.slice(0, 200)}`);
+  if (!r.ok) {
+    throw new Error(
+      `FETCH_FAILED ${r.status} ${r.statusText} ${html.slice(0, 200)}`
+    );
+  }
 
   return { html, finalUrl: r.url };
 }
 
-
 /* -------------------- builders -------------------- */
 function buildOtodomSearchUrl(q: string): string {
+  // “otwarty” landing: brak zawężenia kategorii (działki/dom/najem/hale itp.)
+  // WAF czasem tnie /pl/wyniki bez kontekstu, ale to jest najbardziej neutralne.
   const u = new URL("https://www.otodom.pl/pl/wyniki");
   u.searchParams.set("viewType", "listing");
   if (q) u.searchParams.set("search[phrase]", q);
