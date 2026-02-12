@@ -1023,24 +1023,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 50, 1), 200);
 
     const body = req.method === "POST" ? (req.body ?? {}) : {};
+    const filters = (req.method === "POST" ? (body as any).filters : null) as any | null;
     const urlFromGet = req.method === "GET" ? optString(req.query.url) : null;
     const urlFromPost = req.method === "POST" ? optString(body.url) : null;
-    const q = req.method === "POST" ? optString(body.q) : null;
+    const q =
+    req.method === "POST"
+      ? (optString(filters?.q) ?? optString(body.q))
+      : null;
 
-    const sourceParam =
-      req.method === "POST" ? (optString(body.source) ?? "otodom") : null;
-    const sourceWanted = (sourceParam ?? "otodom").toLowerCase();
+  const sourceParam =
+  req.method === "POST"
+    ? (optString(filters?.source) ?? optString(body.source) ?? "otodom")
+    : "otodom";
+const sourceWanted = String(sourceParam).toLowerCase();
+
+// ✅ tylko te źródła mają harvester/listing parser
+if (sourceWanted !== "otodom" && sourceWanted !== "olx") {
+  return res.status(400).json({
+    error: `UNSUPPORTED_SOURCE ${sourceWanted} (supported: otodom, olx)`,
+  });
+}
+
 
     const cursor =
   req.method === "POST" ? optString(body.cursor) : optString(req.query.cursor);
-    const baseUrl =
+   const baseUrl =
   urlFromPost ||
   urlFromGet ||
   (q
-    ? (sourceWanted === "olx"
-        ? buildOlxSearchUrl(q)
-        : buildOtodomSearchUrl(q))
-    : buildOtodomSearchUrl(""));
+    ? (sourceWanted === "olx" ? buildOlxSearchUrl(q) : buildOtodomSearchUrl(q))
+    : (sourceWanted === "olx" ? buildOlxSearchUrl("") : buildOtodomSearchUrl("")));
 
 if (!baseUrl || !isHttpUrl(baseUrl)) {
   return res.status(400).json({ error: "Invalid or missing url/q" });
@@ -1079,7 +1091,12 @@ for (let pageNo = startPage; pageNo < startPage + pages; pageNo++) {
     ? withPage(canonicalBaseUrl, pageNo)
     : withPage(baseUrl, pageNo);
 
-  console.log("everybot request:", { baseUrl, page: pageNo, url: pageUrl });
+  console.log("everybot request:", {
+  sourceWanted,
+  baseUrl,
+  page: pageNo,
+  url: pageUrl,
+});
 
   const detected = detectSource(pageUrl);
   if (detected === "other") {
