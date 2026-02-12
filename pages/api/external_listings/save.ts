@@ -35,21 +35,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // idempotent: nie duplikuj tego samego zapisu
     const sql = `
-      INSERT INTO external_listing_actions (
-        office_id, external_listing_id, user_id, note
-      ) VALUES ($1, $2, $3, $4)
-      ON CONFLICT (office_id, external_listing_id, user_id)
-      DO UPDATE SET
+    INSERT INTO external_listing_actions (
+        office_id, external_listing_id, user_id, action, note
+    ) VALUES ($1, $2, $3, $4, $5)
+    ON CONFLICT (office_id, external_listing_id, user_id)
+    DO UPDATE SET
+        action = EXCLUDED.action,
         note = COALESCE(EXCLUDED.note, external_listing_actions.note),
         updated_at = now()
-      RETURNING id
+    RETURNING id
     `;
 
+     const action = "save";
+
     const { rows } = await pool.query<{ id: string }>(sql, [
-      officeId,
-      externalListingId,
-      userIdToSave,
-      note,
+    officeId,
+    externalListingId,
+    userIdToSave,
+    action,
+    note,
     ]);
 
     return res.status(200).json({ ok: true, id: rows?.[0]?.id ?? null });
