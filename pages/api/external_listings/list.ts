@@ -113,6 +113,69 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       params.push(`%${q}%`);
       p++;
     }
+    // --- NEW FILTERS FROM SEARCH PANEL ---
+
+    const transactionType = optString(req.query.transactionType);
+    const propertyType = optString(req.query.propertyType);
+    const locationText = optString(req.query.locationText);
+    const city = optString(req.query.city);
+    const district = optString(req.query.district);
+
+    const minPrice = optNumber(req.query.minPrice);
+    const maxPrice = optNumber(req.query.maxPrice);
+    const minArea = optNumber(req.query.minArea);
+    const maxArea = optNumber(req.query.maxArea);
+    const rooms = optNumber(req.query.rooms);
+
+    if (transactionType) {
+      where.push(`transaction_type = $${p++}`);
+      params.push(transactionType);
+    }
+
+    if (propertyType) {
+      where.push(`LOWER(COALESCE(property_type,'')) LIKE $${p++}`);
+      params.push(`%${propertyType.toLowerCase()}%`);
+    }
+
+    if (locationText) {
+      where.push(`LOWER(COALESCE(location_text,'')) LIKE $${p++}`);
+      params.push(`%${locationText.toLowerCase()}%`);
+    }
+
+    if (city) {
+      where.push(`LOWER(COALESCE(city,'')) LIKE $${p++}`);
+      params.push(`%${city.toLowerCase()}%`);
+    }
+
+    if (district) {
+      where.push(`LOWER(COALESCE(district,'')) LIKE $${p++}`);
+      params.push(`%${district.toLowerCase()}%`);
+    }
+
+    if (minPrice != null) {
+      where.push(`price_amount >= $${p++}`);
+      params.push(minPrice);
+    }
+
+    if (maxPrice != null) {
+      where.push(`price_amount <= $${p++}`);
+      params.push(maxPrice);
+    }
+
+    if (minArea != null) {
+      where.push(`area_m2 >= $${p++}`);
+      params.push(minArea);
+    }
+
+    if (maxArea != null) {
+      where.push(`area_m2 <= $${p++}`);
+      params.push(maxArea);
+    }
+
+    if (rooms != null) {
+      where.push(`rooms = $${p++}`);
+      params.push(rooms);
+    }
 
     // ====== TRYB 1: page-based (LIMIT/OFFSET) ======
     if (page != null) {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { t } from "@/utils/i18n";
 import type { LangKey } from "@/utils/translations";
+import EverybotSearchPanel from "@/components/EverybotSearchPanel";
 
 type ListingRow = {
   listing_id: string;
@@ -82,8 +83,21 @@ export default function OffersView({ lang }: { lang: LangKey }) {
   }
 
   // --- EveryBOT external ---
-  const [botQ, setBotQ] = useState("");
-  const [botSource, setBotSource] = useState("all");
+  const [botFilters, setBotFilters] = useState({
+  q: "",
+  source: "all",
+  transactionType: "" as "" | "sale" | "rent",
+  propertyType: "",
+  locationText: "",
+  city: "",
+  district: "",
+  minPrice: "",
+  maxPrice: "",
+  minArea: "",
+  maxArea: "",
+  rooms: "",
+});
+
   const [botLoading, setBotLoading] = useState(false);
   const [botErr, setBotErr] = useState<string | null>(null);
   const [botRows, setBotRows] = useState<ExternalRow[]>([]);
@@ -136,13 +150,13 @@ export default function OffersView({ lang }: { lang: LangKey }) {
   }
 
 async function loadEverybot(opts?: {
-  q?: string;
-  source?: string;
+  filters?: typeof botFilters;
   cursor?: { updated_at: string; id: string } | null;
   append?: boolean;
 }) {
-  const q = (opts?.q ?? botQ).trim();
-  const source = opts?.source ?? botSource;
+  const f = opts?.filters ?? botFilters;
+  const q = (f.q ?? "").trim();
+  const source = f.source ?? "all";
   const cursor = opts?.cursor ?? null;
   const append = !!opts?.append;
 
@@ -154,13 +168,25 @@ async function loadEverybot(opts?: {
     qs.set("limit", "50");
     qs.set("status", "active");
     qs.set("includeInactive", "1");
-    // ✅ ukryj harvest-only (bez enriched_at)
     qs.set("onlyEnriched", "1");
 
     if (q) qs.set("q", q);
     if (source && source !== "all") qs.set("source", source);
 
-    // NOWY stabilny cursor
+    // ✅ NOWE FILTRY (z panelu)
+    if (f.transactionType) qs.set("transactionType", f.transactionType);
+    if (f.propertyType.trim()) qs.set("propertyType", f.propertyType.trim());
+    if (f.locationText.trim()) qs.set("locationText", f.locationText.trim());
+    if (f.city.trim()) qs.set("city", f.city.trim());
+    if (f.district.trim()) qs.set("district", f.district.trim());
+
+    if (f.minPrice.trim()) qs.set("minPrice", f.minPrice.trim());
+    if (f.maxPrice.trim()) qs.set("maxPrice", f.maxPrice.trim());
+    if (f.minArea.trim()) qs.set("minArea", f.minArea.trim());
+    if (f.maxArea.trim()) qs.set("maxArea", f.maxArea.trim());
+    if (f.rooms.trim()) qs.set("rooms", f.rooms.trim());
+
+    // cursor
     if (cursor) {
       qs.set("cursorUpdatedAt", cursor.updated_at);
       qs.set("cursorId", cursor.id);
@@ -173,12 +199,6 @@ async function loadEverybot(opts?: {
     const newRows = (j?.rows ?? []) as ExternalRow[];
     const nextCursor =
       (j?.nextCursor ?? null) as { updated_at: string; id: string } | null;
-
-    console.log(
-      "external_listings/list rows:",
-      newRows.length,
-      newRows[0]
-    );
 
     setBotRows((prev) => (append ? [...prev, ...newRows] : newRows));
     setBotCursor(nextCursor);
@@ -227,39 +247,27 @@ async function loadEverybot(opts?: {
 function isHttpUrl(v: unknown): v is string {
   return typeof v === "string" && /^https?:\/\//i.test(v.trim());
 }
-  async function runLiveHunter() {
-    const q = botQ.trim();
+async function runLiveHunter() {
+  setBotLoading(true);
+  setBotErr(null);
 
-    // MVP: obsługujemy live harvest dla otodom + olx (pozostałe dołożysz jak będą harvestery)
-    const sourcesToRun =
-      botSource === "all"
-        ? ["otodom", "olx"]
-        : [botSource];
+  try {
+    const r = await fetch("/api/everybot/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filters: botFilters }),
+    });
 
-    setBotLoading(true);
-    setBotErr(null);
+    const j = await r.json().catch(() => null);
+    if (!r.ok) throw new Error(j?.error ?? `RUN HTTP ${r.status}`);
 
-    try {
-      const r = await fetch("/api/everybot/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          q: botQ.trim(),
-          source: botSource,
-        }),
-      });
-
-      const j = await r.json().catch(() => null);
-      if (!r.ok) throw new Error(j?.error ?? `RUN HTTP ${r.status}`);
-
-      // Reload z DB (po całym pipeline)
-      await loadEverybot({ source: botSource, q: botQ, cursor: null, append: false });
-    } catch (e: any) {
-      setBotErr(e?.message ?? "Live hunter failed");
-    } finally {
-      setBotLoading(false);
-    }
+    await loadEverybot({ filters: botFilters, cursor: null, append: false });
+  } catch (e: any) {
+    setBotErr(e?.message ?? "Live hunter failed");
+  } finally {
+    setBotLoading(false);
   }
+}
 
   return (
     <div className="space-y-6">
@@ -351,12 +359,12 @@ function isHttpUrl(v: unknown): v is string {
                 ? "border-ew-accent bg-ew-accent/10 text-ew-primary"
                 : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
             )}
-            onClick={() => {
-            setTab("everybot");
-            setBotCursor(null);
-            setBotHasMore(false);
-            loadEverybot({ source: botSource, q: botQ, cursor: null, append: false });
-          }}
+          onClick={() => {
+          setTab("everybot");
+          setBotCursor(null);
+          setBotHasMore(false);
+          loadEverybot({ filters: botFilters, cursor: null, append: false });
+        }}
           >
             🤖 {t(lang, "offersTabEverybot" as any)}
           </button>
@@ -427,116 +435,42 @@ function isHttpUrl(v: unknown): v is string {
         <>
           {/* EVERYBOT PANEL */}
           <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-extrabold text-ew-primary">{t(lang, "everybotTitle" as any)}</h3>
-                <p className="mt-1 text-sm text-gray-500">{t(lang, "everybotSub" as any)}</p>
-              </div>
-            </div>
-
-            {/* Import link */}
-            <div className="mt-4 grid gap-3 md:grid-cols-12">
-              <div className="md:col-span-9">
-                <input
-                  value={importUrl}
-                  onChange={(e) => setImportUrl(e.target.value)}
-                  placeholder={t(lang, "everybotSearchPlaceholder" as any)}
-                  className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
-                />
-              </div>
-              <div className="md:col-span-3">
-                <button
-                  type="button"
-                  disabled={importing || !importUrl.trim()}
-                  onClick={importLink}
-                  className={clsx(
-                    "w-full rounded-2xl px-4 py-3 text-sm font-extrabold shadow-sm transition",
-                    importing || !importUrl.trim()
-                      ? "cursor-not-allowed border border-gray-200 bg-gray-100 text-gray-400"
-                      : "bg-ew-accent text-ew-primary hover:opacity-95"
-                  )}
-                >
-                  {importing ? "…" : t(lang, "everybotSaveLinkBtn" as any)}
-                </button>
-              </div>
-            </div>
-
-            {/* Filters */}
-            <div className="mt-3 grid gap-3 md:grid-cols-12">
-              <div className="md:col-span-7">
-                <input
-                  value={botQ}
-                  onChange={(e) => setBotQ(e.target.value)}
-                  placeholder={t(lang, "everybotFilterPlaceholder" as any)}
-                  className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
-                />
-              </div>
-
-              <div className="md:col-span-3">
-                <select
-                  value={botSource}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setBotSource(v);
-                    setBotCursor(null);
-                    setBotHasMore(false);
-                    loadEverybot({ source: v, q: botQ, cursor: null, append: false });
-                  }}
-                  className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
-                >
-                  <option value="all">{t(lang, "everybotSourceAll" as any)}</option>
-                  <option value="otodom">Otodom</option>
-                  <option value="olx">OLX</option>
-                  <option value="no">Nieruchomosci-online</option>
-                  <option value="owner">{t(lang, "everybotSourceOwner" as any)}</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-
-              <div className="md:col-span-2">
-                <select
-                  value={saveMode}
-                  onChange={(e) => setSaveMode(e.target.value as "agent" | "office")}
-                  className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
-                  title="Dodaj do"
-                >
-                  <option value="agent">Agent</option>
-                  <option value="office">Biuro</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="mt-3 flex justify-end">
-            <button
-            type="button"
-            disabled={botLoading}
-            onClick={() => runLiveHunter()}
-
-            className={clsx(
-                "rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm transition",
-                botLoading
-                ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
-                : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
-            )}
-            >
-            {t(lang, "everybotSearchBtn" as any)}
-            </button>
-            </div>
-
-                        {/* Results */}
+          <EverybotSearchPanel
+            lang={lang}
+            loading={botLoading}
+            importUrl={importUrl}
+            setImportUrl={setImportUrl}
+            importing={importing}
+            onImportLink={importLink}
+            saveMode={saveMode}
+            setSaveMode={setSaveMode}
+            filters={botFilters}
+            setFilters={(next) => {
+              setBotFilters(next);
+              setBotCursor(null);
+              setBotHasMore(false);
+            }}
+            onSearch={() => runLiveHunter()}
+          />
+            {/* Results */}
             <div className="mt-6 rounded-2xl border border-gray-200 bg-white">
-            {botLoading && botRows.length === 0 ? (
-                <div className="p-4 text-sm text-gray-500">{t(lang, "everybotLoading" as any)}</div>
-            ) : botErr ? (
+              {botLoading && botRows.length === 0 ? (
+                <div className="p-4 text-sm text-gray-500">
+                  {t(lang, "everybotLoading" as any)}
+                </div>
+              ) : botErr ? (
                 <div className="p-4 text-sm text-red-700">
-                {t(lang, "everybotLoadError" as any)}: {botErr}
+                  {t(lang, "everybotLoadError" as any)}: {botErr}
                 </div>
-            ) : botRows.length === 0 ? (
+              ) : botRows.length === 0 ? (
                 <div className="flex h-40 items-center justify-center rounded-2xl bg-ew-accent/5">
-                <p className="text-sm text-gray-500">{t(lang, "everybotEmpty" as any)}</p>
+                  <p className="text-sm text-gray-500">
+                    {t(lang, "everybotEmpty" as any)}
+                  </p>
                 </div>
-            ) : (
+              ) : (
                 <>
+
                 <div className="w-full overflow-x-auto">
                   <table className="w-full table-fixed text-left text-sm">
                     <thead className="text-xs text-gray-500">
@@ -699,8 +633,7 @@ function isHttpUrl(v: unknown): v is string {
                       onClick={() => {
                         if (botCursor) {
                           loadEverybot({
-                            source: botSource,
-                            q: botQ,
+                            filters: botFilters,
                             cursor: botCursor,
                             append: true,
                           });
@@ -708,6 +641,7 @@ function isHttpUrl(v: unknown): v is string {
                           runLiveHunter();
                         }
                       }}
+
                       className={clsx(
                         "rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm transition",
                         botLoading

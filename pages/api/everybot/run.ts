@@ -1,3 +1,4 @@
+// pages/api/everybot/run.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { pool } from "../../../lib/neonDb";
 import { getUserIdFromRequest } from "../../../lib/session";
@@ -41,6 +42,25 @@ async function releaseOfficeLock(officeId: string): Promise<void> {
   await pool.query(`select pg_advisory_unlock(hashtext($1))`, [k]).catch(() => null);
 }
 
+type IncomingFilters = {
+  q?: unknown;
+  source?: unknown;
+  transactionType?: unknown;
+  propertyType?: unknown;
+  locationText?: unknown;
+  city?: unknown;
+  district?: unknown;
+  minPrice?: unknown;
+  maxPrice?: unknown;
+  minArea?: unknown;
+  maxArea?: unknown;
+  rooms?: unknown;
+};
+
+function pickString(v: unknown, fallback: string) {
+  return typeof v === "string" ? v : fallback;
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     if (req.method !== "POST" && req.method !== "GET") {
@@ -65,8 +85,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     try {
       const body = req.body ?? {};
-      const q = typeof body.q === "string" ? body.q : "";
-      const source = typeof body.source === "string" ? body.source : "all";
+
+      // ✅ NOWY KONTRAKT: body.filters
+      const filters = (body.filters ?? null) as IncomingFilters | null;
+
+      // ✅ kompatybilność wstecz: body.q/body.source
+      const qFromFilters = filters ? pickString(filters.q, "") : "";
+      const sourceFromFilters = filters ? pickString(filters.source, "all") : "all";
+
+      const q =
+        qFromFilters ||
+        (typeof body.q === "string" ? body.q : "");
+
+      const source =
+        sourceFromFilters ||
+        (typeof body.source === "string" ? body.source : "all");
 
       const cursor =
         typeof body.cursor === "string" && body.cursor.trim() ? body.cursor.trim() : "1";
@@ -74,6 +107,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const harvestPages = 5;
       const harvestLimit = 50;
 
+      // ✅ tylko whitelisted źródła dla run (all => otodom+olx)
       const sourcesToRun = source === "all" ? ["otodom", "olx"] : [source];
 
       let harvestedTotal = 0;
@@ -82,6 +116,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       for (const src of sourcesToRun) {
         try {
+          // IMPORTANT: search endpoint nadal dostaje q/source/cursor/limit/pages
+          // (filtry szczegółowe działają na DB w /external_listings/list)
           const j1 = await callInternal(req, "/api/everybot/search", {
             q,
             source: src,
@@ -125,7 +161,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         nextCursorBySource,
         enrichTotal,
         verifyTotal,
-        config: { q, source, cursor, harvestPages, harvestLimit },
+        config: {
+          // zwracamy oba: finalne q/source oraz pełny filtr (dla debug)
+          q,
+          source,
+          cursor,
+          harvestPages,
+          harvestLimit,
+          filters: filters ?? null,
+        },
       });
     } finally {
       await releaseOfficeLock(officeId);
