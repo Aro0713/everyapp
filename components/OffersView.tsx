@@ -172,9 +172,7 @@ async function loadEverybot(opts?: {
   try {
     const qs = new URLSearchParams();
     qs.set("limit", "50");
-    qs.set("status", "active");
     qs.set("includeInactive", "1");
-    qs.set("onlyEnriched", "1");
 
     if (q) qs.set("q", q);
     if (source && source !== "all") qs.set("source", String(source));
