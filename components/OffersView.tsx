@@ -153,7 +153,8 @@ async function loadEverybot(opts?: {
   filters?: typeof botFilters;
   cursor?: { updated_at: string; id: string } | null;
   append?: boolean;
-}) {
+}): Promise<{ rows: ExternalRow[]; nextCursor: { updated_at: string; id: string } | null }> {
+
   const f = opts?.filters ?? botFilters;
   const q = (f.q ?? "").trim();
   const source = f.source ?? "all";
@@ -220,8 +221,10 @@ async function loadEverybot(opts?: {
     setBotRows((prev) => (append ? [...prev, ...newRows] : newRows));
     setBotCursor(nextCursor);
     setBotHasMore(Boolean(nextCursor) && newRows.length > 0);
+        return { rows: newRows, nextCursor };
   } catch (e: any) {
     setBotErr(e?.message ?? "Failed to load");
+    return { rows: [], nextCursor: null };
   } finally {
     setBotLoading(false);
   }
@@ -285,6 +288,17 @@ async function runLiveHunter(filtersOverride?: typeof botFilters) {
     setBotErr(e?.message ?? "Live hunter failed");
   } finally {
     setBotLoading(false);
+  }
+}
+async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
+  const filters = filtersOverride ?? botFilters;
+
+  // 1) Najpierw cache (Neon)
+  const r1 = await loadEverybot({ filters, cursor: null, append: false });
+
+  // 2) Jeśli brak wyników w cache → odpal LiveHunter i po nim odśwież cache
+  if (!r1.rows || r1.rows.length === 0) {
+    await runLiveHunter(filters);
   }
 }
 
@@ -382,7 +396,7 @@ async function runLiveHunter(filtersOverride?: typeof botFilters) {
           setTab("everybot");
           setBotCursor(null);
           setBotHasMore(false);
-          loadEverybot({ filters: botFilters, cursor: null, append: false });
+          searchEverybotWithFallback(botFilters);
         }}
           >
             🤖 {t(lang, "offersTabEverybot" as any)}
@@ -469,7 +483,7 @@ async function runLiveHunter(filtersOverride?: typeof botFilters) {
               setBotCursor(null);
               setBotHasMore(false);
             }}
-            onSearch={(filters) => runLiveHunter(filters)}
+            onSearch={(filters) => searchEverybotWithFallback(filters)}
           />
             {/* Results */}
             <div className="mt-6 rounded-2xl border border-gray-200 bg-white">

@@ -1084,7 +1084,7 @@ if (sourceWanted !== "otodom" && sourceWanted !== "olx" && sourceWanted !== "all
 
 // ✅ lista źródeł do harvestowania w tym wywołaniu
 const harvestSources: Array<"otodom" | "olx"> =
-  sourceWanted === "all" ? ["otodom", "olx"] : [sourceWanted];
+  sourceWanted === "all" ? ["otodom"] : [sourceWanted];
 
     const cursor =
   req.method === "POST" ? optString(body.cursor) : optString(req.query.cursor);
