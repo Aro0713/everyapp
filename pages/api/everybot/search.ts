@@ -237,120 +237,99 @@ function parseOtodomResultsFromNextData(
 
   const now = new Date().toISOString();
   const p = next?.props?.pageProps;
-  const ads = p?.data?.searchAds;
+const adsItems = p?.data?.searchAds?.items;
 
-  if (Array.isArray(ads) && ads.length) {
-    console.log("otodom searchAd keys:", Object.keys(ads[0] ?? {}));
-    console.log("otodom searchAd sample:", JSON.stringify(ads[0] ?? {}).slice(0, 1200));
+if (Array.isArray(adsItems) && adsItems.length) {
+  const rows: ExternalRow[] = [];
+  const seen = new Set<string>();
 
-    const rows: ExternalRow[] = [];
-    const seen = new Set<string>();
+  for (const ad of adsItems) {
+    const href = firstString(ad?.href);
+    const slug = firstString(ad?.slug);
+    const rawUrl =
+      href && typeof href === "string"
+        ? href.replace("[lang]", "pl")
+        : slug
+        ? `/pl/oferta/${slug}`
+        : null;
 
-    for (const ad of ads) {
-      const rawUrl = firstString(ad?.url, ad?.href, ad?.link, ad?.canonicalUrl);
-      const full = rawUrl ? absUrl(pageUrl, rawUrl) : null;
-      if (!full) continue;
+    const full = rawUrl ? absUrl("https://www.otodom.pl/", rawUrl) : null;
+    if (!full) continue;
 
-      const norm = normalizeOtodomUrl(full);
-      if (!norm.includes("/pl/oferta/")) continue;
-      if (seen.has(norm)) continue;
-      seen.add(norm);
+    const norm = normalizeOtodomUrl(full);
+    if (!norm.includes("/pl/oferta/")) continue;
+    if (seen.has(norm)) continue;
+    seen.add(norm);
 
-      const title = cleanTitle(firstString(ad?.title, ad?.name, ad?.heading)) ?? null;
+    const title = cleanTitle(firstString(ad?.title)) ?? null;
 
-      const priceAmount =
-        optNumber(ad?.price?.amount) ??
-        optNumber(ad?.totalPrice?.amount) ??
-        optNumber(ad?.priceAmount) ??
-        null;
-        const priceText =
-        firstString(ad?.price?.formatted, ad?.totalPrice?.formatted, ad?.priceText) ?? null;
+    const priceAmount =
+      optNumber(ad?.totalPrice?.value) ??
+      optNumber(ad?.totalPrice?.amount) ??
+      optNumber(ad?.price?.value) ??
+      optNumber(ad?.price?.amount) ??
+      null;
 
-        const transaction_type =
-        (ad?.transactionType === "rent" || ad?.transactionType === "sale" ? ad.transactionType : null) ??
-        inferTransactionTypeFromPriceText(priceText);
+    const currency =
+      firstString(ad?.totalPrice?.currency, ad?.price?.currency) ?? null;
 
-      const currency =
-        firstString(ad?.price?.currency, ad?.totalPrice?.currency, ad?.currency) ?? null;
+    const area_m2 = optNumber(ad?.areaInSquareMeters) ?? null;
 
-      const area_m2 =
-        optNumber(ad?.area) ?? optNumber(ad?.areaM2) ?? null;
+    // roomsNumber bywa enumem ("THREE") -> mapuj
+    const rooms =
+      typeof ad?.roomsNumber === "string"
+        ? mapRoomsEnum(ad.roomsNumber)
+        : optNumber(ad?.rooms) != null
+        ? Math.round(optNumber(ad?.rooms)!)
+        : null;
 
-      const roomsRaw =
-        optNumber(ad?.rooms) ?? null;
+    const price_per_m2 = optNumber(ad?.pricePerSquareMeter?.value) ?? null;
 
-      const rooms = roomsRaw != null ? Math.round(roomsRaw) : null;
+    const addr = ad?.location?.address;
+    const city = optString(addr?.city?.name) ?? null;
+    const voivodeship = optString(addr?.province?.name) ?? null;
+    const streetName = optString(addr?.street?.name) ?? null;
+    const streetNo = optString(addr?.street?.number) ?? null;
+    const street = [streetName, streetNo].filter(Boolean).join(" ") || null;
 
-      const price_per_m2 =
-        optNumber(ad?.pricePerM2) ??
-        optNumber(ad?.price_per_m2) ??
-        null;
+    const location_text = [street, city, voivodeship].filter(Boolean).join(", ") || null;
 
-      const locationText =
-        firstString(ad?.locationText, ad?.location, ad?.address, ad?.city, ad?.district, ad?.region) ?? null;
-        const locParts = parseLocationParts(locationText);
-        const matched_at = now;
+    const img =
+      optString(ad?.images?.[0]?.medium) ??
+      optString(ad?.images?.[0]?.large) ??
+      null;
 
-        // próbujemy najpierw po kluczach z JSON (różne wersje danych)
-        const floor =
-        pickAnyStringByKeys(ad, ["floor", "floorNo", "floor_number", "level"]) ??
-        parseFloorFromText(firstString(ad?.description, ad?.subtitle, ad?.additionalInfo, ad?.paramsText, locationText));
+    rows.push({
+      external_id: norm,
+      office_id: null,
+      source: "otodom",
+      source_url: norm,
+      title,
+      price_amount: priceAmount,
+      currency,
+      location_text,
+      status: "preview",
+      imported_at: now,
+      updated_at: now,
+      thumb_url: img,
+      area_m2,
+      rooms,
+      price_per_m2,
+      created_at: now,
+      matched_at: optString(ad?.dateCreated) ?? now,
+      transaction_type: normalizeTx(ad?.transaction) ?? null,
+      property_type: optString(ad?.estate) ?? null,
+      voivodeship,
+      city,
+      street,
+      district: null,
+    });
 
-        const year_built =
-        pickAnyNumberByKeys(ad, ["yearBuilt", "buildYear", "constructionYear", "year_built"]) ??
-        parseYearBuiltFromText(firstString(ad?.description, ad?.subtitle, ad?.additionalInfo, ad?.paramsText));
-
-        const property_type =
-        firstString(ad?.category, ad?.propertyType, ad?.estateType, ad?.type) ??
-        inferPropertyTypeFromText(firstString(ad?.title, ad?.description));
-
-
-      const img =
-        firstString(ad?.thumbnail, ad?.thumb, ad?.image, ad?.images?.[0]?.url, ad?.photos?.[0]?.url) ?? null;
-
-          rows.push({
-        external_id: norm,
-        office_id: null,
-        source: "otodom",
-        source_url: norm,
-
-        title,
-        price_amount: priceAmount,
-        currency,
-        location_text: locationText,
-
-        status: "preview",
-        imported_at: now,
-        updated_at: now,
-
-        thumb_url: img ? absUrl(pageUrl, img) : null,
-
-        area_m2,
-        rooms,
-        price_per_m2,
-        
-
-        // ALIASES dla tabeli (MVP)
-        created_at: now,
-        transaction_type: transaction_type ?? null,
-        price: priceAmount ?? null,
-        matched_at,
-property_type: property_type ?? null,
-floor: floor ?? null,
-year_built: year_built ?? null,
-voivodeship: locParts.voivodeship,
-city: locParts.city,
-district: locParts.district,
-street: locParts.street,
-
-        });
-
-      if (rows.length >= limit) break;
-    }
-
-    // tu jeszcze nie ruszamy paginacji — zwracamy hasNext null
-    return { rows, hasNext: null };
+    if (rows.length >= limit) break;
   }
+
+  return { rows, hasNext: null };
+}
 
   // 1) zbierz kandydatów na "listing/ad/offer" – heurystyka po polach
   const candidates = deepCollectObjects(next, (o) => {
@@ -501,6 +480,24 @@ street: locParts.street,
 }
 
 /* -------------------- parsers -------------------- */
+function normalizeTx(v: unknown): "sale" | "rent" | null {
+  const s = typeof v === "string" ? v.toUpperCase() : "";
+  if (s === "SELL") return "sale";
+  if (s === "RENT") return "rent";
+  return null;
+}
+function mapRoomsEnum(v: string): number | null {
+  const t = v.toUpperCase();
+  if (t === "ONE") return 1;
+  if (t === "TWO") return 2;
+  if (t === "THREE") return 3;
+  if (t === "FOUR") return 4;
+  if (t === "FIVE") return 5;
+  if (t === "SIX") return 6;
+  const m = t.match(/\d+/);
+  return m ? Number(m[0]) : null;
+}
+
 function normalizeOtodomUrl(u: string): string {
   // /hpr/ -> /
   let out = u.replace("://www.otodom.pl/hpr/", "://www.otodom.pl/");
@@ -931,13 +928,14 @@ function buildOtodomSearchUrl(q: string, city?: string | null): string {
   // ✅ jeśli mamy miasto -> budujemy path, żeby portal realnie zawęził wyniki
   // bazujemy na kanonicznym /wyniki/sprzedaz/mieszkanie/<miasto>/<miasto>
   // Otodom i tak zrobi redirect do właściwej struktury (województwo itp.)
-  if (c) {
-    const citySlug = slugifyPl(c);
-    const u = new URL(`https://www.otodom.pl/pl/wyniki/sprzedaz/mieszkanie/${citySlug}/${citySlug}`);
-    u.searchParams.set("viewType", "listing");
-    if (phrase) u.searchParams.set("search[phrase]", phrase);
-    return u.toString();
-  }
+  function buildOtodomSearchUrl(q: string): string {
+  const phrase = (q ?? "").trim();
+  const u = new URL("https://www.otodom.pl/pl/wyniki");
+  u.searchParams.set("viewType", "listing");
+  if (phrase) u.searchParams.set("search[phrase]", phrase);
+  return u.toString();
+}
+
 
   // fallback: szerokie wyniki
   const u = new URL("https://www.otodom.pl/pl/wyniki");
@@ -1084,9 +1082,9 @@ if (sourceWanted !== "otodom" && sourceWanted !== "olx" && sourceWanted !== "all
 
 // ✅ lista źródeł do harvestowania w tym wywołaniu
 const harvestSources: Array<"otodom" | "olx"> =
-  sourceWanted === "all" ? ["otodom"] : [sourceWanted];
+  sourceWanted === "all" ? ["otodom","olx"] : [sourceWanted];
 
-    const cursor =
+  const cursor =
   req.method === "POST" ? optString(body.cursor) : optString(req.query.cursor);
 
 const cityForPortal =
@@ -1100,7 +1098,7 @@ function buildBaseUrlForSource(src: "otodom" | "olx") {
     (q
       ? (src === "olx"
           ? buildOlxSearchUrl(q)
-          : buildOtodomSearchUrl(q, cityForPortal))
+          : buildOtodomSearchUrl(q))
       : (src === "olx"
           ? buildOlxSearchUrl("")
           : buildOtodomSearchUrl("", cityForPortal)))
@@ -1176,6 +1174,24 @@ for (const src of harvestSources) {
   }
 
  const { html, finalUrl } = await fetchHtmlWithFinalUrl(pageUrl);
+
+// 🔎 DETEKCJA DEGRADACJI OTODOM (redirect do canonical)
+const degraded =
+  src === "otodom" &&
+  filters?.city &&
+  typeof filters.city === "string" &&
+  filters.city.trim() &&
+  stripPageParam(finalUrl).includes("/cala-polska");
+
+if (degraded) {
+  console.log("everybot degraded:", {
+    src,
+    requested: pageUrl,
+    finalUrl,
+    reason: "otodom_redirected_to_canonical_location",
+  });
+}
+
 
 // ✅ ta strona została realnie pobrana
 lastFetchedPage = pageNo;

@@ -118,15 +118,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         try {
           // IMPORTANT: search endpoint nadal dostaje q/source/cursor/limit/pages
           // (filtry szczegółowe działają na DB w /external_listings/list)
-          const j1 = await callInternal(req, "/api/everybot/search", {
-            q,
-            source: src,
-            cursor,
-            limit: harvestLimit,
-            pages: harvestPages,
-          });
+         const j1 = await callInternal(req, "/api/everybot/search", {
+          // nowy kontrakt
+          filters: filters ?? { q, source: src },
+          // kompatybilność
+          q,
+          source: src,
+          cursor,
+          limit: harvestLimit,
+          pages: harvestPages,
+        });
 
-          harvestBySource[src] = j1;
+        harvestBySource[src] = j1;
           nextCursorBySource[src] =
             typeof j1?.nextCursor === "string" ? j1.nextCursor : null;
 

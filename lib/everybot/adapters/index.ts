@@ -1,8 +1,22 @@
-import otodom from "./otodom";
-import olx from "./olx";
-import { EverybotAdapter } from "./types";
+// lib/everybot/adapters/index.ts
+import type { SourceKey } from "../enrichers/types";
+import type { PortalAdapter } from "./types";
 
-export const adapterRegistry: Record<string, EverybotAdapter> = {
-  otodom,
-  olx,
+import otodomAdapter from "./otodom";
+import olxAdapter from "./olx";
+
+import gratkaAdapter from "./gratka";
+import morizonAdapter from "./morizon";
+import odwlascicielaAdapter from "./odwlasciciela";
+
+export const adapterRegistry: Record<SourceKey, PortalAdapter | null> = {
+  otodom: otodomAdapter,
+  olx: olxAdapter,
+
+  gratka: gratkaAdapter,
+  morizon: morizonAdapter,
+  odwlasciciela: odwlascicielaAdapter,
+
+  // SourceKey ma ten klucz – na razie brak adaptera:
+  nieruchomosci_online: null,
 };

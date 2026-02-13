@@ -23,14 +23,21 @@ function optNumber(v: unknown): number | null {
 }
 function toSourceKey(s: string): SourceKey | null {
   const v = (s || "").toLowerCase();
+
   if (v === "otodom") return "otodom";
   if (v === "olx") return "olx";
-  if (v === "no" || v === "nieruchomosci-online" || v === "nieruchomoscisonline") return "no";
   if (v === "gratka") return "gratka";
   if (v === "morizon") return "morizon";
-  if (v === "owner" || v === "od_wlasciciela" || v === "od-wlasciciela") return "owner";
-  return null;
+
+  // odwlasciciela.pl (u Ciebie historycznie było "owner")
+if (v === "owner" || v === "od_wlasciciela" || v === "od-wlasciciela" || v === "odwlasciciela") return "odwlasciciela";
+if (v === "no" || v === "nieruchomosci-online" || v === "nieruchomoscisonline" || v === "nieruchomosci_online") return "nieruchomosci_online";
+ {
+    return "odwlasciciela";
+  }
+
 }
+
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));

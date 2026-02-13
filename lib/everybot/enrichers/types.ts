@@ -1,6 +1,13 @@
 // lib/everybot/enrichers/types.ts
 
-export type SourceKey = "otodom" | "olx" | "no" | "gratka" | "morizon" | "owner";
+export type SourceKey =
+  | "otodom"
+  | "olx"
+  | "gratka"
+  | "morizon"
+  | "odwlasciciela"
+  | "nieruchomosci_online";
+
 
 export type EnrichResult = {
   // core (Esti-like)

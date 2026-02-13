@@ -1,55 +1,73 @@
-export type EverybotSource = {
-  id: string;
-  office_id: string;
-  adapter: string;              // 'otodom' | 'olx'
-  strategy: string;             // 'url' | 'search' | 'rss'
-  enabled: boolean;
-  crawl_interval_minutes: number | null;
-  last_crawled_at: string | null;
-  last_status: string | null;
-  meta: any;                    // jsonb z DB
-  listing_category: string | null;
-  transaction_type: string | null;
-  country_code: string | null;
+// lib/everybot/adapters/types.ts
+
+import type { NormalizedFilters } from "../filters/types";
+import type { SourceKey } from "../enrichers/types";
+
+export type DegradedReason =
+  | "none"
+  | "portal_redirected"
+  | "filters_ignored"
+  | "captcha_or_block"
+  | "unknown";
+
+export type SearchRequest = {
+  url: string;
+  method: "GET";
+  headers?: Record<string, string>;
 };
 
-export type EverybotResult = {
-  source: string;               // 'otodom' | 'olx'
-  source_listing_id: string;
-  source_url: string;
+export type SearchMeta = {
+  source: SourceKey;
+  requestedUrl: string;
+  finalUrl: string;
+  page: number;
 
-  title?: string;
-  description?: string;
+  applied: boolean; // czy portal faktycznie zastosował to co obiecujemy w adapterze
+  degradedReason: DegradedReason;
+};
 
-  price_amount?: number;
-  currency?: string;
+export type SearchItem = {
+  source: SourceKey;
+  source_url: string; // canonical oferta URL
+  title: string | null;
+  price_amount: number | null;
+  currency: string | null;
+  location_text: string | null;
+  thumb_url: string | null;
 
-  // Esti-like / tabela
-  matched_at?: string;          // ISO
+  // opcjonalnie — jeśli wyciągniesz z listy
   transaction_type?: "sale" | "rent" | null;
-
+  property_type?: string | null;
   area_m2?: number | null;
   price_per_m2?: number | null;
   rooms?: number | null;
-
   floor?: string | null;
   year_built?: number | null;
-
   voivodeship?: string | null;
   city?: string | null;
   district?: string | null;
   street?: string | null;
-
-  property_type?: string | null;
-  owner_phone?: string | null;
-
-  thumb_url?: string | null;
-
-  location_text?: string | null;
-  status?: string;              // 'active'
 };
 
+export type ParseResult = {
+  items: SearchItem[];
+  meta: SearchMeta;
+  hasNext: boolean | null;
+};
 
-export type EverybotAdapter = (
-  source: EverybotSource
-) => Promise<EverybotResult[]>;
+export type AdapterContext = {
+  filters: NormalizedFilters;
+  page: number;
+  baseUrl?: string | null; // jeśli portal zwraca canonical base dla kolejnych stron
+};
+
+export type PortalAdapter = {
+  source: SourceKey;
+
+  buildSearchRequest(ctx: AdapterContext): SearchRequest;
+
+  parseSearch(ctx: AdapterContext, html: string, finalUrl: string): ParseResult;
+
+  // opcjonalnie: portal może mieć swoje nextUrl w payloadzie
+  getNextBaseUrl?: (ctx: AdapterContext, html: string, finalUrl: string) => string | null;
+};
