@@ -115,6 +115,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const nextCursorBySource: Record<string, string | null> = {};
 
       for (const src of sourcesToRun) {
+        const city = typeof filters?.city === "string" ? filters.city.trim() : "";
+          const district = typeof filters?.district === "string" ? filters.district.trim() : "";
+
+          if (src === "otodom" && (city || district)) {
+            harvestBySource[src] = {
+              skipped: true,
+              reason: "OTODOM_LOCATION_NOT_SUPPORTED_YET",
+              city,
+              district,
+            };
+            nextCursorBySource[src] = null;
+            continue;
+          }
         try {
           // IMPORTANT: search endpoint nadal dostaje q/source/cursor/limit/pages
           // (filtry szczegółowe działają na DB w /external_listings/list)

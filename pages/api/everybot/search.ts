@@ -885,15 +885,13 @@ async function fetchHtmlWithFinalUrl(
   // 1) pierwszy strzał
   let { r, html } = await doFetch(url);
 
-  // 2) jeśli 403/429 – retry z "bezpiecznym landingiem"
-  if (r.status === 403 || r.status === 429) {
-    const fallback = "https://www.otodom.pl/pl/wyniki/sprzedaz/mieszkanie/cala-polska";
-    const retryUrl = fallback + (parsed.search ? parsed.search : "?viewType=listing");
-
-    console.log("everybot retry (fallback landing):", { retryUrl });
-
-    ({ r, html } = await doFetch(retryUrl));
-  }
+ // 2) jeśli 403/429 – NIE zmieniamy URL na "cala-polska" (to zanieczyszcza cache)
+//    Po prostu traktujemy jako blokadę portalu.
+if (r.status === 403 || r.status === 429) {
+  const title =
+    html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim() ?? "";
+  throw new Error(`PORTAL_BLOCKED ${r.status}${title ? ` (${title})` : ""}`);
+}
 
   if (r.status === 403 || r.status === 429) {
     const title =
@@ -923,27 +921,16 @@ function slugifyPl(s: string): string {
 
 function buildOtodomSearchUrl(q: string, city?: string | null): string {
   const phrase = (q ?? "").trim();
-  const c = (city ?? "").trim();
-
-  // ✅ jeśli mamy miasto -> budujemy path, żeby portal realnie zawęził wyniki
-  // bazujemy na kanonicznym /wyniki/sprzedaz/mieszkanie/<miasto>/<miasto>
-  // Otodom i tak zrobi redirect do właściwej struktury (województwo itp.)
-  function buildOtodomSearchUrl(q: string): string {
-  const phrase = (q ?? "").trim();
   const u = new URL("https://www.otodom.pl/pl/wyniki");
+
   u.searchParams.set("viewType", "listing");
-  if (phrase) u.searchParams.set("search[phrase]", phrase);
+
+  if (phrase) {
+    u.searchParams.set("search[phrase]", phrase);
+  }
+
   return u.toString();
 }
-
-
-  // fallback: szerokie wyniki
-  const u = new URL("https://www.otodom.pl/pl/wyniki");
-  u.searchParams.set("viewType", "listing");
-  if (phrase) u.searchParams.set("search[phrase]", phrase);
-  return u.toString();
-}
-
 
 function buildOlxSearchUrl(q: string, city?: string | null, district?: string | null): string {
   const rawQ = (q ?? "").trim();
@@ -1176,12 +1163,12 @@ for (const src of harvestSources) {
  const { html, finalUrl } = await fetchHtmlWithFinalUrl(pageUrl);
 
 // 🔎 DETEKCJA DEGRADACJI OTODOM (redirect do canonical)
+const requestedBase = stripPageParam(pageUrl);
+const finalBase = stripPageParam(finalUrl);
+
 const degraded =
   src === "otodom" &&
-  filters?.city &&
-  typeof filters.city === "string" &&
-  filters.city.trim() &&
-  stripPageParam(finalUrl).includes("/cala-polska");
+  (requestedBase !== finalBase || finalBase.includes("/cala-polska"));
 
 if (degraded) {
   console.log("everybot degraded:", {
@@ -1190,6 +1177,8 @@ if (degraded) {
     finalUrl,
     reason: "otodom_redirected_to_canonical_location",
   });
+
+  break; // STOP: nie parsuj, nie upsertuj, nie leć na kolejne strony
 }
 
 
