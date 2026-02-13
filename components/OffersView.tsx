@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { t } from "@/utils/i18n";
 import type { LangKey } from "@/utils/translations";
-import EverybotSearchPanel from "@/components/EverybotSearchPanel";
+import EverybotSearchPanel, {
+  type EverybotFilters,
+  type EverybotSource,
+} from "@/components/EverybotSearchPanel";
+
 
 type ListingRow = {
   listing_id: string;
@@ -83,10 +87,10 @@ export default function OffersView({ lang }: { lang: LangKey }) {
   }
 
   // --- EveryBOT external ---
-  const [botFilters, setBotFilters] = useState({
+const [botFilters, setBotFilters] = useState<EverybotFilters>({
   q: "",
-  source: "all",
-  transactionType: "" as "" | "sale" | "rent",
+  source: "all" as EverybotSource,
+  transactionType: "",
   propertyType: "",
   locationText: "",
   city: "",
@@ -97,6 +101,7 @@ export default function OffersView({ lang }: { lang: LangKey }) {
   maxArea: "",
   rooms: "",
 });
+
 
   const [botLoading, setBotLoading] = useState(false);
   const [botErr, setBotErr] = useState<string | null>(null);
@@ -172,7 +177,7 @@ async function loadEverybot(opts?: {
     qs.set("onlyEnriched", "1");
 
     if (q) qs.set("q", q);
-    if (source && source !== "all") qs.set("source", source);
+    if (source && source !== "all") qs.set("source", String(source));
 
     // ✅ NOWE FILTRY (z panelu)
     if (f.transactionType) qs.set("transactionType", f.transactionType);

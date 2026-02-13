@@ -2,10 +2,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { t } from "@/utils/i18n";
 import type { LangKey } from "@/utils/translations";
+import type { SourceKey } from "@/lib/everybot/enrichers/types";
 
-type EverybotFilters = {
+export type EverybotSource = "all" | SourceKey;
+
+export type EverybotFilters = {
   q: string;
-  source: string;
+  source: EverybotSource;
   transactionType: "" | "sale" | "rent";
   propertyType: string;
   locationText: string;
@@ -17,6 +20,7 @@ type EverybotFilters = {
   maxArea: string;
   rooms: string;
 };
+
 
 function clsx(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
@@ -201,14 +205,19 @@ function onClickSearch() {
     "w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20";
 
   // ✅ backend realnie obsługuje tylko te źródła w harvest
-  const supportedSources = useMemo(
-    () => [
-      { v: "all", label: t(lang, "everybotSourceAll" as any) },
-      { v: "otodom", label: "Otodom" },
-      { v: "olx", label: "OLX" },
-    ],
-    [lang]
-  );
+const supportedSources = useMemo(
+  () => [
+    { v: "all" as const, label: t(lang, "everybotSourceAll" as any) },
+    { v: "otodom" as const, label: "Otodom" },
+    { v: "olx" as const, label: "OLX" },
+    // dopisuj dopiero jak backend realnie obsługuje:
+    // { v: "gratka" as const, label: "Gratka" },
+    // { v: "morizon" as const, label: "Morizon" },
+    // { v: "odwlasciciela" as const, label: "OdWlasciciela" },
+    // { v: "nieruchomosci_online" as const, label: "Nieruchomosci-Online" },
+  ],
+  [lang]
+);
 
   return (
     <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -285,7 +294,7 @@ function onClickSearch() {
           </label>
           <select
             value={f.source}
-            onChange={(e) => patch({ source: e.target.value })}
+            onChange={(e) => patch({ source: e.target.value as EverybotSource })}
             className={inputCls}
           >
             {supportedSources.map((s) => (
