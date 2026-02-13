@@ -102,17 +102,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       where.push(`enriched_at IS NOT NULL`);
     }
 
-    if (q) {
-      where.push(`(
-        LOWER(COALESCE(title,'')) LIKE $${p}
-        OR LOWER(COALESCE(location_text,'')) LIKE $${p}
-        OR LOWER(COALESCE(city,'')) LIKE $${p}
-        OR LOWER(COALESCE(district,'')) LIKE $${p}
-        OR LOWER(COALESCE(street,'')) LIKE $${p}
-      )`);
-      params.push(`%${q}%`);
-      p++;
+      if (q) {
+      // ✅ q może być "mieszkanie, Katowice" -> tokenizujemy
+      const terms = q
+        .split(/[,\s]+/g) // przecinki i spacje
+        .map((t) => t.trim())
+        .filter((t) => t.length >= 2);
+
+      if (terms.length) {
+        const ors: string[] = [];
+
+        for (const term of terms) {
+          ors.push(`(
+            LOWER(COALESCE(title,'')) LIKE $${p}
+            OR LOWER(COALESCE(location_text,'')) LIKE $${p}
+            OR LOWER(COALESCE(city,'')) LIKE $${p}
+            OR LOWER(COALESCE(district,'')) LIKE $${p}
+            OR LOWER(COALESCE(street,'')) LIKE $${p}
+          )`);
+          params.push(`%${term}%`);
+          p++;
+        }
+
+        // ✅ wystarczy, że pasuje dowolny token (OR)
+        where.push(`(${ors.join(" OR ")})`);
+      }
     }
+
     // --- NEW FILTERS FROM SEARCH PANEL ---
 
     const transactionType = optString(req.query.transactionType);
