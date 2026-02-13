@@ -1050,6 +1050,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!userId) return res.status(401).json({ error: "UNAUTHORIZED" });
 
     const officeId = await getOfficeIdForUserId(userId);
+    if (!officeId) return res.status(400).json({ error: "MISSING_OFFICE_ID" });
+
+    console.log("everybot auth:", { userId, officeId });
 
     const limitRaw =
       req.method === "GET"
@@ -1341,6 +1344,11 @@ if (detected === "otodom") {
 const nextCursor = String(lastFetchedPage + 1);
 
 const pagesFetched = Math.max(0, lastFetchedPage - startPage + 1);
+
+console.log("everybot summary:", {
+  totalRowsParsed: allRows.length,
+  upserted,
+});
 
 return res.status(200).json({
   rows: allRows.slice(0, limit), // UI może pokazać tylko 50 – OK
