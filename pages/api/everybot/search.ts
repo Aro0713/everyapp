@@ -1356,6 +1356,7 @@ for (const r of rows) {
     )
     ON CONFLICT (office_id, source, source_listing_id)
     DO UPDATE SET
+      matched_at = now(),
       source_url = EXCLUDED.source_url,
       title = EXCLUDED.title,
       price_amount = EXCLUDED.price_amount,
@@ -1364,7 +1365,6 @@ for (const r of rows) {
       status = EXCLUDED.status,
 
       thumb_url = COALESCE(EXCLUDED.thumb_url, external_listings.thumb_url),
-      matched_at = COALESCE(external_listings.matched_at, EXCLUDED.matched_at),
       transaction_type = COALESCE(EXCLUDED.transaction_type, external_listings.transaction_type),
       property_type = COALESCE(EXCLUDED.property_type, external_listings.property_type),
 

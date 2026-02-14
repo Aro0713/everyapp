@@ -85,11 +85,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const includeInactive = optString(req.query.includeInactive) === "1";
     const onlyEnriched = optString(req.query.onlyEnriched) === "1";
     const includePreview = optString(req.query.includePreview) !== "0"; // domyślnie TAK
-
     const where: string[] = [`office_id = $1`];
     const params: any[] = [officeId];
     let p = 2;
+    const sinceMinutes = optNumber(req.query.sinceMinutes);
+    if (sinceMinutes != null) {
+      where.push(`matched_at >= now() - ($${p++}::int * interval '1 minute')`);
+      params.push(sinceMinutes);
+    }
 
+    if (source && source !== "all") {
+      where.push(`source = $${p++}`);
+      params.push(source);
+    }
     if (source && source !== "all") {
       where.push(`source = $${p++}`);
       params.push(source);
