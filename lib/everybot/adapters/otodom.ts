@@ -71,7 +71,7 @@ function mapEstateToOtodom(v: unknown): OtodomEstate | null {
 
   // dopasuj do Twoich wartości z UI
   if (s.includes("dom") || s === "house") return "dom";
-  if (s.includes("miesz") || s.includes("apart") || s === "flat") return "mieszkanie";
+  if (s.includes("miesz") || s.includes("apart") || s === "flat" || s === "apartment") return "mieszkanie";
   if (s.includes("dzial") || s.includes("grunt") || s === "plot") return "dzialka";
   if (s.includes("lokal") || s.includes("komerc") || s.includes("office")) return "lokal";
   if (s.includes("pokoj") || s.includes("room")) return "pokoj";
@@ -83,9 +83,8 @@ function mapEstateToOtodom(v: unknown): OtodomEstate | null {
 
 // Otodom URL builder: PATH (tx/estate/region) + opcjonalnie phrase
 function buildOtodomUrl(filters: any, page: number) {
-  const tx = mapTxToOtodom(filters?.transaction_type) ?? "sprzedaz";
-  const estate = mapEstateToOtodom(filters?.property_type) ?? "mieszkanie";
-
+  const tx = mapTxToOtodom(filters?.transactionType) ?? "sprzedaz";
+  const estate = mapEstateToOtodom(filters?.propertyType) ?? "mieszkanie";
   // województwo z UI: np. "śląskie" -> "slaskie"
   const voiv = optString(filters?.voivodeship);
   const voivSlug = voiv ? slugifyPl(voiv) : null;
@@ -180,12 +179,10 @@ function detectOtodomDegradation(requestedUrl: string, finalUrl: string): { appl
   if (reqBase !== finBase) {
     return { applied: false, reason: "otodom_redirected_to_canonical_location" };
   }
-
-  // dodatkowy bezpiecznik: często oznacza “zignorowane”
-  if (finBase.includes("/cala-polska")) {
-    return { applied: false, reason: "otodom_redirected_to_canonical_location" };
-  }
-
+  // jeśli prosiliśmy o konkretny region, a final wylądował na "cala-polska" -> degradacja
+if (!reqBase.includes("/cala-polska") && finBase.includes("/cala-polska")) {
+  return { applied: false, reason: "otodom_redirected_to_canonical_location" };
+}
   return { applied: true, reason: "none" };
 }
 

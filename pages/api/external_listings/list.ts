@@ -136,7 +136,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const locationText = optString(req.query.locationText);
     const city = optString(req.query.city);
     const district = optString(req.query.district);
-
+    const voivodeship = optString(req.query.voivodeship);
+    const street = optString(req.query.street);
     const minPrice = optNumber(req.query.minPrice);
     const maxPrice = optNumber(req.query.maxPrice);
     const minArea = optNumber(req.query.minArea);
@@ -166,6 +167,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (district) {
       where.push(`LOWER(COALESCE(district,'')) LIKE $${p++}`);
       params.push(`%${district.toLowerCase()}%`);
+    }
+    if (street) {
+      where.push(`LOWER(COALESCE(street,'')) LIKE $${p++}`);
+      params.push(`%${street.toLowerCase()}%`);
+    }
+    if (voivodeship) {
+      where.push(`LOWER(COALESCE(voivodeship,'')) LIKE $${p++}`);
+      params.push(`%${voivodeship.toLowerCase()}%`);
     }
 
     if (minPrice != null) {

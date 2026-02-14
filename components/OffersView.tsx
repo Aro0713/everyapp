@@ -184,7 +184,7 @@ async function loadEverybot(opts?: {
       const s = v.trim().toLowerCase();
       if (!s) return "";
       if (s.includes("dom")) return "house";
-      if (s.includes("mieszkan")) return "flat";
+      if (s.includes("mieszkan")) return "apartment";
       if (s.includes("działk") || s.includes("dzialk") || s.includes("grunt")) return "plot";
       if (s.includes("lokal") || s.includes("biur") || s.includes("komerc")) return "commercial";
       return s;
@@ -192,7 +192,7 @@ async function loadEverybot(opts?: {
 
     const pt = normalizePropertyTypeForDb(f.propertyType);
     if (pt) qs.set("propertyType", pt);
-
+    if (f.voivodeship.trim()) qs.set("voivodeship", f.voivodeship.trim());
     if (f.city.trim()) qs.set("city", f.city.trim());
     if (f.district.trim()) qs.set("district", f.district.trim());
 
@@ -226,7 +226,8 @@ async function loadEverybot(opts?: {
     setBotCursor(nextCursor);
     setBotHasMore(Boolean(nextCursor) && newRows.length > 0);
         return { rows: newRows, nextCursor };
-  } catch (e: any) {
+  } 
+  catch (e: any) {
     setBotErr(e?.message ?? "Failed to load");
     return { rows: [], nextCursor: null };
   } finally {
@@ -272,7 +273,38 @@ function isHttpUrl(v: unknown): v is string {
   return typeof v === "string" && /^https?:\/\//i.test(v.trim());
 }
 async function runLiveHunter(filtersOverride?: typeof botFilters) {
-  const filters = filtersOverride ?? botFilters;
+  const raw = filtersOverride ?? botFilters;
+
+  const filters = {
+    ...raw,
+    q: (raw.q ?? "").trim(),
+    voivodeship: (raw.voivodeship ?? "").trim(),
+    propertyType: (raw.propertyType ?? "").trim(),
+    city: (raw.city ?? "").trim(),
+    district: (raw.district ?? "").trim(),
+    locationText: (raw.locationText ?? "").trim(),
+    minPrice: (raw.minPrice ?? "").trim(),
+    maxPrice: (raw.maxPrice ?? "").trim(),
+    minArea: (raw.minArea ?? "").trim(),
+    maxArea: (raw.maxArea ?? "").trim(),
+    rooms: (raw.rooms ?? "").trim(),
+  };
+
+  function inferPropertyTypeFromQ(
+    q: string
+  ): "" | "house" | "apartment" | "plot" | "commercial" {
+    const s = q.toLowerCase();
+    if (s.includes("dom")) return "house";
+    if (s.includes("mieszkan")) return "apartment";
+    if (s.includes("działk") || s.includes("dzialk") || s.includes("grunt")) return "plot";
+    if (s.includes("lokal") || s.includes("biur") || s.includes("komerc")) return "commercial";
+    return "";
+  }
+
+  if (!filters.propertyType && filters.q) {
+    const inferred = inferPropertyTypeFromQ(filters.q);
+    if (inferred) filters.propertyType = inferred;
+  }
 
   setBotLoading(true);
   setBotErr(null);
@@ -294,6 +326,7 @@ async function runLiveHunter(filtersOverride?: typeof botFilters) {
     setBotLoading(false);
   }
 }
+
 async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
   const filters = filtersOverride ?? botFilters;
 
