@@ -12,6 +12,7 @@ export type EverybotFilters = {
   transactionType: "" | "sale" | "rent";
   propertyType: string;
   locationText: string;
+  voivodeship: string; // ✅ NOWE
   city: string;
   district: string;
   minPrice: string;
@@ -20,6 +21,7 @@ export type EverybotFilters = {
   maxArea: string;
   rooms: string;
 };
+
 
 
 function clsx(...xs: Array<string | false | null | undefined>) {
@@ -58,7 +60,7 @@ async function reverseGeocodeOSM(lat: number, lon: number) {
     .filter(Boolean)
     .join(", ");
 
-  return { locationText, city, district };
+  return { locationText, city, district, voivodeship: state };
 }
 
 function isNonEmpty(v: unknown): v is string {
@@ -165,14 +167,15 @@ export default function EverybotSearchPanel(props: {
       const lat = pos.coords.latitude;
       const lon = pos.coords.longitude;
 
-      const { locationText, city, district } = await reverseGeocodeOSM(lat, lon);
+      const { locationText, city, district, voivodeship } = await reverseGeocodeOSM(lat, lon);
 
       // ✅ patch na najnowszych filtrach (bez ...f)
-      patch({
+     patch({
         locationText: locationText || latestFiltersRef.current.locationText,
+        voivodeship: (voivodeship || latestFiltersRef.current.voivodeship),
         city: city || latestFiltersRef.current.city,
         district: district || latestFiltersRef.current.district,
-      });
+        });
     } catch (e: any) {
       setGeoErr(e?.message ?? t(lang, "everybotGeoError" as any));
     } finally {
@@ -275,6 +278,18 @@ const supportedSources = useMemo(
       </div>
 
       {/* 2) Search panel */}
+      <div className="md:col-span-3">
+        <label className="mb-1 block text-xs font-semibold text-ew-primary">
+            {t(lang, "everybotVoivodeshipLabel" as any)}
+        </label>
+        <input
+            value={f.voivodeship}
+            onChange={(e) => patch({ voivodeship: e.target.value })}
+            placeholder={t(lang, "everybotVoivodeshipPlaceholder" as any)}
+            className={inputCls}
+        />
+        </div>
+
       <div className="mt-4 grid gap-3 md:grid-cols-12">
         <div className="md:col-span-6">
           <label className="mb-1 block text-xs font-semibold text-ew-primary">

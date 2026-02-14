@@ -5177,6 +5177,27 @@ everybotActionReject: {
     lt: "Nepavyko gauti vietos.",
     vi: "Không thể lấy vị trí.",
   },
+everybotVoivodeshipLabel: {
+  pl: "Województwo",
+  en: "Voivodeship",
+  de: "Woiwodschaft",
+  cs: "Vojvodství",
+  sk: "Vojvodstvo",
+  ua: "Воєводство",
+  lt: "Vaivadija",
+  vi: "Tỉnh (Voivodeship)",
+},
+
+everybotVoivodeshipPlaceholder: {
+  pl: "np. śląskie",
+  en: "e.g. śląskie",
+  de: "z.B. śląskie",
+  cs: "např. śląskie",
+  sk: "napr. śląskie",
+  ua: "напр. śląskie",
+  lt: "pvz. śląskie",
+  vi: "vd: śląskie",
+},
 
 
 } as const);

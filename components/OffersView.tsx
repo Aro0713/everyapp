@@ -94,6 +94,7 @@ const [botFilters, setBotFilters] = useState<EverybotFilters>({
   propertyType: "",
   locationText: "",
   city: "",
+  voivodeship: "",
   district: "",
   minPrice: "",
   maxPrice: "",
