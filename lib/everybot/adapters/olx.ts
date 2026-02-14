@@ -34,7 +34,10 @@ function buildOlxUrl(q: string, page: number) {
     if (page > 1) u.searchParams.set("page", String(page));
     return u.toString();
   }
-  const slug = encodeURIComponent(q.trim().replace(/\s+/g, "-"));
+  const slug = encodeURIComponent(
+  q.trim().replace(/[,\s]+/g, "-").replace(/-+/g, "-")
+);
+
   const base = `https://www.olx.pl/nieruchomosci/q-${slug}/`;
   const u = new URL(base);
   if (page > 1) u.searchParams.set("page", String(page));
@@ -63,77 +66,93 @@ const olxAdapter: PortalAdapter = {
     };
   },
 
-  parseSearch(ctx, html, finalUrl): ParseResult {
-    const $ = cheerio.load(html);
-    const items: SearchItem[] = [];
-    const seen = new Set<string>();
+parseSearch(ctx, html, finalUrl): ParseResult {
+  const $ = cheerio.load(html);
+  const items: SearchItem[] = [];
+  const seen = new Set<string>();
 
-    $("a[href]").each((_, el) => {
-      const href = $(el).attr("href");
-      const full = absUrl(finalUrl, href);
-      if (!full) return;
-      if (!full.includes("/d/oferta/")) return;
-      if (seen.has(full)) return;
-      seen.add(full);
+  // 1) Preferuj karty (stabilniejsze niż wszystkie <a>)
+  const cards =
+    $('article').filter((_, el) => $(el).find('a[href*="/d/oferta/"]').length > 0);
 
-      const card = $(el).closest("article, div").first();
+  const scan = cards.length ? cards : $('a[href*="/d/oferta/"]').map((_, el) => $(el).closest("article, div").first()).get();
 
-      const title =
-        card.find("h2, h3").first().text().trim() ||
-        $(el).attr("aria-label")?.trim() ||
-        $(el).attr("title")?.trim() ||
-        null;
+  for (const el of scan as any[]) {
+    const card = (cards.length ? $(el) : $(el));
 
-      const priceText =
-        card.find('[data-testid="ad-price"], [class*="price"]').first().text().trim() || null;
+    // link do oferty
+    const href =
+      card.find('a[href*="/d/oferta/"]').first().attr("href") ??
+      null;
 
-      const currency =
-        priceText?.includes("€") ? "EUR" :
-        priceText?.toLowerCase().includes("zł") ? "PLN" :
-        null;
+    const full = href ? absUrl(finalUrl, href) : null;
+    if (!full) continue;
+    if (!full.includes("/d/oferta/")) continue;
+    if (seen.has(full)) continue;
+    seen.add(full);
 
-      const priceAmount = parseNumberLoose(priceText);
-      const tx = inferTxFromPriceText(priceText);
+    // tytuł: OLX często ma h6/h5 lub aria-label na linku
+    const linkEl = card.find('a[href*="/d/oferta/"]').first();
 
-      const locationText =
-        card.find('[data-testid="location-date"], [class*="location"]').first().text().trim() || null;
+    const titleRaw =
+      card.find("h4, h5, h6, h3, h2").first().text().trim() ||
+      linkEl.attr("aria-label")?.trim() ||
+      linkEl.attr("title")?.trim() ||
+      linkEl.text().replace(/\s+/g, " ").trim() ||
+      null;
 
-      const img =
-        card.find("img").first().attr("src") ||
-        card.find("img").first().attr("data-src") ||
-        null;
+    const title = titleRaw && titleRaw.length <= 260 ? titleRaw : null;
 
-      items.push({
-        source: "olx",
-        source_url: full,
-        title: title || null,
-        price_amount: priceAmount ?? null,
-        currency,
-        location_text: locationText || null,
-        thumb_url: img ? absUrl(finalUrl, img) : null,
-        transaction_type: tx,
-      });
+    const priceText =
+      card.find('[data-testid="ad-price"], [class*="price"], [data-cy*="price"]').first().text().trim() || null;
+
+    const currency =
+      priceText?.includes("€") ? "EUR" :
+      priceText?.toLowerCase().includes("zł") ? "PLN" :
+      null;
+
+    const priceAmount = parseNumberLoose(priceText);
+    const tx = inferTxFromPriceText(priceText);
+
+    const locationText =
+      card.find('[data-testid="location-date"], [class*="location"], [data-testid*="location"]').first().text().trim() || null;
+
+    const img =
+      card.find("img").first().attr("src") ||
+      card.find("img").first().attr("data-src") ||
+      card.find("img").first().attr("srcset") ||
+      null;
+
+    items.push({
+      source: "olx",
+      source_url: full,
+      title: title || null,
+      price_amount: priceAmount ?? null,
+      currency,
+      location_text: locationText || null,
+      thumb_url: img ? absUrl(finalUrl, img) : null,
+      transaction_type: tx,
     });
+  }
 
-    // hasNext – prosto: jeśli jest page+1 w link rel next
-    const hasNext =
-      $('link[rel="next"]').attr("href") || $('a[rel="next"]').attr("href")
-        ? true
-        : null;
+  const hasNext =
+    $('link[rel="next"]').attr("href") || $('a[rel="next"]').attr("href")
+      ? true
+      : null;
 
-    return {
-      items,
-      hasNext,
-      meta: {
-        source: "olx",
-        requestedUrl: "olx",
-        finalUrl,
-        page: ctx.page,
-        applied: true,
-        degradedReason: "none",
-      },
-    };
-  },
+  return {
+    items,
+    hasNext,
+    meta: {
+      source: "olx",
+      requestedUrl: "olx",
+      finalUrl,
+      page: ctx.page,
+      applied: true,
+      degradedReason: "none",
+    },
+  };
+},
 
   getNextBaseUrl(ctx, html, finalUrl) {
     // trzymamy base bez page

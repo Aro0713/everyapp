@@ -893,8 +893,7 @@ if (r.status === 403 || r.status === 429) {
   throw new Error(`PORTAL_BLOCKED ${r.status}${title ? ` (${title})` : ""}`);
 }
 
-  if (r.status === 403 || r.status === 429) {
-    const title =
+ {const title =
       html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim() ?? "";
     throw new Error(`PORTAL_BLOCKED ${r.status}${title ? ` (${title})` : ""}`);
   }
@@ -921,58 +920,35 @@ function slugifyPl(s: string): string {
 
 function buildOtodomSearchUrl(
   q: string,
-  city?: string | null,
   voivodeship?: string | null,
   transactionType?: "sale" | "rent" | null,
-  propertyType?: string | null,
-  page?: number
+  propertyType?: string | null
 ): string {
   const phrase = (q ?? "").trim();
-  const c = (city ?? "").trim();
   const v = (voivodeship ?? "").trim();
 
-  // mapy na routing otodom
   const txnSeg = transactionType === "rent" ? "wynajem" : "sprzedaz";
 
-  // minimalna mapka typu (MVP)
   const pt = (propertyType ?? "").toLowerCase();
   const typeSeg =
     pt.includes("dom") || pt.includes("house") ? "dom" :
-    pt.includes("miesz") || pt.includes("flat") || pt.includes("apart") ? "mieszkanie" :
+    pt.includes("miesz") || pt.includes("flat") || pt.includes("apart") || pt.includes("apartment") ? "mieszkanie" :
     pt.includes("dzial") || pt.includes("dział") || pt.includes("plot") || pt.includes("grunt") ? "dzialka" :
     pt.includes("lokal") || pt.includes("biur") || pt.includes("commercial") ? "lokal" :
     "mieszkanie";
 
-  // jak nie mamy city albo voiv -> nie budujemy path (bo i tak redirect / degraduje)
-  // zostaw fallback (phrase only), a degradację obsłużysz stopem
-  if (!c || !v) {
-    const u = new URL("https://www.otodom.pl/pl/wyniki");
-    u.searchParams.set("viewType", "listing");
-    if (phrase) u.searchParams.set("search[phrase]", phrase);
-    if (page && page > 1) u.searchParams.set("page", String(page));
-    return u.toString();
-  }
+  const voivSlug = v ? slugifyPl(v) : null;
 
-  const citySlug = slugifyPl(c);
-  const voivSlug = slugifyPl(v);
-
-  // wzorzec jak w Twoim przykładzie (miasto 3x)
-  const base = `https://www.otodom.pl/pl/wyniki/${txnSeg}/${typeSeg}/${voivSlug}/${citySlug}/${citySlug}/${citySlug}`;
+  const base = voivSlug
+    ? `https://www.otodom.pl/pl/wyniki/${txnSeg}/${typeSeg}/${voivSlug}`
+    : `https://www.otodom.pl/pl/wyniki/${txnSeg}/${typeSeg}/cala-polska`;
 
   const u = new URL(base);
-  u.searchParams.set("ownerTypeSingleSelect", "ALL");
-  u.searchParams.set("by", "DEFAULT");
-  u.searchParams.set("direction", "DESC");
-
-  if (page && page > 1) u.searchParams.set("page", String(page));
-
-  // NIE wrzucamy "dom, Sosnowiec" do phrase. Phrase zostaw tylko jako extra słowa (opcjonalnie).
-  // Jeśli chcesz, możesz tu wpiąć sanitized phrase (bez city/dom), ale na MVP pomiń:
-  // if (phrase) u.searchParams.set("search[phrase]", phrase);
+  u.searchParams.set("viewType", "listing");
+  if (phrase) u.searchParams.set("search[phrase]", phrase);
 
   return u.toString();
 }
-
 
 function buildOlxSearchUrl(q: string, city?: string | null, district?: string | null): string {
   const rawQ = (q ?? "").trim();
@@ -1127,21 +1103,14 @@ function buildBaseUrlForSource(src: "otodom" | "olx") {
     (q
       ? (src === "olx"
           ? buildOlxSearchUrl(q)
-          : buildOtodomSearchUrl(
-    q,
-    optString(filters?.city) ?? null,
-    // voivodeship weź z filters.locationText albo dodaj pole w filtrach; MVP: spróbuj z locationText
-    (() => {
-      const lt = optString(filters?.locationText) ?? "";
-      // heurystyka: ostatni człon typu "śląskie", "małopolskie" itd.
-      const m = lt.match(/,\s*([a-ząćęłńóśźż-]+skie)\s*$/i);
-      return m?.[1] ?? null;
-    })(),
-    (optString(filters?.transactionType) as any) ?? null,
-    optString(filters?.propertyType) ?? null,
-    startPage
-  )
-)
+        : buildOtodomSearchUrl(
+          q,
+          optString(filters?.voivodeship) ?? null,
+          (optString(filters?.transactionType) as any) ?? null,
+          optString(filters?.propertyType) ?? null
+        )
+
+        )
       : (src === "olx"
           ? buildOlxSearchUrl("")
           : buildOtodomSearchUrl("", cityForPortal)))
@@ -1224,7 +1193,11 @@ const finalBase = stripPageParam(finalUrl);
 
 const degraded =
   src === "otodom" &&
-  (requestedBase !== finalBase || finalBase.includes("/cala-polska"));
+  (
+    requestedBase !== finalBase ||
+    (!requestedBase.includes("/cala-polska") && finalBase.includes("/cala-polska"))
+  );
+
 
 if (degraded) {
   console.log("everybot degraded:", {
