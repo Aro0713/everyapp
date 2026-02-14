@@ -261,7 +261,12 @@ if (Array.isArray(adsItems) && adsItems.length) {
     if (seen.has(norm)) continue;
     seen.add(norm);
 
-    const title = cleanTitle(firstString(ad?.title)) ?? null;
+    const title =
+  cleanTitle(firstString(ad?.title, ad?.name, ad?.heading)) ??
+  cleanTitle(pickAnyStringByKeys(ad, ["title","name","heading","subtitle","shortDescription","slug"])) ??
+  null;
+  
+    const finalTitle = title ?? cleanTitle(firstString(ad?.slug)) ?? "Oferta z Otodom";
 
     const priceAmount =
       optNumber(ad?.totalPrice?.value) ??

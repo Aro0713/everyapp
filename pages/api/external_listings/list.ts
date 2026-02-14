@@ -93,8 +93,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       params.push(source);
     }
 
-    if (!includeInactive) {
-      where.push(`COALESCE(source_status, 'unknown') = $${p++}`);
+    if (!includeInactive && status) {
+      where.push(`COALESCE(source_status, 'active') = $${p++}`);
       params.push(status);
     }
 
@@ -124,8 +124,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           p++;
         }
 
-        // ✅ wystarczy, że pasuje dowolny token (OR)
-        where.push(`(${ors.join(" OR ")})`);
+                // ✅ filtr q ma sens tylko jeśli rekord ma jakiekolwiek dane tekstowe
+        where.push(`(
+          (
+            COALESCE(title,'') <> ''
+            OR COALESCE(location_text,'') <> ''
+            OR COALESCE(city,'') <> ''
+            OR COALESCE(district,'') <> ''
+            OR COALESCE(street,'') <> ''
+          )
+          AND (${ors.join(" OR ")})
+        )`);
       }
     }
 

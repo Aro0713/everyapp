@@ -132,7 +132,17 @@ parseSearch(ctx, html, finalUrl): ParseResult {
       linkEl.text().replace(/\s+/g, " ").trim() ||
       null;
 
-    const title = titleRaw && titleRaw.length <= 260 ? titleRaw : null;
+    let title = titleRaw && titleRaw.length <= 260 ? titleRaw : null;
+
+    // fallback: tytuł z URL (ostatni segment) – żeby nie wycinać rekordów
+    if (!title) {
+      try {
+        const u = new URL(full);
+        const seg = decodeURIComponent(u.pathname.split("/").filter(Boolean).pop() ?? "");
+        const guess = seg.replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim();
+        if (guess && guess.length <= 260) title = guess;
+      } catch {}
+    }
 
     const priceText =
       card.find('[data-testid="ad-price"], [class*="price"], [data-cy*="price"]').first().text().trim() || null;
