@@ -156,64 +156,85 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const minArea = optNumber(req.query.minArea);
     const maxArea = optNumber(req.query.maxArea);
     const rooms = optNumber(req.query.rooms);
+    
+    const hasDetailFilters =
+  !!transactionType ||
+  !!propertyType ||
+  !!locationText ||
+  !!city ||
+  !!district ||
+  !!voivodeship ||
+  !!street ||
+  minPrice != null ||
+  maxPrice != null ||
+  minArea != null ||
+  maxArea != null ||
+  rooms != null;
 
-    if (transactionType) {
-      where.push(`transaction_type = $${p++}`);
-      params.push(transactionType);
-    }
+// ✅ preview bez detali, ale tylko "świeże", żeby nie pokazywać starych śmieci
+if (includePreview && hasDetailFilters) {
+  where.push(`(status <> 'preview' OR updated_at >= now() - interval '2 hours')`);
+}
 
-    if (propertyType) {
-      where.push(`LOWER(COALESCE(property_type,'')) LIKE $${p++}`);
-      params.push(`%${propertyType.toLowerCase()}%`);
-    }
+if (transactionType) {
+  where.push(`(status = 'preview' OR transaction_type = $${p++})`);
+  params.push(transactionType);
+}
 
-    if (locationText) {
-      where.push(`LOWER(COALESCE(location_text,'')) LIKE $${p++}`);
-      params.push(`%${locationText.toLowerCase()}%`);
-    }
+if (propertyType) {
+  where.push(`(status = 'preview' OR LOWER(COALESCE(property_type,'')) LIKE $${p++})`);
+  params.push(`%${propertyType.toLowerCase()}%`);
+}
 
-    if (city) {
-      where.push(`LOWER(COALESCE(city,'')) LIKE $${p++}`);
-      params.push(`%${city.toLowerCase()}%`);
-    }
+if (locationText) {
+  where.push(`(status = 'preview' OR LOWER(COALESCE(location_text,'')) LIKE $${p++})`);
+  params.push(`%${locationText.toLowerCase()}%`);
+}
 
-    if (district) {
-      where.push(`LOWER(COALESCE(district,'')) LIKE $${p++}`);
-      params.push(`%${district.toLowerCase()}%`);
-    }
-    if (street) {
-      where.push(`LOWER(COALESCE(street,'')) LIKE $${p++}`);
-      params.push(`%${street.toLowerCase()}%`);
-    }
-    if (voivodeship) {
-      where.push(`LOWER(COALESCE(voivodeship,'')) LIKE $${p++}`);
-      params.push(`%${voivodeship.toLowerCase()}%`);
-    }
+if (city) {
+  where.push(`(status = 'preview' OR LOWER(COALESCE(city,'')) LIKE $${p++})`);
+  params.push(`%${city.toLowerCase()}%`);
+}
 
-    if (minPrice != null) {
-      where.push(`price_amount >= $${p++}`);
-      params.push(minPrice);
-    }
+if (district) {
+  where.push(`(status = 'preview' OR LOWER(COALESCE(district,'')) LIKE $${p++})`);
+  params.push(`%${district.toLowerCase()}%`);
+}
 
-    if (maxPrice != null) {
-      where.push(`price_amount <= $${p++}`);
-      params.push(maxPrice);
-    }
+if (street) {
+  where.push(`(status = 'preview' OR LOWER(COALESCE(street,'')) LIKE $${p++})`);
+  params.push(`%${street.toLowerCase()}%`);
+}
 
-    if (minArea != null) {
-      where.push(`area_m2 >= $${p++}`);
-      params.push(minArea);
-    }
+if (voivodeship) {
+  where.push(`(status = 'preview' OR LOWER(COALESCE(voivodeship,'')) LIKE $${p++})`);
+  params.push(`%${voivodeship.toLowerCase()}%`);
+}
 
-    if (maxArea != null) {
-      where.push(`area_m2 <= $${p++}`);
-      params.push(maxArea);
-    }
+if (minPrice != null) {
+  where.push(`(status = 'preview' OR price_amount >= $${p++})`);
+  params.push(minPrice);
+}
 
-    if (rooms != null) {
-      where.push(`rooms = $${p++}`);
-      params.push(rooms);
-    }
+if (maxPrice != null) {
+  where.push(`(status = 'preview' OR price_amount <= $${p++})`);
+  params.push(maxPrice);
+}
+
+if (minArea != null) {
+  where.push(`(status = 'preview' OR area_m2 >= $${p++})`);
+  params.push(minArea);
+}
+
+if (maxArea != null) {
+  where.push(`(status = 'preview' OR area_m2 <= $${p++})`);
+  params.push(maxArea);
+}
+
+if (rooms != null) {
+  where.push(`(status = 'preview' OR rooms = $${p++})`);
+  params.push(rooms);
+}
 
     // ====== TRYB 1: page-based (LIMIT/OFFSET) ======
     if (page != null) {
