@@ -20,23 +20,24 @@ export function portalSafeFiltersFor(
     case "otodom":
       // Otodom: najlepiej PATH (tx + typ) + opcjonalnie region.
       // City/district w URL są niestabilne -> tniemy w DB.
-      return {
+         return {
         q: filters.q,
         transactionType: filters.transactionType,
         propertyType: filters.propertyType,
         voivodeship: filters.voivodeship,
-
-        // jeśli masz te pola w NormalizedFilters i chcesz je w URL (opcjonalne):
-        priceMin: (filters as any).priceMin,
-        priceMax: (filters as any).priceMax,
-        areaMin: (filters as any).areaMin,
-        areaMax: (filters as any).areaMax,
+        city: (filters as any).city,
+        district: (filters as any).district,
+        street: (filters as any).street,
+        minPrice: (filters as any).minPrice,
+        maxPrice: (filters as any).maxPrice,
+        minArea: (filters as any).minArea,
+        maxArea: (filters as any).maxArea,
         rooms: (filters as any).rooms,
-      } as NormalizedFilters;
+        } as NormalizedFilters;
 
-    case "olx":
+         case "olx":
       // OLX: q + podstawowe filtry są stabilne, lokalizacja też zwykle działa.
-      return {
+         return {
         q: filters.q,
         transactionType: filters.transactionType,
         propertyType: filters.propertyType,

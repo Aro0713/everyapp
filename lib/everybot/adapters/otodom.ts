@@ -32,6 +32,7 @@ function stripPageParam(u: string) {
   try {
     const x = new URL(u);
     x.searchParams.delete("page");
+    x.searchParams.delete("viewType");
     return x.toString();
   } catch {
     return u;
@@ -96,15 +97,47 @@ function buildOtodomUrl(filters: any, page: number) {
 
   const u = new URL(`https://www.otodom.pl${path}`);
 
-  // phrase tylko jako dodatkowy tekst, NIE jako filtry
+   // phrase jako dodatkowy tekst (opcjonalnie)
   const q = optString(filters?.q);
   if (q) u.searchParams.set("search[phrase]", q);
+
+  // ✅ FILTRY STRUKTURALNE (Otodom)
+  const city = optString(filters?.city);
+  const district = optString(filters?.district);
+  const street = optString(filters?.street);
+
+  // miasto/dzielnica/ulica jako frazy doprecyzowujące
+  // (Otodom i tak najlepiej działa na phrase, ale teraz budujemy ją Z FILTRÓW)
+  const phraseParts: string[] = [];
+  if (q) phraseParts.push(q);
+  if (city) phraseParts.push(city);
+  if (district) phraseParts.push(district);
+  if (street) phraseParts.push(street);
+
+  if (phraseParts.length) {
+    u.searchParams.set("search[phrase]", phraseParts.join(", "));
+  }
+
+  // cena
+  const minPrice = optNumber(filters?.minPrice);
+  const maxPrice = optNumber(filters?.maxPrice);
+  if (minPrice != null) u.searchParams.set("search[filter_float_price:from]", String(minPrice));
+  if (maxPrice != null) u.searchParams.set("search[filter_float_price:to]", String(maxPrice));
+
+  // metraż
+  const minArea = optNumber(filters?.minArea);
+  const maxArea = optNumber(filters?.maxArea);
+  if (minArea != null) u.searchParams.set("search[filter_float_m:from]", String(minArea));
+  if (maxArea != null) u.searchParams.set("search[filter_float_m:to]", String(maxArea));
+
+  // pokoje
+  const rooms = optNumber(filters?.rooms);
+  if (rooms != null) u.searchParams.set("search[filter_enum_rooms_num][]", String(rooms));
 
   u.searchParams.set("viewType", "listing");
   if (page > 1) u.searchParams.set("page", String(page));
   return u.toString();
 }
-
 
 function normalizeOfferUrl(u: string): string {
   return u.replace("://www.otodom.pl/hpr/", "://www.otodom.pl/");
@@ -191,7 +224,6 @@ const otodomAdapter: PortalAdapter = {
 
   buildSearchRequest(ctx) {
     const safe = portalSafeFiltersFor("otodom", ctx.filters);
-    const q = safe.q ?? "";
     const url = buildOtodomUrl(safe, ctx.page);
 
     return {
