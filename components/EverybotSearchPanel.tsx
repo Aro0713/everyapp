@@ -14,6 +14,7 @@ export type EverybotFilters = {
   locationText: string;
   voivodeship: string; // ✅ NOWE
   city: string;
+  street?: string;
   district: string;
   minPrice: string;
   maxPrice: string;

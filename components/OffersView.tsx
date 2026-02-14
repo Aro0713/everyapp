@@ -234,6 +234,47 @@ async function loadEverybot(opts?: {
     setBotLoading(false);
   }
 }
+  async function refreshEverybotList() {
+  try {
+    const qs = new URLSearchParams();
+    qs.set("limit", "50");
+    qs.set("includeInactive", "1");
+    qs.set("includePreview", "0"); // bo wycinasz preview przy filtrach
+    qs.set("onlyEnriched", "1");   // pokaż tylko enriched/active
+    qs.set("sinceMinutes", "30");  // tylko świeże (dopasuj)
+
+    // jeśli masz source/filter w stanie – dodaj je
+    if (botFilters?.source && botFilters.source !== "all") qs.set("source", botFilters.source);
+
+    // ważne: do list.ts wysyłasz filtry z panelu (tak jak robisz teraz)
+    if (botFilters?.transactionType) qs.set("transactionType", botFilters.transactionType);
+    if (botFilters?.propertyType) qs.set("propertyType", botFilters.propertyType);
+    if (botFilters?.locationText) qs.set("locationText", botFilters.locationText);
+    if (botFilters?.city) qs.set("city", botFilters.city);
+    if (botFilters?.district) qs.set("district", botFilters.district);
+    if (botFilters?.voivodeship) qs.set("voivodeship", botFilters.voivodeship);
+    if (botFilters?.street) qs.set("street", botFilters.street);
+    if (botFilters?.minPrice != null) qs.set("minPrice", String(botFilters.minPrice));
+    if (botFilters?.maxPrice != null) qs.set("maxPrice", String(botFilters.maxPrice));
+    if (botFilters?.minArea != null) qs.set("minArea", String(botFilters.minArea));
+    if (botFilters?.maxArea != null) qs.set("maxArea", String(botFilters.maxArea));
+    if (botFilters?.rooms != null) qs.set("rooms", String(botFilters.rooms));
+
+    // q jako fallback/phrase
+    if (botFilters?.q) qs.set("q", botFilters.q);
+
+    const r = await fetch(`/api/external_listings/list?${qs.toString()}`);
+    const j = await r.json();
+    if (!r.ok) throw new Error(j?.error ?? "List error");
+
+    setBotRows(Array.isArray(j?.rows) ? j.rows : []);
+    setBotHasMore(Boolean(j?.nextCursor)); // jeśli używasz cursor
+  } catch (e: any) {
+    // nie spamuj errorami podczas polling
+    console.warn("everybot refresh failed:", e?.message ?? e);
+  }
+}
+
 
   async function importLink() {
     const url = importUrl.trim();
@@ -520,7 +561,19 @@ async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
               setBotCursor(null);
               setBotHasMore(false);
             }}
-            onSearch={(filters) => searchEverybotWithFallback(filters)}
+            onSearch={async (filters) => {
+              await searchEverybotWithFallback(filters);
+              await new Promise((r) => setTimeout(r, 1000));
+              await refreshEverybotList();
+              // ✅ auto-refresh co 5s przez 90s (18 prób)
+              let ticks = 0;
+              const id = window.setInterval(async () => {
+                ticks += 1;
+                await refreshEverybotList();
+                if (ticks >= 18) window.clearInterval(id);
+              }, 5000);
+            }}
+
           />
             {/* Results */}
             <div className="mt-6 rounded-2xl border border-gray-200 bg-white">

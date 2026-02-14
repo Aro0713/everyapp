@@ -181,70 +181,71 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   maxArea != null ||
   rooms != null;
 
-// ✅ preview bez detali, ale tylko "świeże", żeby nie pokazywać starych śmieci
-if (includePreview && hasDetailFilters) {
-  where.push(`(status <> 'preview' OR updated_at >= now() - interval '2 hours')`);
+// Jeśli są filtry szczegółowe → nie pokazuj preview
+if (hasDetailFilters) {
+  where.push(`status <> 'preview'`);
 }
 
 if (transactionType) {
-  where.push(`(status = 'preview' OR transaction_type = $${p++})`);
+  where.push(`transaction_type = $${p++}`);
   params.push(transactionType);
 }
 
 if (propertyType) {
-  where.push(`(status = 'preview' OR LOWER(COALESCE(property_type,'')) LIKE $${p++})`);
+  where.push(`LOWER(COALESCE(property_type,'')) LIKE $${p++}`);
   params.push(`%${propertyType.toLowerCase()}%`);
 }
 
 if (locationText) {
-  where.push(`(status = 'preview' OR LOWER(COALESCE(location_text,'')) LIKE $${p++})`);
+  where.push(`LOWER(COALESCE(location_text,'')) LIKE $${p++}`);
   params.push(`%${locationText.toLowerCase()}%`);
 }
 
 if (city) {
-  where.push(`(status = 'preview' OR LOWER(COALESCE(city,'')) LIKE $${p++})`);
+  where.push(`LOWER(COALESCE(city,'')) LIKE $${p++}`);
   params.push(`%${city.toLowerCase()}%`);
 }
 
 if (district) {
-  where.push(`(status = 'preview' OR LOWER(COALESCE(district,'')) LIKE $${p++})`);
+  where.push(`LOWER(COALESCE(district,'')) LIKE $${p++}`);
   params.push(`%${district.toLowerCase()}%`);
 }
 
 if (street) {
-  where.push(`(status = 'preview' OR LOWER(COALESCE(street,'')) LIKE $${p++})`);
+  where.push(`LOWER(COALESCE(street,'')) LIKE $${p++}`);
   params.push(`%${street.toLowerCase()}%`);
 }
 
 if (voivodeship) {
-  where.push(`(status = 'preview' OR LOWER(COALESCE(voivodeship,'')) LIKE $${p++})`);
+  where.push(`LOWER(COALESCE(voivodeship,'')) LIKE $${p++}`);
   params.push(`%${voivodeship.toLowerCase()}%`);
 }
 
 if (minPrice != null) {
-  where.push(`(status = 'preview' OR price_amount >= $${p++})`);
+  where.push(`price_amount >= $${p++}`);
   params.push(minPrice);
 }
 
 if (maxPrice != null) {
-  where.push(`(status = 'preview' OR price_amount <= $${p++})`);
+  where.push(`price_amount <= $${p++}`);
   params.push(maxPrice);
 }
 
 if (minArea != null) {
-  where.push(`(status = 'preview' OR area_m2 >= $${p++})`);
+  where.push(`area_m2 >= $${p++}`);
   params.push(minArea);
 }
 
 if (maxArea != null) {
-  where.push(`(status = 'preview' OR area_m2 <= $${p++})`);
+  where.push(`area_m2 <= $${p++}`);
   params.push(maxArea);
 }
 
 if (rooms != null) {
-  where.push(`(status = 'preview' OR rooms = $${p++})`);
+  where.push(`rooms = $${p++}`);
   params.push(rooms);
 }
+
 
     // ====== TRYB 1: page-based (LIMIT/OFFSET) ======
     if (page != null) {
