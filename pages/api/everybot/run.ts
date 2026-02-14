@@ -104,8 +104,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const cursor =
         typeof body.cursor === "string" && body.cursor.trim() ? body.cursor.trim() : "1";
 
-      const harvestPages = 5;
-      const harvestLimit = 50;
+      const harvestPages = 2;
+      const harvestLimit = 30;
 
       // ✅ tylko whitelisted źródła dla run (all => otodom+olx)
       const sourcesToRun = source === "all" ? ["otodom", "olx"] : [source];
@@ -118,16 +118,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const city = typeof filters?.city === "string" ? filters.city.trim() : "";
           const district = typeof filters?.district === "string" ? filters.district.trim() : "";
 
-          if (src === "otodom" && (city || district)) {
-            harvestBySource[src] = {
-              skipped: true,
-              reason: "OTODOM_LOCATION_NOT_SUPPORTED_YET",
-              city,
-              district,
-            };
-            nextCursorBySource[src] = null;
-            continue;
-          }
         try {
           // IMPORTANT: search endpoint nadal dostaje q/source/cursor/limit/pages
           // (filtry szczegółowe działają na DB w /external_listings/list)
@@ -155,7 +145,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       let enrichTotal = 0;
       for (let i = 0; i < 6; i++) {
-        const j2 = await callInternal(req, "/api/everybot/enrich", { limit: 50 });
+        const j2 = await callInternal(req, "/api/everybot/enrich", { limit: 20 });
         const processed = Number(j2?.processed ?? 0);
         if (!Number.isFinite(processed) || processed <= 0) break;
         enrichTotal += processed;
@@ -163,7 +153,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       let verifyTotal = 0;
       for (let i = 0; i < 2; i++) {
-        const j3 = await callInternal(req, "/api/everybot/verify", { limit: 100 });
+        const j3 = await callInternal(req, "/api/everybot/verify", { limit: 50 });
         const processed = Number(j3?.processed ?? 0);
         if (!Number.isFinite(processed) || processed <= 0) break;
         verifyTotal += processed;

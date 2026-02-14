@@ -1064,6 +1064,7 @@ function samePath(a: string, b: string): boolean {
 /* -------------------- handler -------------------- */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
+    const UPSERT_BUDGET = 60; // max insert/update per request (chroni przed timeoutem)
     if (req.method !== "GET" && req.method !== "POST") {
   res.setHeader("Allow", "GET, POST");
   return res.status(405).json({ error: "Method not allowed" });
@@ -1412,7 +1413,20 @@ for (const r of rows) {
     ]
   );
 
-  upserted += 1;
+    upserted += 1;
+
+    if (upserted >= UPSERT_BUDGET) {
+      console.log("everybot budget reached:", { upserted });
+
+      return res.status(200).json({
+        rows: allRows.slice(0, limit),
+        nextCursor: String(lastFetchedPage + 1),
+        upserted,
+        pagesFetched: Math.max(0, lastFetchedPage - startPage + 1),
+        totalRowsParsed: allRows.length,
+        canonicalBaseUrls,
+      });
+    }
 }
 
 if (skippedMissingTitle || skippedMissingUrl) {
