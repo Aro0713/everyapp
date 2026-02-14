@@ -1045,6 +1045,15 @@ function getOtodomNextUrlFromNextData(pageUrl: string, html: string): string | n
   const full = typeof raw === "string" ? absUrl(pageUrl, raw) : null;
   return full ? normalizeOtodomUrl(full) : null;
 }
+function samePath(a: string, b: string): boolean {
+  try {
+    const ua = new URL(a);
+    const ub = new URL(b);
+    return ua.origin === ub.origin && ua.pathname === ub.pathname;
+  } catch {
+    return a === b;
+  }
+}
 
 
 /* -------------------- handler -------------------- */
@@ -1216,10 +1225,9 @@ const finalBase = stripPageParam(finalUrl);
 const degraded =
   src === "otodom" &&
   (
-    requestedBase !== finalBase ||
+    !samePath(requestedBase, finalBase) ||
     (!requestedBase.includes("/cala-polska") && finalBase.includes("/cala-polska"))
   );
-
 
 if (degraded) {
   console.log("everybot degraded:", {

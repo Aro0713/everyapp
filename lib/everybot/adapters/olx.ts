@@ -43,6 +43,37 @@ function buildOlxUrl(q: string, page: number) {
   if (page > 1) u.searchParams.set("page", String(page));
   return u.toString();
 }
+function extractJsonLdItems(html: string): Array<{ url?: string; name?: string; title?: string }> {
+  const $ = cheerio.load(html);
+  const out: Array<{ url?: string; name?: string; title?: string }> = [];
+
+  $('script[type="application/ld+json"]').each((_, el) => {
+    const txt = $(el).text();
+    if (!txt) return;
+    try {
+      const j = JSON.parse(txt);
+
+      const graphs = Array.isArray(j) ? j : [j];
+      for (const node of graphs) {
+        // ItemList -> itemListElement
+        const items = node?.itemListElement;
+        if (Array.isArray(items)) {
+          for (const it of items) {
+            const url = it?.url ?? it?.item?.url;
+            const name = it?.name ?? it?.item?.name;
+            const title = it?.title ?? it?.item?.title;
+            if (url || name || title) out.push({ url, name, title });
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+  });
+
+  return out;
+}
+
 
 const olxAdapter: PortalAdapter = {
   source: "olx",
@@ -117,10 +148,14 @@ parseSearch(ctx, html, finalUrl): ParseResult {
     const locationText =
       card.find('[data-testid="location-date"], [class*="location"], [data-testid*="location"]').first().text().trim() || null;
 
+    const imgEl = card.find("img").first();
+    const srcset = imgEl.attr("srcset");
+    const srcsetUrl = srcset ? srcset.split(",")[0]?.trim().split(" ")[0] : null;
+
     const img =
-      card.find("img").first().attr("src") ||
-      card.find("img").first().attr("data-src") ||
-      card.find("img").first().attr("srcset") ||
+      imgEl.attr("src") ||
+      imgEl.attr("data-src") ||
+      srcsetUrl ||
       null;
 
     items.push({
@@ -134,6 +169,25 @@ parseSearch(ctx, html, finalUrl): ParseResult {
       transaction_type: tx,
     });
   }
+    // Fallback: jeśli wszystkie tytuły puste, spróbuj JSON-LD (ItemList)
+  if (items.length && items.every((x) => !x.title)) {
+    const ld = extractJsonLdItems(html);
+
+    const byUrl = new Map<string, string>();
+    for (const it of ld) {
+      const u = optString(it.url);
+      const t = optString(it.name) ?? optString(it.title);
+      if (u && t) byUrl.set(u, t);
+    }
+
+    for (const it of items) {
+      if (!it.title) {
+        const t = byUrl.get(it.source_url);
+        if (t) it.title = t;
+      }
+    }
+  }
+
 
   const hasNext =
     $('link[rel="next"]').attr("href") || $('a[rel="next"]').attr("href")
