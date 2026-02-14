@@ -25,9 +25,9 @@ type Row = {
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
-    if (req.method !== "POST") {
-      res.setHeader("Allow", "POST");
-      return res.status(405).json({ error: "Method not allowed" });
+    if (req.method !== "GET") {
+    res.setHeader("Allow", "GET");
+    return res.status(405).json({ error: "Method not allowed" });
     }
 
     // ✅ Vercel Cron auth (bez sekretów w repo)
@@ -36,7 +36,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(401).json({ error: "UNAUTHORIZED" });
     }
 
-    const limit = typeof req.body?.limit === "number" ? req.body.limit : 50;
+    const limit = 50;
 
     const { rows } = await pool.query<Row>(
       `
