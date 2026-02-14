@@ -917,6 +917,18 @@ function slugifyPl(s: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 }
+function normalizeVoivodeshipInput(v?: string | null): string | null {
+  const s = (v ?? "").trim();
+  if (!s) return null;
+
+  // usuń: "województwo", "wojewodztwo", "woj.", "woj "
+  const out = s
+    .replace(/^wojew[oó]dztwo\s+/i, "")
+    .replace(/^woj\.?\s+/i, "")
+    .trim();
+
+  return out || null;
+}
 
 function buildOtodomSearchUrl(
   q: string,
@@ -925,7 +937,7 @@ function buildOtodomSearchUrl(
   propertyType?: string | null
 ): string {
   const phrase = (q ?? "").trim();
-  const v = (voivodeship ?? "").trim();
+  const vRaw = normalizeVoivodeshipInput(voivodeship);
 
   const txnSeg = transactionType === "rent" ? "wynajem" : "sprzedaz";
 
@@ -937,7 +949,7 @@ function buildOtodomSearchUrl(
     pt.includes("lokal") || pt.includes("biur") || pt.includes("commercial") ? "lokal" :
     "mieszkanie";
 
-  const voivSlug = v ? slugifyPl(v) : null;
+  const voivSlug = vRaw ? slugifyPl(vRaw) : null;
 
   const base = voivSlug
     ? `https://www.otodom.pl/pl/wyniki/${txnSeg}/${typeSeg}/${voivSlug}`
@@ -1185,7 +1197,22 @@ for (const src of harvestSources) {
     return res.status(400).json({ error: "Unsupported source url" });
   }
 
- const { html, finalUrl } = await fetchHtmlWithFinalUrl(pageUrl);
+let html = "";
+let finalUrl = pageUrl;
+
+try {
+  const got = await fetchHtmlWithFinalUrl(pageUrl);
+  html = got.html;
+  finalUrl = got.finalUrl;
+} catch (e: any) {
+  console.log("everybot source fetch failed:", {
+    src,
+    requested: pageUrl,
+    error: e?.message ?? String(e),
+  });
+  break; // przerywamy to źródło, ale NIE wywalamy całego /search
+}
+
 
 // 🔎 DETEKCJA DEGRADACJI OTODOM (redirect do canonical)
 const requestedBase = stripPageParam(pageUrl);
