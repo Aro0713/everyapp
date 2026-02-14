@@ -261,9 +261,9 @@ if (Array.isArray(adsItems) && adsItems.length) {
     if (seen.has(norm)) continue;
     seen.add(norm);
 
-    const title =
+ const title =
   cleanTitle(firstString(ad?.title, ad?.name, ad?.heading)) ??
-  cleanTitle(pickAnyStringByKeys(ad, ["title","name","heading","subtitle","shortDescription","slug"])) ??
+  cleanTitle(pickAnyStringByKeys(ad, ["title","name","heading","subtitle","slug","shortDescription"])) ??
   null;
   
     const finalTitle = title ?? cleanTitle(firstString(ad?.slug)) ?? "Oferta z Otodom";
@@ -309,7 +309,7 @@ if (Array.isArray(adsItems) && adsItems.length) {
       office_id: null,
       source: "otodom",
       source_url: norm,
-      title,
+      title: finalTitle,
       price_amount: priceAmount,
       currency,
       location_text,
@@ -1296,6 +1296,18 @@ for (const r of rows) {
     skippedMissingUrl++;
     continue;
   }
+
+  if (!r.title || !String(r.title).trim()) {
+  // MVP fallback: tytuł z URL (ostatni segment ścieżki)
+  try {
+    const u = new URL(r.source_url);
+    const seg = decodeURIComponent(u.pathname.split("/").filter(Boolean).pop() ?? "");
+    const guess = seg.replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim();
+    if (guess && guess.length <= 260) {
+      r.title = guess;
+    }
+  } catch {}
+}
 
   if (!r.title || !String(r.title).trim()) {
     skippedMissingTitle++;

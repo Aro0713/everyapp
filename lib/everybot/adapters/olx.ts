@@ -183,17 +183,21 @@ parseSearch(ctx, html, finalUrl): ParseResult {
   if (items.length && items.every((x) => !x.title)) {
     const ld = extractJsonLdItems(html);
 
-    const byUrl = new Map<string, string>();
+   const byPath = new Map<string, string>();
     for (const it of ld) {
       const u = optString(it.url);
       const t = optString(it.name) ?? optString(it.title);
-      if (u && t) byUrl.set(u, t);
+      if (u && t) {
+        try { byPath.set(new URL(u).pathname, t); } catch {}
+      }
     }
 
     for (const it of items) {
       if (!it.title) {
-        const t = byUrl.get(it.source_url);
-        if (t) it.title = t;
+        try {
+          const t = byPath.get(new URL(it.source_url).pathname);
+          if (t) it.title = t;
+        } catch {}
       }
     }
   }
