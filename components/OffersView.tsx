@@ -636,7 +636,31 @@ async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
                           {/* Tytuł */}
                           <td className="px-4 py-3 font-semibold text-ew-primary">
                             <div className="truncate">{r.title ?? "-"}</div>
-                            <div className="text-xs text-gray-500">{r.status}</div>
+                            <div className="mt-1">
+                              {r.status === "preview" && (
+                                <span className="inline-flex items-center rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
+                                  {t(lang, "everybotStatusPreview" as any)}
+                                </span>
+                              )}
+
+                              {(r.status === "enriched" || r.status === "active") && (
+                                <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
+                                  {t(lang, "everybotStatusOk" as any)}
+                                </span>
+                              )}
+
+                              {r.status === "error" && (
+                                <span className="inline-flex items-center rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
+                                  {t(lang, "everybotStatusError" as any)}
+                                </span>
+                              )}
+
+                              {!["preview", "enriched", "active", "error"].includes(String(r.status)) && (
+                                <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">
+                                  {String(r.status)}
+                                </span>
+                              )}
+                            </div>
                           </td>
 
                           {/* Portal */}

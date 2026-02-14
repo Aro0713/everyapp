@@ -5198,6 +5198,38 @@ everybotVoivodeshipPlaceholder: {
   lt: "pvz. śląskie",
   vi: "vd: śląskie",
 },
+everybotStatusPreview: {
+  pl: "Uzupełniam...",
+  en: "Enriching...",
+  de: "Wird ergänzt...",
+  cs: "Doplňuji...",
+  sk: "Dopĺňam...",
+  ua: "Оновлюється...",
+  lt: "Pildoma...",
+  vi: "Đang cập nhật..."
+},
+
+everybotStatusOk: {
+  pl: "OK",
+  en: "OK",
+  de: "OK",
+  cs: "OK",
+  sk: "OK",
+  ua: "OK",
+  lt: "OK",
+  vi: "OK"
+},
+
+everybotStatusError: {
+  pl: "Błąd",
+  en: "Error",
+  de: "Fehler",
+  cs: "Chyba",
+  sk: "Chyba",
+  ua: "Помилка",
+  lt: "Klaida",
+  vi: "Lỗi"
+}
 
 
 } as const);

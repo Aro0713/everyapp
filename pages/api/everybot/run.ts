@@ -143,32 +143,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       }
 
-      let enrichTotal = 0;
-      for (let i = 0; i < 6; i++) {
-        const j2 = await callInternal(req, "/api/everybot/enrich", { limit: 20 });
-        const processed = Number(j2?.processed ?? 0);
-        if (!Number.isFinite(processed) || processed <= 0) break;
-        enrichTotal += processed;
-      }
-
-      let verifyTotal = 0;
-      for (let i = 0; i < 2; i++) {
-        const j3 = await callInternal(req, "/api/everybot/verify", { limit: 50 });
-        const processed = Number(j3?.processed ?? 0);
-        if (!Number.isFinite(processed) || processed <= 0) break;
-        verifyTotal += processed;
-      }
-
-      return res.status(200).json({
+           return res.status(200).json({
         ok: true,
         officeId,
         harvestedTotal,
         harvestBySource,
         nextCursorBySource,
-        enrichTotal,
-        verifyTotal,
         config: {
-          // zwracamy oba: finalne q/source oraz pełny filtr (dla debug)
           q,
           source,
           cursor,
@@ -177,6 +158,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           filters: filters ?? null,
         },
       });
+
     } finally {
       await releaseOfficeLock(officeId);
     }

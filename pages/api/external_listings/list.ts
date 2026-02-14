@@ -9,6 +9,7 @@ type Row = {
   office_id: string;
   source: string;
   source_url: string;
+  status: string;
   title: string | null;
   description: string | null;
   price_amount: number | null;
@@ -83,6 +84,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const status = optString(req.query.status) ?? "active";
     const includeInactive = optString(req.query.includeInactive) === "1";
     const onlyEnriched = optString(req.query.onlyEnriched) === "1";
+    const includePreview = optString(req.query.includePreview) !== "0"; // domyślnie TAK
 
     const where: string[] = [`office_id = $1`];
     const params: any[] = [officeId];
@@ -99,7 +101,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (onlyEnriched) {
-      where.push(`enriched_at IS NOT NULL`);
+    where.push(`status IN ('enriched','active')`);
     }
 
       if (q) {
@@ -125,7 +127,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
                 // ✅ filtr q ma sens tylko jeśli rekord ma jakiekolwiek dane tekstowe
-        where.push(`(
+          where.push(`(
+        (${includePreview ? "status = 'preview' OR" : ""} (
           (
             COALESCE(title,'') <> ''
             OR COALESCE(location_text,'') <> ''
@@ -134,7 +137,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             OR COALESCE(street,'') <> ''
           )
           AND (${ors.join(" OR ")})
-        )`);
+        ))
+      )`);
       }
     }
 
@@ -227,9 +231,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const sql = `
         SELECT
-          id, office_id, source, source_url,
-          title, description,
-          price_amount, currency, location_text,
+        id, office_id, source, source_url, status,
+        title, description,
+        price_amount, currency, location_text,
           thumb_url, matched_at,
           transaction_type, property_type,
           area_m2, price_per_m2, rooms,
@@ -268,7 +272,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const sql = `
       SELECT
-        id, office_id, source, source_url,
+        id, office_id, source, source_url, status,
         title, description,
         price_amount, currency, location_text,
         thumb_url, matched_at,

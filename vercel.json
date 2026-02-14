@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/everybot/enrich-run",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/everybot/verify-run",
+      "schedule": "*/10 * * * *"
+    }
+  ]
+}
