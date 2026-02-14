@@ -6,6 +6,11 @@ import type { SourceKey } from "../enrichers/types";
  * Portal-safe filtry = tylko to,
  * co jest stabilne w URL danego portalu.
  * Resztę docinamy w Neon.
+ *
+ * Zasada:
+ * - "safe" = parametry, które realnie da się zakodować w URL danego portalu
+ *   bez ryzyka canonical redirect / ignorowania / przestawiania typu.
+ * - szczegółowe docinanie (dzielnica, ulica, itd.) robimy po stronie DB.
  */
 export function portalSafeFiltersFor(
   source: SourceKey,
@@ -13,24 +18,86 @@ export function portalSafeFiltersFor(
 ): NormalizedFilters {
   switch (source) {
     case "otodom":
-      // Otodom jest niestabilny w path city,
-      // więc MVP: tylko q + transactionType
+      // Otodom: najlepiej PATH (tx + typ) + opcjonalnie region.
+      // City/district w URL są niestabilne -> tniemy w DB.
       return {
         q: filters.q,
         transactionType: filters.transactionType,
-      };
+        propertyType: filters.propertyType,
+        voivodeship: filters.voivodeship,
+
+        // jeśli masz te pola w NormalizedFilters i chcesz je w URL (opcjonalne):
+        priceMin: (filters as any).priceMin,
+        priceMax: (filters as any).priceMax,
+        areaMin: (filters as any).areaMin,
+        areaMax: (filters as any).areaMax,
+        rooms: (filters as any).rooms,
+      } as NormalizedFilters;
 
     case "olx":
-      // OLX działa głównie przez q
+      // OLX: q + podstawowe filtry są stabilne, lokalizacja też zwykle działa.
       return {
         q: filters.q,
-      };
+        transactionType: filters.transactionType,
+        propertyType: filters.propertyType,
+        voivodeship: filters.voivodeship,
+        city: (filters as any).city,
+        district: (filters as any).district,
+        priceMin: (filters as any).priceMin,
+        priceMax: (filters as any).priceMax,
+        areaMin: (filters as any).areaMin,
+        areaMax: (filters as any).areaMax,
+        rooms: (filters as any).rooms,
+      } as NormalizedFilters;
+
+    case "morizon":
+      // Morizon: zwykle stabilne są: typ, transakcja, miasto/region, cena, metraż.
+      return {
+        q: filters.q,
+        transactionType: filters.transactionType,
+        propertyType: filters.propertyType,
+        voivodeship: filters.voivodeship,
+        city: (filters as any).city,
+        priceMin: (filters as any).priceMin,
+        priceMax: (filters as any).priceMax,
+        areaMin: (filters as any).areaMin,
+        areaMax: (filters as any).areaMax,
+        rooms: (filters as any).rooms,
+      } as NormalizedFilters;
 
     case "gratka":
-    case "morizon":
+      // Gratka: podobnie – transakcja/typ/lokalizacja/cena/metraż są OK.
+      return {
+        q: filters.q,
+        transactionType: filters.transactionType,
+        propertyType: filters.propertyType,
+        voivodeship: filters.voivodeship,
+        city: (filters as any).city,
+        priceMin: (filters as any).priceMin,
+        priceMax: (filters as any).priceMax,
+        areaMin: (filters as any).areaMin,
+        areaMax: (filters as any).areaMax,
+        rooms: (filters as any).rooms,
+      } as NormalizedFilters;
+
     case "odwlasciciela":
     case "nieruchomosci_online":
+      // mniejsze portale: na start bezpiecznie q + transakcja + typ + region.
+      return {
+        q: filters.q,
+        transactionType: filters.transactionType,
+        propertyType: filters.propertyType,
+        voivodeship: filters.voivodeship,
+        city: (filters as any).city,
+        priceMin: (filters as any).priceMin,
+        priceMax: (filters as any).priceMax,
+        areaMin: (filters as any).areaMin,
+        areaMax: (filters as any).areaMax,
+        rooms: (filters as any).rooms,
+      } as NormalizedFilters;
+
     default:
+      // fallback: minimum
       return {
         q: filters.q,
       };

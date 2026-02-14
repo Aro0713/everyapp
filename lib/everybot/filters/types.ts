@@ -12,24 +12,32 @@ export type PropertyType =
   | "other";
 
 export type NormalizedFilters = {
-  // fraza wyszukiwania (np. "dom Kraków")
+  // tekst
   q?: string;
+  source?: "all" | SourceKey;
 
-  // źródło
-  source?: SourceKey | "all";
-
-  // bezpieczne dla portali (częściowo)
+  // transakcja / typ
   transactionType?: TxType | "";
   propertyType?: PropertyType | "";
 
-  // lokalizacja (MVP: DB-only, nie wciskamy na siłę do URL)
+  // lokalizacja
+  voivodeship?: string;
+  location?: string;
   city?: string;
   district?: string;
 
-  // zakresy – zawsze DB-only
+  // liczby
   minPrice?: number | null;
   maxPrice?: number | null;
   minArea?: number | null;
   maxArea?: number | null;
   rooms?: number | null;
+
+  // aliasy (jeśli używasz w portalSafe/adapters)
+  priceMin?: number | null;
+  priceMax?: number | null;
+  areaMin?: number | null;
+  areaMax?: number | null;
 };
+
+

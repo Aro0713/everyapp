@@ -37,17 +37,75 @@ function stripPageParam(u: string) {
     return u;
   }
 }
+function slugifyPl(s: string): string {
+  return s
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // usuń znaki diakrytyczne
+    .replace(/ł/g, "l")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
-// Otodom URL builder (MVP): tylko phrase + paging.
-// Lokalizacja w phrase bywa ignorowana przez Otodom -> wtedy portal redirectuje.
-// W takim przypadku NIE zapisujemy wyników i NIE stronujemy.
-function buildOtodomUrl(q: string, page: number) {
-  const u = new URL("https://www.otodom.pl/pl/wyniki");
+type OtodomTx = "sprzedaz" | "wynajem";
+type OtodomEstate =
+  | "mieszkanie"
+  | "dom"
+  | "dzialka"
+  | "lokal"
+  | "pokoj"
+  | "garaz";
+
+function mapTxToOtodom(v: unknown): OtodomTx | null {
+  const s = optString(v)?.toLowerCase();
+  if (!s) return null;
+  if (s === "sale" || s.includes("sprzed")) return "sprzedaz";
+  if (s === "rent" || s.includes("wynaj")) return "wynajem";
+  return null;
+}
+
+function mapEstateToOtodom(v: unknown): OtodomEstate | null {
+  const s = optString(v)?.toLowerCase();
+  if (!s) return null;
+
+  // dopasuj do Twoich wartości z UI
+  if (s.includes("dom") || s === "house") return "dom";
+  if (s.includes("miesz") || s.includes("apart") || s === "flat") return "mieszkanie";
+  if (s.includes("dzial") || s.includes("grunt") || s === "plot") return "dzialka";
+  if (s.includes("lokal") || s.includes("komerc") || s.includes("office")) return "lokal";
+  if (s.includes("pokoj") || s.includes("room")) return "pokoj";
+  if (s.includes("garaz") || s.includes("garage")) return "garaz";
+
+  return null;
+}
+
+
+// Otodom URL builder: PATH (tx/estate/region) + opcjonalnie phrase
+function buildOtodomUrl(filters: any, page: number) {
+  const tx = mapTxToOtodom(filters?.transaction_type) ?? "sprzedaz";
+  const estate = mapEstateToOtodom(filters?.property_type) ?? "mieszkanie";
+
+  // województwo z UI: np. "śląskie" -> "slaskie"
+  const voiv = optString(filters?.voivodeship);
+  const voivSlug = voiv ? slugifyPl(voiv) : null;
+
+  // bazowa ścieżka (bez "cala-polska" jeśli mamy województwo)
+  const path = voivSlug
+    ? `/pl/wyniki/${tx}/${estate}/${voivSlug}`
+    : `/pl/wyniki/${tx}/${estate}/cala-polska`;
+
+  const u = new URL(`https://www.otodom.pl${path}`);
+
+  // phrase tylko jako dodatkowy tekst, NIE jako filtry
+  const q = optString(filters?.q);
+  if (q) u.searchParams.set("search[phrase]", q);
+
   u.searchParams.set("viewType", "listing");
-  if (q.trim()) u.searchParams.set("search[phrase]", q.trim());
   if (page > 1) u.searchParams.set("page", String(page));
   return u.toString();
 }
+
 
 function normalizeOfferUrl(u: string): string {
   return u.replace("://www.otodom.pl/hpr/", "://www.otodom.pl/");
@@ -137,7 +195,7 @@ const otodomAdapter: PortalAdapter = {
   buildSearchRequest(ctx) {
     const safe = portalSafeFiltersFor("otodom", ctx.filters);
     const q = safe.q ?? "";
-    const url = buildOtodomUrl(q, ctx.page);
+    const url = buildOtodomUrl(safe, ctx.page);
 
     return {
       url,
@@ -156,8 +214,7 @@ const otodomAdapter: PortalAdapter = {
 
   parseSearch(ctx, html, finalUrl): ParseResult {
     const safe = portalSafeFiltersFor("otodom", ctx.filters);
-    const requestedUrl = buildOtodomUrl(safe.q ?? "", ctx.page);
-
+    const requestedUrl = buildOtodomUrl(safe, ctx.page);
     const deg = detectOtodomDegradation(requestedUrl, finalUrl);
 
     // Jeśli Otodom zignorował intencję (redirect) — nie zapisuj wyników i nie stronuj
