@@ -94,6 +94,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       where.push(`source = $${p++}`);
       params.push(source);
     }
+    // ✅ SAFETY: OLX ma być tylko nieruchomości
+    where.push(`(source <> 'olx' OR source_url LIKE '%/nieruchomosci/%')`);
 
     if (!includeInactive && status) {
       where.push(`COALESCE(source_status, 'active') = $${p++}`);
