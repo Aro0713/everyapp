@@ -893,11 +893,6 @@ if (r.status === 403 || r.status === 429) {
   throw new Error(`PORTAL_BLOCKED ${r.status}${title ? ` (${title})` : ""}`);
 }
 
- {const title =
-      html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim() ?? "";
-    throw new Error(`PORTAL_BLOCKED ${r.status}${title ? ` (${title})` : ""}`);
-  }
-
   if (!r.ok) {
     throw new Error(`FETCH_FAILED ${r.status} ${r.statusText} ${html.slice(0, 200)}`);
   }
