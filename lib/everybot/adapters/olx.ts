@@ -29,20 +29,13 @@ function inferTxFromPriceText(s: string | null): "rent" | "sale" | null {
 }
 
 function buildOlxUrl(q: string, page: number) {
-  if (!q.trim()) {
-    const u = new URL("https://www.olx.pl/nieruchomosci/");
-    if (page > 1) u.searchParams.set("page", String(page));
-    return u.toString();
-  }
-  const slug = encodeURIComponent(
-  q.trim().replace(/[,\s]+/g, "-").replace(/-+/g, "-")
-);
-
-  const base = `https://www.olx.pl/nieruchomosci/q-${slug}/`;
-  const u = new URL(base);
+  const u = new URL("https://www.olx.pl/nieruchomosci/");
+  const qq = (q ?? "").trim();
+  if (qq) u.searchParams.set("q", qq);
   if (page > 1) u.searchParams.set("page", String(page));
   return u.toString();
 }
+
 function extractJsonLdItems(html: string): Array<{ url?: string; name?: string; title?: string }> {
   const $ = cheerio.load(html);
   const out: Array<{ url?: string; name?: string; title?: string }> = [];
@@ -101,6 +94,22 @@ parseSearch(ctx, html, finalUrl): ParseResult {
   const $ = cheerio.load(html);
   const items: SearchItem[] = [];
   const seen = new Set<string>();
+    // ✅ HARD GUARD: OLX czasem redirectuje do /oferty/ (śmieci). Nie harvestuj wtedy nic.
+  // ✅ HARD GUARD: OLX czasem redirectuje do /oferty/ (śmieci). Nie harvestuj wtedy nic.
+  if (!String(finalUrl || "").includes("/nieruchomosci/")) {
+    return {
+      items: [],
+      hasNext: false,
+      meta: {
+        source: "olx",
+        requestedUrl: "olx",
+        finalUrl,
+        page: ctx.page,
+        applied: false,
+        degradedReason: "none",
+      },
+    };
+  }
 
   // 1) Preferuj karty (stabilniejsze niż wszystkie <a>)
   const cards =
@@ -119,6 +128,7 @@ parseSearch(ctx, html, finalUrl): ParseResult {
     const full = href ? absUrl(finalUrl, href) : null;
     if (!full) continue;
     if (!full.includes("/d/oferta/")) continue;
+        // ✅ drugi bezpiecznik: jeśli OLX zwróci link spoza nieruchomości (rzadkie), pomijamy
     if (seen.has(full)) continue;
     seen.add(full);
 
