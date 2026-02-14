@@ -107,12 +107,15 @@ const [botFilters, setBotFilters] = useState<EverybotFilters>({
   const [botLoading, setBotLoading] = useState(false);
   const [botErr, setBotErr] = useState<string | null>(null);
   const [botRows, setBotRows] = useState<ExternalRow[]>([]);
+  const [botMatchedSince, setBotMatchedSince] = useState<string | null>(null);
   const [botCursor, setBotCursor] = useState<{
   updated_at: string;
   id: string;
 } | null>(null);
 
   const [botHasMore, setBotHasMore] = useState(false);
+  const [botSearching, setBotSearching] = useState(false);
+  const [botSearchSeconds, setBotSearchSeconds] = useState(0);
 
   const [importUrl, setImportUrl] = useState("");
   const [importing, setImporting] = useState(false);
@@ -242,6 +245,8 @@ async function loadEverybot(opts?: {
     qs.set("includePreview", "0"); // bo wycinasz preview przy filtrach
     qs.set("onlyEnriched", "1");   // pokaż tylko enriched/active
     qs.set("sinceMinutes", "30");  // tylko świeże (dopasuj)
+    
+    if (botMatchedSince) qs.set("matchedSince", botMatchedSince);
 
     // jeśli masz source/filter w stanie – dodaj je
     if (botFilters?.source && botFilters.source !== "all") qs.set("source", botFilters.source);
@@ -557,25 +562,44 @@ async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
             setSaveMode={setSaveMode}
             filters={botFilters}
             setFilters={(next) => {
-              setBotFilters(next);
-              setBotCursor(null);
-              setBotHasMore(false);
-            }}
-            onSearch={async (filters) => {
-              await searchEverybotWithFallback(filters);
-              await new Promise((r) => setTimeout(r, 1000));
+            setBotFilters(next);
+            setBotCursor(null);
+            setBotHasMore(false);
+            setBotRows([]);
+          }}
+           onSearch={async (filters) => {
+            const runTs = new Date().toISOString();
+            setBotMatchedSince(runTs);
+
+            setBotSearching(true);
+            setBotSearchSeconds(0);
+
+            await searchEverybotWithFallback(filters);
+
+            await new Promise((r) => setTimeout(r, 1000));
+            await refreshEverybotList();
+
+            let ticks = 0;
+
+            const intervalId = window.setInterval(async () => {
+              ticks += 1;
+              setBotSearchSeconds(ticks * 5);
               await refreshEverybotList();
-              // ✅ auto-refresh co 5s przez 90s (18 prób)
-              let ticks = 0;
-              const id = window.setInterval(async () => {
-                ticks += 1;
-                await refreshEverybotList();
-                if (ticks >= 18) window.clearInterval(id);
-              }, 5000);
-            }}
+
+              if (ticks >= 18) {
+                window.clearInterval(intervalId);
+                setBotSearching(false);
+              }
+            }, 5000);
+          }}
 
           />
             {/* Results */}
+            {botSearching && (
+                <div className="mb-3 rounded-xl bg-ew-accent/10 px-4 py-2 text-sm font-semibold text-ew-primary">
+                  🔄 {t(lang, "everybotSearching" as any)} ({botSearchSeconds}s / 90s)
+                </div>
+              )}
             <div className="mt-6 rounded-2xl border border-gray-200 bg-white">
               {botLoading && botRows.length === 0 ? (
                 <div className="p-4 text-sm text-gray-500">

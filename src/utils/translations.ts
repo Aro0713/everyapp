@@ -5229,8 +5229,17 @@ everybotStatusError: {
   ua: "Помилка",
   lt: "Klaida",
   vi: "Lỗi"
+},
+everybotSearching: {
+  pl: "Wyszukiwanie w toku...",
+  en: "Searching in progress...",
+  de: "Suche läuft...",
+  cs: "Vyhledávání probíhá...",
+  sk: "Vyhľadávanie prebieha...",
+  ua: "Пошук триває...",
+  lt: "Vykdoma paieška...",
+  vi: "Đang tìm kiếm..."
 }
-
 
 } as const);
 

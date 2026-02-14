@@ -88,10 +88,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const where: string[] = [`office_id = $1`];
     const params: any[] = [officeId];
     let p = 2;
-    const sinceMinutes = optNumber(req.query.sinceMinutes);
-    if (sinceMinutes != null) {
-      where.push(`matched_at >= now() - ($${p++}::int * interval '1 minute')`);
-      params.push(sinceMinutes);
+
+    const matchedSince = optString(req.query.matchedSince);
+    if (matchedSince) {
+      where.push(`matched_at >= $${p++}::timestamptz`);
+      params.push(matchedSince);
     }
 
     if (source && source !== "all") {
