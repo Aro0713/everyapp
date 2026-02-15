@@ -182,6 +182,7 @@ async function loadEverybot(opts?: {
     qs.set("limit", "50");
     qs.set("includeInactive", "1");
     qs.set("includePreview", "1");
+    qs.set("onlyEnriched", "0");
 
     if (q) qs.set("q", q);
     if (source && source !== "all") qs.set("source", String(source));

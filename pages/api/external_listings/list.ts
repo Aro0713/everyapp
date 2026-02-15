@@ -55,6 +55,9 @@ function optNumber(v: unknown): number | null {
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
+    
+     console.log("external_listings/list query:", req.query);
+
     if (req.method !== "GET") {
       res.setHeader("Allow", "GET");
       return res.status(405).json({ error: "Method not allowed" });
