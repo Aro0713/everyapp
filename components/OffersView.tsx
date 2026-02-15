@@ -181,6 +181,7 @@ async function loadEverybot(opts?: {
     const qs = new URLSearchParams();
     qs.set("limit", "50");
     qs.set("includeInactive", "1");
+    qs.set("includePreview", "1");
 
     if (q) qs.set("q", q);
     if (source && source !== "all") qs.set("source", String(source));
@@ -247,7 +248,6 @@ async function loadEverybot(opts?: {
     const qs = new URLSearchParams();
     qs.set("limit", "50");
     qs.set("includeInactive", "1");
-    qs.set("includePreview", "1");
     qs.set("onlyEnriched", "0");
     
     if (botMatchedSince) qs.set("matchedSince", botMatchedSince);
@@ -495,26 +495,31 @@ async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
                 ? "border-ew-accent bg-ew-accent/10 text-ew-primary"
                 : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
             )}
-           onClick={() => {
-              setTab("everybot");
-              setBotCursor(null);
-              setBotHasMore(false);
+              onClick={() => {
+                setTab("everybot");
+                setBotCursor(null);
+                setBotHasMore(false);
 
-              // ✅ stop live UI (jakby coś zostało)
-              setBotSearching(false);
-              setBotSearchSeconds(0);
-              if (searchIntervalRef.current) {
-                window.clearInterval(searchIntervalRef.current);
-                searchIntervalRef.current = null;
-              }
-              searchingRef.current = false;
+                // 🔴 zatrzymaj pasek wyszukiwania
+                setBotSearching(false);
+                setBotSearchSeconds(0);
 
-              // ✅ NEON ONLY (bez matchedSince)
-              setBotMatchedSince(null);
-              loadEverybot({ filters: botFilters, cursor: null, append: false, matchedSince: null });
-            }}
+                if (searchIntervalRef.current) {
+                  window.clearInterval(searchIntervalRef.current);
+                  searchIntervalRef.current = null;
+                }
+                searchingRef.current = false;
 
-          >
+                // 🟢 tylko Neon (bez live)
+                setBotMatchedSince(null);
+                loadEverybot({
+                  filters: botFilters,
+                  cursor: null,
+                  append: false,
+                  matchedSince: null,
+                });
+              }}
+                >
             🤖 {t(lang, "offersTabEverybot" as any)}
           </button>
         </div>
@@ -600,87 +605,65 @@ async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
             setBotHasMore(false);
             setBotRows([]);
           }}
-          onSearch={async (filters) => {
-            const hasRealFilters =
-              !!filters.q?.trim() ||
-              !!filters.transactionType?.trim() ||
-              !!filters.propertyType?.trim() ||
-              !!filters.voivodeship?.trim() ||
-              !!filters.city?.trim() ||
-              !!filters.district?.trim() ||
-              !!filters.locationText?.trim() ||
-              !!filters.minPrice?.trim() ||
-              !!filters.maxPrice?.trim() ||
-              !!filters.minArea?.trim() ||
-              !!filters.maxArea?.trim() ||
-              !!filters.rooms?.trim();
+            onSearch={async (filters) => {
+              const hasRealFilters =
+                !!filters.q?.trim() ||
+                !!filters.transactionType?.trim() ||
+                !!filters.propertyType?.trim() ||
+                !!filters.voivodeship?.trim() ||
+                !!filters.city?.trim() ||
+                !!filters.district?.trim() ||
+                !!filters.locationText?.trim() ||
+                !!filters.minPrice?.trim() ||
+                !!filters.maxPrice?.trim() ||
+                !!filters.minArea?.trim() ||
+                !!filters.maxArea?.trim() ||
+                !!filters.rooms?.trim();
 
-            // ✅ brak filtrów => TYLKO NEON, zero paska
-            if (!hasRealFilters) {
-              setBotSearching(false);
+              // brak filtrów => tylko Neon
+              if (!hasRealFilters) {
+                setBotSearching(false);
+                setBotSearchSeconds(0);
+                setBotMatchedSince(null);
+
+                await loadEverybot({
+                  filters,
+                  cursor: null,
+                  append: false,
+                  matchedSince: null,
+                });
+                return;
+              }
+
+              // są filtry => LIVE
+              const runTs = new Date().toISOString();
+              setBotMatchedSince(runTs);
+
+              // ubij poprzedni interval (na wszelki)
+              if (searchIntervalRef.current) {
+                window.clearInterval(searchIntervalRef.current);
+                searchIntervalRef.current = null;
+              }
+              searchingRef.current = true;
+
+              setBotSearching(true);
               setBotSearchSeconds(0);
-              setBotMatchedSince(null);
 
+              // 1) run
+              await runLiveHunter(filters, runTs);
+
+              // 2) jeden deterministyczny odczyt (TEN run)
               await loadEverybot({
-                filters,
-                cursor: null,
-                append: false,
-                matchedSince: null,
-              });
-              return;
-            }
-
-            // ✅ są filtry => LIVE + NEON, pokazujemy pasek
-            const runTs = new Date().toISOString();
-            setBotMatchedSince(runTs);
-
-            // ubij poprzedni interval
-            if (searchIntervalRef.current) {
-              window.clearInterval(searchIntervalRef.current);
-              searchIntervalRef.current = null;
-            }
-
-            setBotSearching(true);
-            searchingRef.current = true;
-            setBotSearchSeconds(0);
-
-            await runLiveHunter(filters, runTs);
-
-            // polling maks 90s, ale TYLKO na ten runTs
-            let ticks = 0;
-            searchIntervalRef.current = window.setInterval(async () => {
-              if (!searchingRef.current) return;
-
-              ticks += 1;
-              setBotSearchSeconds(ticks * 5);
-
-              const got = await loadEverybot({
                 filters,
                 cursor: null,
                 append: false,
                 matchedSince: runTs,
               });
 
-              if (got.rows && got.rows.length > 0) {
-                if (searchIntervalRef.current) {
-                  window.clearInterval(searchIntervalRef.current);
-                  searchIntervalRef.current = null;
-                }
-                searchingRef.current = false;
-                setBotSearching(false);
-                return;
-              }
-
-              if (ticks >= 18) {
-                if (searchIntervalRef.current) {
-                  window.clearInterval(searchIntervalRef.current);
-                  searchIntervalRef.current = null;
-                }
-                searchingRef.current = false;
-                setBotSearching(false);
-              }
-            }, 5000);
-          }}
+              // 3) stop paska natychmiast (run zakończony)
+              searchingRef.current = false;
+              setBotSearching(false);
+            }}
 
           />
             {/* Results */}
