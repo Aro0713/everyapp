@@ -934,7 +934,12 @@ function buildOtodomSearchUrl(
   q: string,
   voivodeship?: string | null,
   transactionType?: "sale" | "rent" | null,
-  propertyType?: string | null
+  propertyType?: string | null,
+  minPrice?: number | null,
+  maxPrice?: number | null,
+  minArea?: number | null,
+  maxArea?: number | null,
+  rooms?: number | null
 ): string {
   const phrase = (q ?? "").trim();
   const vRaw = normalizeVoivodeshipInput(voivodeship);
@@ -956,11 +961,31 @@ function buildOtodomSearchUrl(
     : `https://www.otodom.pl/pl/wyniki/${txnSeg}/${typeSeg}/cala-polska`;
 
   const u = new URL(base);
+
+  // Otodom często usuwa viewType przez redirect — to nie szkodzi, ale zostawiamy
   u.searchParams.set("viewType", "listing");
+
   if (phrase) u.searchParams.set("search[phrase]", phrase);
+
+  // ✅ twarde filtry URL (Otodom rozumie te parametry)
+  if (minPrice != null) u.searchParams.set("search[filter_float_price:from]", String(minPrice));
+  if (maxPrice != null) u.searchParams.set("search[filter_float_price:to]", String(maxPrice));
+
+  if (minArea != null) u.searchParams.set("search[filter_float_m:from]", String(minArea));
+  if (maxArea != null) u.searchParams.set("search[filter_float_m:to]", String(maxArea));
+
+  // rooms: Otodom przyjmuje np. search[filter_enum_rooms_num][0]=3 (albo "more")
+  if (rooms != null) {
+    const v = rooms >= 6 ? "more" : String(Math.max(1, Math.min(10, Math.round(rooms))));
+    u.searchParams.set("search[filter_enum_rooms_num][0]", v);
+  }
+
+  // stabilne sortowanie (opcjonalnie, ale polecam)
+  u.searchParams.set("search[order]", "quality_score");
 
   return u.toString();
 }
+
 
 function buildOlxSearchUrl(q: string, city?: string | null, district?: string | null): string {
   const rawQ = (q ?? "").trim();
@@ -1132,7 +1157,12 @@ function buildBaseUrlForSource(src: "otodom" | "olx") {
           q,
           optString(filters?.voivodeship) ?? null,
           (optString(filters?.transactionType) as any) ?? null,
-          optString(filters?.propertyType) ?? null
+          optString(filters?.propertyType) ?? null,
+          optNumber(filters?.minPrice),
+          optNumber(filters?.maxPrice),
+          optNumber(filters?.minArea),
+          optNumber(filters?.maxArea),
+          optNumber(filters?.rooms)
         )
 
         )
