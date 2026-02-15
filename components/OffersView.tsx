@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { t } from "@/utils/i18n";
 import type { LangKey } from "@/utils/translations";
 import EverybotSearchPanel, {
@@ -64,6 +64,8 @@ function fmtPrice(v: ExternalRow["price_amount"], currency?: string | null) {
 }
 
 export default function OffersView({ lang }: { lang: LangKey }) {
+  const searchIntervalRef = useRef<number | null>(null);
+  const searchingRef = useRef(false);
   const [tab, setTab] = useState<OffersTab>("office");
 
   // --- Office listings ---
@@ -245,9 +247,8 @@ async function loadEverybot(opts?: {
     const qs = new URLSearchParams();
     qs.set("limit", "50");
     qs.set("includeInactive", "1");
-    qs.set("includePreview", "0"); // bo wycinasz preview przy filtrach
-    qs.set("onlyEnriched", "1");   // pokaż tylko enriched/active
-    qs.set("sinceMinutes", "30");  // tylko świeże (dopasuj)
+    qs.set("includePreview", "1");
+    qs.set("onlyEnriched", "0");
     
     if (botMatchedSince) qs.set("matchedSince", botMatchedSince);
 
@@ -314,6 +315,14 @@ async function loadEverybot(opts?: {
   useEffect(() => {
     load();
   }, []);
+  useEffect(() => {
+  return () => {
+    if (searchIntervalRef.current) {
+      window.clearInterval(searchIntervalRef.current);
+      searchIntervalRef.current = null;
+    }
+  };
+}, []);
 
   const empty = !loading && rows.length === 0 && !err;
 
@@ -321,7 +330,10 @@ async function loadEverybot(opts?: {
 function isHttpUrl(v: unknown): v is string {
   return typeof v === "string" && /^https?:\/\//i.test(v.trim());
 }
-async function runLiveHunter(filtersOverride?: typeof botFilters, runTs?: string) {
+async function runLiveHunter(
+  filtersOverride?: typeof botFilters,
+  runTs?: string
+) {
   const raw = filtersOverride ?? botFilters;
 
   const filters = {
@@ -338,12 +350,25 @@ async function runLiveHunter(filtersOverride?: typeof botFilters, runTs?: string
     maxArea: (raw.maxArea ?? "").trim(),
     rooms: (raw.rooms ?? "").trim(),
   };
-  
-  const effectiveRunTs = runTs ?? new Date().toISOString();
 
+  function inferPropertyTypeFromQ(
+    q: string
+  ): "" | "house" | "apartment" | "plot" | "commercial" {
+    const s = q.toLowerCase();
+    if (s.includes("dom")) return "house";
+    if (s.includes("mieszkan")) return "apartment";
+    if (s.includes("działk") || s.includes("dzialk") || s.includes("grunt")) return "plot";
+    if (s.includes("lokal") || s.includes("biur") || s.includes("komerc")) return "commercial";
+    return "";
+  }
+
+  if (!filters.propertyType && filters.q) {
+    const inferred = inferPropertyTypeFromQ(filters.q);
+    if (inferred) filters.propertyType = inferred;
+  }
+
+  const effectiveRunTs = (runTs ?? new Date().toISOString()).trim();
   setBotMatchedSince(effectiveRunTs);
-  setBotCursor(null);
-  setBotHasMore(false);
 
   setBotLoading(true);
   setBotErr(null);
@@ -358,7 +383,12 @@ async function runLiveHunter(filtersOverride?: typeof botFilters, runTs?: string
     const j = await r.json().catch(() => null);
     if (!r.ok) throw new Error(j?.error ?? `RUN HTTP ${r.status}`);
 
-    await loadEverybot({ filters, cursor: null, append: false, matchedSince: effectiveRunTs });
+    await loadEverybot({
+      filters,
+      cursor: null,
+      append: false,
+      matchedSince: effectiveRunTs,
+    });
   } catch (e: any) {
     setBotErr(e?.message ?? "Live hunter failed");
   } finally {
@@ -366,16 +396,32 @@ async function runLiveHunter(filtersOverride?: typeof botFilters, runTs?: string
   }
 }
 
-
 async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
   const filters = filtersOverride ?? botFilters;
 
-  // 1) Najpierw cache (Neon)
-  const r1 = await loadEverybot({ filters, cursor: null, append: false });
+  // 0) boundary run (jeśli nie mamy jeszcze runTs w stanie)
+  const effectiveRunTs = botMatchedSince ?? new Date().toISOString();
+  setBotMatchedSince(effectiveRunTs);
 
-  // 2) Jeśli brak wyników w cache → odpal LiveHunter i po nim odśwież cache
+  // 1) Najpierw cache (Neon) — tylko TEN run
+  const r1 = await loadEverybot({
+    filters,
+    cursor: null,
+    append: false,
+    matchedSince: effectiveRunTs,
+  });
+
+  // 2) Jeśli brak wyników w cache → odpal LiveHunter z TYM SAMYM runTs,
+  //    a potem odczytaj cache jeszcze raz (też tylko TEN run)
   if (!r1.rows || r1.rows.length === 0) {
-    await runLiveHunter(filters);
+    await runLiveHunter(filters, effectiveRunTs);
+
+    await loadEverybot({
+      filters,
+      cursor: null,
+      append: false,
+      matchedSince: effectiveRunTs,
+    });
   }
 }
 
@@ -561,31 +607,58 @@ async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
             setBotHasMore(false);
             setBotRows([]);
           }}
-           onSearch={async (filters) => {
-          const runTs = new Date().toISOString();
+          onSearch={async (filters) => {
+            const runTs = new Date().toISOString();
+            setBotMatchedSince(runTs);
 
-          setBotSearching(true);
-          setBotSearchSeconds(0);
-
-          await runLiveHunter(filters, runTs);
-
-          // opcjonalny polling (jeśli chcesz jeszcze dociągać enrich/statusy),
-          // ale NA TYM SAMYM matchedSince
-          await new Promise((r) => setTimeout(r, 800));
-          await refreshEverybotList();
-
-          let ticks = 0;
-          const intervalId = window.setInterval(async () => {
-            ticks += 1;
-            setBotSearchSeconds(ticks * 5);
-            await refreshEverybotList();
-
-            if (ticks >= 18) {
-              window.clearInterval(intervalId);
-              setBotSearching(false);
+            // ubij poprzednie szukanie
+            if (searchIntervalRef.current) {
+              window.clearInterval(searchIntervalRef.current);
+              searchIntervalRef.current = null;
             }
-          }, 5000);
-        }}
+
+            setBotSearching(true);
+            searchingRef.current = true;
+            setBotSearchSeconds(0);
+
+            await runLiveHunter(filters, runTs);
+
+            let ticks = 0;
+
+            searchIntervalRef.current = window.setInterval(async () => {
+              if (!searchingRef.current) return;
+
+              ticks += 1;
+              setBotSearchSeconds(ticks * 5);
+
+              const got = await loadEverybot({
+                filters: botFilters,
+                cursor: null,
+                append: false,
+                matchedSince: runTs,
+              });
+
+              if (got.rows && got.rows.length > 0) {
+                if (searchIntervalRef.current) {
+                  window.clearInterval(searchIntervalRef.current);
+                  searchIntervalRef.current = null;
+                }
+                searchingRef.current = false;
+                setBotSearching(false);
+                return;
+              }
+
+              if (ticks >= 18) {
+                if (searchIntervalRef.current) {
+                  window.clearInterval(searchIntervalRef.current);
+                  searchIntervalRef.current = null;
+                }
+                searchingRef.current = false;
+                setBotSearching(false);
+              }
+            }, 5000);
+          }}
+
 
           />
             {/* Results */}
