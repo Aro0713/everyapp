@@ -97,6 +97,16 @@ function isServiceAuthorized(req: NextApiRequest): boolean {
 
   return (typeof a === "string" && key === a) || (typeof b === "string" && key === b);
 }
+function isOlxRealEstateUrl(u: string): boolean {
+  try {
+    const url = new URL(u);
+    const p = url.pathname.toLowerCase();
+    // OLX real estate: musi być nieruchomosci + oferta
+    return p.includes("/nieruchomosci/") && p.includes("/d/oferta/");
+  } catch {
+    return false;
+  }
+}
 
 
 type BatchItem = {
@@ -161,6 +171,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const priceAmount = optNumber(it.priceAmount);
 
         const normalizedUrl = normalizeUrl(sourceUrl);
+            // ✅ HARD GATE: OLX tylko nieruchomości (blokujemy zanim dotkniemy DB)
+            if (source === "olx") {
+              // gate sprawdzamy na znormalizowanym URL (bez trackingu)
+              if (!isOlxRealEstateUrl(normalizedUrl)) {
+                results.push({ url: sourceUrl, ok: false, error: "OLX_NON_REALESTATE_BLOCKED" });
+                continue;
+              }
+            }
         const urlHash = sha256Hex(normalizedUrl);
         const sourceListingId =
           optString(it.sourceListingId) ?? extractSourceListingId(source, normalizedUrl);

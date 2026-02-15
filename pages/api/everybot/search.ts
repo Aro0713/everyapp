@@ -785,9 +785,17 @@ function parseOlxResults(pageUrl: string, html: string, limit: number): External
     const href = $(el).attr("href");
     const full = absUrl(pageUrl, href);
     if (!full) return;
-    if (!full.includes("/d/oferta/")) return;
-    if (seen.has(full)) return;
-    seen.add(full);
+    // ✅ OLX tylko nieruchomości: musi być /nieruchomosci/ oraz /d/oferta/
+    if (!full.includes("/nieruchomosci/") || !full.includes("/d/oferta/")) return;
+    let canon = full;
+    try {
+      const u = new URL(full);
+      u.search = ""; // wywal search_reason / reason / tracking
+      canon = u.toString();
+    } catch {}
+
+    if (seen.has(canon)) return;
+    seen.add(canon);
 
     const card = $(el).closest("article, div").first();
 
@@ -818,10 +826,10 @@ function parseOlxResults(pageUrl: string, html: string, limit: number): External
     const priceAmount = parseNumberLoose(priceText);
 
     rows.push({
-      external_id: full,
+       external_id: canon,
       office_id: null,
       source: "olx",
-      source_url: full,
+      source_url: canon,
       title: title || null,
       price_amount: priceAmount ?? null,
       currency,
@@ -1154,7 +1162,7 @@ function buildBaseUrlForSource(src: "otodom" | "olx") {
     urlFromGet ||
     (q
       ? (src === "olx"
-          ? buildOlxSearchUrl(q)
+          ? buildOlxSearchUrl(q, optString(filters?.city) ?? null, optString(filters?.district) ?? null)
         : buildOtodomSearchUrl(
           q,
           optString(filters?.voivodeship) ?? null,
@@ -1348,6 +1356,13 @@ for (const r of rows) {
   if (!r.title || !String(r.title).trim()) {
     skippedMissingTitle++;
     continue;
+  }
+  // ✅ HARD GATE: OLX tylko nieruchomości (ostatnia linia obrony przed DB)
+  if (r.source === "olx") {
+    const u = String(r.source_url || "");
+    if (!u.includes("/nieruchomosci/") || !u.includes("/d/oferta/")) {
+      continue;
+    }
   }
 
   const sourceListingId = toSourceListingId(r);

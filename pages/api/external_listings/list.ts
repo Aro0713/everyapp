@@ -120,11 +120,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       params.push(source);
     }
 
-    // ✅ SAFETY: OLX ma być tylko nieruchomości
+    // ✅ SAFETY: OLX ma być tylko nieruchomości (real-estate category)
     where.push(`(
-    source <> 'olx'
-    OR source_url LIKE '%/nieruchomosci/%'
-    OR source_url LIKE '%/d/oferta/%'
+      source <> 'olx'
+      OR (source_url LIKE '%/nieruchomosci/%' AND source_url LIKE '%/d/oferta/%')
     )`);
 
     if (!includeInactive && status) {

@@ -77,6 +77,15 @@ function normalizeUrl(input: string): string {
 function sha256Hex(s: string): string {
   return crypto.createHash("sha256").update(s, "utf8").digest("hex");
 }
+function isOlxRealEstateUrl(u: string): boolean {
+  try {
+    const url = new URL(u);
+    const p = url.pathname.toLowerCase();
+    return p.includes("/nieruchomosci/") && p.includes("/d/oferta/");
+  } catch {
+    return false;
+  }
+}
 
 /**
  * MVP: wyciągnij ID jeśli łatwe. Nie musi pokrywać 100% przypadków.
@@ -132,14 +141,23 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
     // A+B fields
     const normalizedUrl = normalizeUrl(sourceUrl);
-    const urlHash = sha256Hex(normalizedUrl);
+
+      // ✅ HARD GATE: OLX tylko nieruchomości
+      if (source === "olx") {
+        if (!isOlxRealEstateUrl(normalizedUrl)) {
+          return res.status(400).json({ error: "OLX_NON_REALESTATE_BLOCKED" });
+        }
+      }
+
+      const urlHash = sha256Hex(normalizedUrl);
+
     const sourceListingId = optString(body.sourceListingId) ?? extractSourceListingId(source, normalizedUrl);
 
-    const raw = {
+      const raw = {
       importedFrom: "manual-link",
       source,
-      sourceUrl,
-      normalizedUrl,
+      sourceUrl,        // oryginał (z trackingiem)
+      normalizedUrl,    // kanoniczny
       sourceListingId,
       at: new Date().toISOString(),
     };
@@ -186,7 +204,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         officeId,
         source,
         sourceListingId,
-        sourceUrl,
+        normalizedUrl,
         normalizedUrl,
         urlHash,
         title,
