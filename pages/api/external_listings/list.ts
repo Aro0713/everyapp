@@ -89,13 +89,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const onlyEnriched = optString(req.query.onlyEnriched) === "1";
     const includePreview = optString(req.query.includePreview) !== "0"; // domyślnie TAK
 
-    const where: string[] = [`office_id = $1`];
+    const where: string[] = [`1=1`];
+
     if (!includePreview) {
-    where.push(`status <> 'preview'`);
+      where.push(`status <> 'preview'`);
     }
 
-    const params: any[] = [officeId];
-    let p = 2;
+    const params: any[] = [];
+    let p = 1;
 
     const matchedSince = optString(req.query.matchedSince);
     if (matchedSince) {
@@ -135,7 +136,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       where.push(`status = 'enriched'`);
     }
 
-    // --- NEW FILTERS FROM SEARCH PANEL ---
+      // --- NEW FILTERS FROM SEARCH PANEL ---
+    // Zasada MVP: preview często ma braki danych => NIE WYCIINAMY preview filtrami strukturalnymi.
+    // Każdy filtr: (status='preview' OR <warunek>)
 
     const transactionType = optString(req.query.transactionType);
     const propertyType = optString(req.query.propertyType);
@@ -149,140 +152,183 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const minArea = optNumber(req.query.minArea);
     const maxArea = optNumber(req.query.maxArea);
     const rooms = optNumber(req.query.rooms);
-    
+
+    // Q działa TYLKO jeśli nie ma filtrów strukturalnych
     const hasDetailFilters =
-  !!transactionType ||
-  !!propertyType ||
-  !!locationText ||
-  !!city ||
-  !!district ||
-  !!voivodeship ||
-  !!street ||
-  minPrice != null ||
-  maxPrice != null ||
-  minArea != null ||
-  maxArea != null ||
-  rooms != null;
-    // 🔥 Q działa TYLKO jeśli nie ma filtrów strukturalnych
-const hasStructuredFilters = hasDetailFilters;
+      !!transactionType ||
+      !!propertyType ||
+      !!locationText ||
+      !!city ||
+      !!district ||
+      !!voivodeship ||
+      !!street ||
+      minPrice != null ||
+      maxPrice != null ||
+      minArea != null ||
+      maxArea != null ||
+      rooms != null;
 
-if (q && !hasStructuredFilters) {
-  const terms = q
-    .split(/[,\s]+/g)
-    .map((t) => t.trim())
-    .filter((t) => t.length >= 2);
+    const hasStructuredFilters = hasDetailFilters;
 
-  if (terms.length) {
-    const ors: string[] = [];
-    for (const term of terms) {
-      ors.push(`(
-        LOWER(COALESCE(title,'')) LIKE $${p}
+    if (q && !hasStructuredFilters) {
+      const terms = q
+        .split(/[,\s]+/g)
+        .map((t) => t.trim())
+        .filter((t) => t.length >= 2);
+
+      if (terms.length) {
+        const ors: string[] = [];
+        for (const term of terms) {
+          ors.push(`(
+            LOWER(COALESCE(title,'')) LIKE $${p}
+            OR LOWER(COALESCE(location_text,'')) LIKE $${p}
+          )`);
+          params.push(`%${term}%`);
+          p++;
+        }
+        where.push(`(${ors.join(" OR ")})`);
+      }
+    }
+
+    // 1) TRANSACTION TYPE
+    // Preview: przepuszczamy. Non-preview: wymagamy match.
+    // Dodatkowo fallback na title/location_text (bo często nie masz jeszcze transaction_type)
+    if (transactionType) {
+      const v = transactionType.toLowerCase();
+      where.push(`(
+        status = 'preview'
+        OR LOWER(COALESCE(transaction_type,'')) = $${p}
+        OR LOWER(COALESCE(title,'')) LIKE $${p + 1}
+        OR LOWER(COALESCE(location_text,'')) LIKE $${p + 1}
+      )`);
+      params.push(v, `%${v}%`);
+      p += 2;
+    }
+
+    // 2) PROPERTY TYPE (fallback na title/location_text)
+    if (propertyType) {
+      const v = propertyType.toLowerCase();
+      where.push(`(
+        status = 'preview'
+        OR LOWER(COALESCE(property_type,'')) LIKE $${p}
+        OR LOWER(COALESCE(title,'')) LIKE $${p}
         OR LOWER(COALESCE(location_text,'')) LIKE $${p}
       )`);
-      params.push(`%${term}%`);
+      params.push(`%${v}%`);
       p++;
     }
-    where.push(`(${ors.join(" OR ")})`);
-  }
-}
 
-  // TRANSACTION TYPE (bez fallbacku – pole jest stabilne)
-  if (transactionType) {
-    where.push(`transaction_type = $${p++}`);
-    params.push(transactionType);
-  }
+    // 3) LOCATION TEXT (fallback na title/city)
+    if (locationText) {
+      const v = locationText.toLowerCase();
+      where.push(`(
+        status = 'preview'
+        OR LOWER(COALESCE(location_text,'')) LIKE $${p}
+        OR LOWER(COALESCE(title,'')) LIKE $${p}
+        OR LOWER(COALESCE(city,'')) LIKE $${p}
+      )`);
+      params.push(`%${v}%`);
+      p++;
+    }
 
-  // PROPERTY TYPE (fallback na title + location_text)
-  if (propertyType) {
-    where.push(`(
-      LOWER(COALESCE(property_type,'')) LIKE $${p}
-      OR LOWER(COALESCE(title,'')) LIKE $${p}
-      OR LOWER(COALESCE(location_text,'')) LIKE $${p}
-    )`);
-    params.push(`%${propertyType.toLowerCase()}%`);
-    p++;
-  }
+    // 4) CITY (fallback na location_text/title)
+    if (city) {
+      const v = city.toLowerCase();
+      where.push(`(
+        status = 'preview'
+        OR LOWER(COALESCE(city,'')) LIKE $${p}
+        OR LOWER(COALESCE(location_text,'')) LIKE $${p}
+        OR LOWER(COALESCE(title,'')) LIKE $${p}
+      )`);
+      params.push(`%${v}%`);
+      p++;
+    }
 
-  // LOCATION TEXT (rozszerzone o title + city)
-  if (locationText) {
-    where.push(`(
-      LOWER(COALESCE(location_text,'')) LIKE $${p}
-      OR LOWER(COALESCE(title,'')) LIKE $${p}
-      OR LOWER(COALESCE(city,'')) LIKE $${p}
-    )`);
-    params.push(`%${locationText.toLowerCase()}%`);
-    p++;
-  }
+    // 5) DISTRICT (fallback na location_text/title)
+    if (district) {
+      const v = district.toLowerCase();
+      where.push(`(
+        status = 'preview'
+        OR LOWER(COALESCE(district,'')) LIKE $${p}
+        OR LOWER(COALESCE(location_text,'')) LIKE $${p}
+        OR LOWER(COALESCE(title,'')) LIKE $${p}
+      )`);
+      params.push(`%${v}%`);
+      p++;
+    }
 
-  // CITY (fallback na location_text + title)
-  if (city) {
-    where.push(`(
-      LOWER(COALESCE(city,'')) LIKE $${p}
-      OR LOWER(COALESCE(location_text,'')) LIKE $${p}
-      OR LOWER(COALESCE(title,'')) LIKE $${p}
-    )`);
-    params.push(`%${city.toLowerCase()}%`);
-    p++;
-  }
+    // 6) STREET (fallback na location_text/title)
+    if (street) {
+      const v = street.toLowerCase();
+      where.push(`(
+        status = 'preview'
+        OR LOWER(COALESCE(street,'')) LIKE $${p}
+        OR LOWER(COALESCE(location_text,'')) LIKE $${p}
+        OR LOWER(COALESCE(title,'')) LIKE $${p}
+      )`);
+      params.push(`%${v}%`);
+      p++;
+    }
 
-  // DISTRICT (fallback na location_text + title)
-  if (district) {
-    where.push(`(
-      LOWER(COALESCE(district,'')) LIKE $${p}
-      OR LOWER(COALESCE(location_text,'')) LIKE $${p}
-      OR LOWER(COALESCE(title,'')) LIKE $${p}
-    )`);
-    params.push(`%${district.toLowerCase()}%`);
-    p++;
-  }
+    // 7) VOIVODESHIP (fallback na location_text/title)
+    if (voivodeship) {
+      const v = voivodeship.toLowerCase();
+      where.push(`(
+        status = 'preview'
+        OR LOWER(COALESCE(voivodeship,'')) LIKE $${p}
+        OR LOWER(COALESCE(location_text,'')) LIKE $${p}
+        OR LOWER(COALESCE(title,'')) LIKE $${p}
+      )`);
+      params.push(`%${v}%`);
+      p++;
+    }
 
-  // STREET (fallback na location_text + title)
-  if (street) {
-    where.push(`(
-      LOWER(COALESCE(street,'')) LIKE $${p}
-      OR LOWER(COALESCE(location_text,'')) LIKE $${p}
-      OR LOWER(COALESCE(title,'')) LIKE $${p}
-    )`);
-    params.push(`%${street.toLowerCase()}%`);
-    p++;
-  }
+    // 8) NUMERIC FILTERS
+    // Preview: przepuszczamy. Non-preview: wymagamy liczbowego warunku.
+    if (minPrice != null) {
+      where.push(`(
+        status = 'preview'
+        OR price_amount >= $${p}
+      )`);
+      params.push(minPrice);
+      p++;
+    }
 
-  // VOIVODESHIP (fallback na location_text + title)
-  if (voivodeship) {
-    where.push(`(
-      LOWER(COALESCE(voivodeship,'')) LIKE $${p}
-      OR LOWER(COALESCE(location_text,'')) LIKE $${p}
-      OR LOWER(COALESCE(title,'')) LIKE $${p}
-    )`);
-    params.push(`%${voivodeship.toLowerCase()}%`);
-    p++;
-  }
+    if (maxPrice != null) {
+      where.push(`(
+        status = 'preview'
+        OR price_amount <= $${p}
+      )`);
+      params.push(maxPrice);
+      p++;
+    }
 
-  // NUMERIC FILTERS (bez fallbacku – czyste dane)
-  if (minPrice != null) {
-    where.push(`price_amount >= $${p++}`);
-    params.push(minPrice);
-  }
+    if (minArea != null) {
+      where.push(`(
+        status = 'preview'
+        OR area_m2 >= $${p}
+      )`);
+      params.push(minArea);
+      p++;
+    }
 
-  if (maxPrice != null) {
-    where.push(`price_amount <= $${p++}`);
-    params.push(maxPrice);
-  }
+    if (maxArea != null) {
+      where.push(`(
+        status = 'preview'
+        OR area_m2 <= $${p}
+      )`);
+      params.push(maxArea);
+      p++;
+    }
 
-  if (minArea != null) {
-    where.push(`area_m2 >= $${p++}`);
-    params.push(minArea);
-  }
-
-  if (maxArea != null) {
-    where.push(`area_m2 <= $${p++}`);
-    params.push(maxArea);
-  }
-
-  if (rooms != null) {
-    where.push(`rooms = $${p++}`);
-    params.push(rooms);
-  }
+    if (rooms != null) {
+      where.push(`(
+        status = 'preview'
+        OR rooms = $${p}
+      )`);
+      params.push(rooms);
+      p++;
+    }
 
     // ====== TRYB 1: page-based (LIMIT/OFFSET) ======
     if (page != null) {
