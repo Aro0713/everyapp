@@ -402,11 +402,28 @@ async function runLiveHunter(
 async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
   const filters = filtersOverride ?? botFilters;
 
-  // ✅ NEON ONLY
-  setBotMatchedSince(null);
-  await loadEverybot({ filters, cursor: null, append: false, matchedSince: null });
-}
+  // 🔴 zatrzymaj ewentualny live timer
+  if (searchIntervalRef.current) {
+    window.clearInterval(searchIntervalRef.current);
+    searchIntervalRef.current = null;
+  }
+  searchingRef.current = false;
 
+  setBotSearching(false);
+  setBotSearchSeconds(0);
+
+  // ✅ wracamy do czystego Neon (bez matchedSince)
+  setBotMatchedSince(null);
+  setBotCursor(null);
+  setBotHasMore(false);
+
+  await loadEverybot({
+    filters,
+    cursor: null,
+    append: false,
+    matchedSince: null,
+  });
+}
 
   return (
     <div className="space-y-6">
