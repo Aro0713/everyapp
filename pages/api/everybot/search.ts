@@ -64,6 +64,7 @@ type ExternalRow = {
   source: string;
   source_url: string;
   title: string | null;
+  description?: string | null;
   price_amount: string | number | null;
   currency: string | null;
   location_text: string | null;
@@ -310,6 +311,7 @@ if (Array.isArray(adsItems) && adsItems.length) {
       source: "otodom",
       source_url: norm,
       title: finalTitle,
+      description: firstString(ad?.shortDescription, ad?.description) ?? null,
       price_amount: priceAmount,
       currency,
       location_text,
@@ -1423,7 +1425,7 @@ for (const r of rows) {
       sourceListingId,
       r.source_url,
       r.title ?? null,
-      null,
+      r.description ?? null,
       typeof r.price_amount === "number" ? r.price_amount : r.price_amount ? Number(r.price_amount) : null,
       r.currency ?? null,
       r.location_text ?? null,

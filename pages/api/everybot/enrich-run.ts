@@ -32,22 +32,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // ✅ Vercel Cron auth (bez sekretów w repo)
     const ua = String(req.headers["user-agent"] || "");
-    if (!ua.startsWith("vercel-cron")) {
-      return res.status(401).json({ error: "UNAUTHORIZED" });
+    const auth = String(req.headers["authorization"] || "");
+    const secret = process.env.EVERYBOT_CRON_SECRET || "";
+
+    // ✅ allow Vercel Cron OR Bearer secret
+    const okCronUa = ua.startsWith("vercel-cron");
+    const okBearer = !!secret && auth === `Bearer ${secret}`;
+
+    if (!okCronUa && !okBearer) {
+    return res.status(401).json({ error: "UNAUTHORIZED" });
     }
 
     const limit = 50;
 
     const { rows } = await pool.query<Row>(
-      `
-      select id, office_id, source, source_url
-      from external_listings
-      where status = 'preview'
-      order by updated_at asc
-      limit $1
-      `,
-      [limit]
-    );
+        `
+        select id, office_id, source, source_url
+        from external_listings
+        where enriched_at is null
+            and status in ('preview','active')
+        order by updated_at asc
+        limit $1
+        `,
+        [limit]
+        );
 
     if (!rows.length) {
       return res.status(200).json({ ok: true, processed: 0, errors: [] });
@@ -75,27 +83,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
             const data = await enricher(it.source_url);
 
-            await pool.query(
-              `
-              update external_listings
-              set
+        await pool.query(
+            `
+            update external_listings
+            set
                 title = coalesce($2, title),
-                price_amount = coalesce($3, price_amount),
-                currency = coalesce($4, currency),
-                location_text = coalesce($5, location_text),
-                thumb_url = coalesce($6, thumb_url),
+                description = coalesce($3, description),
+                price_amount = coalesce($4, price_amount),
+                currency = coalesce($5, currency),
+                location_text = coalesce($6, location_text),
+                thumb_url = coalesce($7, thumb_url),
+
+                area_m2 = coalesce($8, area_m2),
+                rooms = coalesce($9, rooms),
+                price_per_m2 = coalesce($10, price_per_m2),
+
                 status = 'enriched',
+                enriched_at = now(),
                 updated_at = now()
-              where id = $1
-              `,
-              [
+            where id = $1
+            `,
+            [
                 it.id,
                 data?.title ?? null,
+                data?.description ?? null,
                 data?.price_amount ?? null,
                 data?.currency ?? null,
                 data?.location_text ?? null,
                 data?.thumb_url ?? null,
-              ]
+
+                data?.area_m2 ?? null,
+                data?.rooms ?? null,
+                data?.price_per_m2 ?? null,
+            ]
             );
 
             processed++;
