@@ -90,17 +90,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let p = 2;
 
     const matchedSince = optString(req.query.matchedSince);
-    const hasMatchedSince = !!matchedSince;
-
-    if (matchedSince) {
+        if (matchedSince) {
       where.push(`matched_at >= $${p++}::timestamptz`);
       params.push(matchedSince);
     }
+    const hasMatchedSince = !!matchedSince;
 
-   if (source && source !== "all") {
-    where.push(`source = $${p++}`);
-    params.push(source);
-  }
+    const orderBy = hasMatchedSince
+      ? `matched_at DESC NULLS LAST, updated_at DESC, id DESC`
+      : `updated_at DESC, id DESC`;
+
+     if (source && source !== "all") {
+      where.push(`source = $${p++}`);
+      params.push(source);
+    }
 
     // ✅ SAFETY: OLX ma być tylko nieruchomości
     where.push(`(source <> 'olx' OR source_url LIKE '%/nieruchomosci/%')`);
@@ -263,9 +266,9 @@ if (rooms != null) {
 
       const sql = `
         SELECT
-        id, office_id, source, source_url, status,
-        title, description,
-        price_amount, currency, location_text,
+          id, office_id, source, source_url, status,
+          title, description,
+          price_amount, currency, location_text,
           thumb_url, matched_at,
           transaction_type, property_type,
           area_m2, price_per_m2, rooms,
@@ -276,13 +279,10 @@ if (rooms != null) {
           updated_at
         FROM external_listings
         WHERE ${where.join(" AND ")}
-        ORDER BY
-        CASE WHEN $MATCHED_SINCE_PRESENT THEN matched_at END DESC NULLS LAST,
-        updated_at DESC,
-        id DESC
+        ORDER BY ${orderBy}
         LIMIT $${p} OFFSET $${p + 1}
       `;
-      
+
       const listParams = [...params, limit, offset];
       const { rows } = await pool.query<Row>(sql, listParams);
 
@@ -305,7 +305,7 @@ if (rooms != null) {
       p += 2;
     }
 
-    const sql = `
+     const sql = `
       SELECT
         id, office_id, source, source_url, status,
         title, description,
@@ -320,10 +320,7 @@ if (rooms != null) {
         updated_at
       FROM external_listings
       WHERE ${where.join(" AND ")}
-      ORDER BY
-      CASE WHEN $MATCHED_SINCE_PRESENT THEN matched_at END DESC NULLS LAST,
-      updated_at DESC,
-      id DESC
+      ORDER BY ${orderBy}
       LIMIT $${p++}
     `;
 
