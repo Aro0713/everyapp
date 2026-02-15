@@ -85,7 +85,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const includeInactive = optString(req.query.includeInactive) === "1";
     const onlyEnriched = optString(req.query.onlyEnriched) === "1";
     const includePreview = optString(req.query.includePreview) !== "0"; // domyślnie TAK
+
     const where: string[] = [`office_id = $1`];
+    if (!includePreview) {
+    where.push(`status <> 'preview'`);
+    }
+
     const params: any[] = [officeId];
     let p = 2;
 
