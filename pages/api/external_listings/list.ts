@@ -184,11 +184,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   maxArea != null ||
   rooms != null;
 
-  // Jeśli są filtry szczegółowe → nie pokazuj preview
-  if (hasDetailFilters) {
-    where.push(`status <> 'preview'`);
-  }
-
   // TRANSACTION TYPE (bez fallbacku – pole jest stabilne)
   if (transactionType) {
     where.push(`transaction_type = $${p++}`);
