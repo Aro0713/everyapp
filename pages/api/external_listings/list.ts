@@ -98,17 +98,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let p = 2;
 
     const matchedSince = optString(req.query.matchedSince);
-        if (matchedSince) {
-      where.push(`matched_at >= $${p++}::timestamptz`);
+    if (matchedSince) {
+      // ✅ nie wycinaj rekordów z NULL matched_at (stare cache)
+      where.push(`(
+        matched_at >= $${p}::timestamptz
+        OR matched_at IS NULL
+      )`);
       params.push(matchedSince);
+      p++;
     }
+
     const hasMatchedSince = !!matchedSince;
 
     const orderBy = hasMatchedSince
       ? `matched_at DESC NULLS LAST, updated_at DESC, id DESC`
       : `updated_at DESC, id DESC`;
 
-     if (source && source !== "all") {
+    if (source && source !== "all") {
       where.push(`source = $${p++}`);
       params.push(source);
     }
@@ -355,6 +361,7 @@ if (q && !hasStructuredFilters) {
     params.push(limit);
 
     const { rows } = await pool.query<Row>(sql, params);
+    console.log("external_listings/list returned:", { count: rows.length });
 
     const last = rows.length ? rows[rows.length - 1] : null;
     const nextCursor =
