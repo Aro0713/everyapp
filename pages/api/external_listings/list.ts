@@ -184,71 +184,108 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   maxArea != null ||
   rooms != null;
 
-// Jeśli są filtry szczegółowe → nie pokazuj preview
-if (hasDetailFilters) {
-  where.push(`status <> 'preview'`);
-}
+  // Jeśli są filtry szczegółowe → nie pokazuj preview
+  if (hasDetailFilters) {
+    where.push(`status <> 'preview'`);
+  }
 
-if (transactionType) {
-  where.push(`transaction_type = $${p++}`);
-  params.push(transactionType);
-}
+  // TRANSACTION TYPE (bez fallbacku – pole jest stabilne)
+  if (transactionType) {
+    where.push(`transaction_type = $${p++}`);
+    params.push(transactionType);
+  }
 
-if (propertyType) {
-  where.push(`LOWER(COALESCE(property_type,'')) LIKE $${p++}`);
-  params.push(`%${propertyType.toLowerCase()}%`);
-}
+  // PROPERTY TYPE (fallback na title + location_text)
+  if (propertyType) {
+    where.push(`(
+      LOWER(COALESCE(property_type,'')) LIKE $${p}
+      OR LOWER(COALESCE(title,'')) LIKE $${p}
+      OR LOWER(COALESCE(location_text,'')) LIKE $${p}
+    )`);
+    params.push(`%${propertyType.toLowerCase()}%`);
+    p++;
+  }
 
-if (locationText) {
-  where.push(`LOWER(COALESCE(location_text,'')) LIKE $${p++}`);
-  params.push(`%${locationText.toLowerCase()}%`);
-}
+  // LOCATION TEXT (rozszerzone o title + city)
+  if (locationText) {
+    where.push(`(
+      LOWER(COALESCE(location_text,'')) LIKE $${p}
+      OR LOWER(COALESCE(title,'')) LIKE $${p}
+      OR LOWER(COALESCE(city,'')) LIKE $${p}
+    )`);
+    params.push(`%${locationText.toLowerCase()}%`);
+    p++;
+  }
 
-if (city) {
-  where.push(`LOWER(COALESCE(city,'')) LIKE $${p++}`);
-  params.push(`%${city.toLowerCase()}%`);
-}
+  // CITY (fallback na location_text + title)
+  if (city) {
+    where.push(`(
+      LOWER(COALESCE(city,'')) LIKE $${p}
+      OR LOWER(COALESCE(location_text,'')) LIKE $${p}
+      OR LOWER(COALESCE(title,'')) LIKE $${p}
+    )`);
+    params.push(`%${city.toLowerCase()}%`);
+    p++;
+  }
 
-if (district) {
-  where.push(`LOWER(COALESCE(district,'')) LIKE $${p++}`);
-  params.push(`%${district.toLowerCase()}%`);
-}
+  // DISTRICT (fallback na location_text + title)
+  if (district) {
+    where.push(`(
+      LOWER(COALESCE(district,'')) LIKE $${p}
+      OR LOWER(COALESCE(location_text,'')) LIKE $${p}
+      OR LOWER(COALESCE(title,'')) LIKE $${p}
+    )`);
+    params.push(`%${district.toLowerCase()}%`);
+    p++;
+  }
 
-if (street) {
-  where.push(`LOWER(COALESCE(street,'')) LIKE $${p++}`);
-  params.push(`%${street.toLowerCase()}%`);
-}
+  // STREET (fallback na location_text + title)
+  if (street) {
+    where.push(`(
+      LOWER(COALESCE(street,'')) LIKE $${p}
+      OR LOWER(COALESCE(location_text,'')) LIKE $${p}
+      OR LOWER(COALESCE(title,'')) LIKE $${p}
+    )`);
+    params.push(`%${street.toLowerCase()}%`);
+    p++;
+  }
 
-if (voivodeship) {
-  where.push(`LOWER(COALESCE(voivodeship,'')) LIKE $${p++}`);
-  params.push(`%${voivodeship.toLowerCase()}%`);
-}
+  // VOIVODESHIP (fallback na location_text + title)
+  if (voivodeship) {
+    where.push(`(
+      LOWER(COALESCE(voivodeship,'')) LIKE $${p}
+      OR LOWER(COALESCE(location_text,'')) LIKE $${p}
+      OR LOWER(COALESCE(title,'')) LIKE $${p}
+    )`);
+    params.push(`%${voivodeship.toLowerCase()}%`);
+    p++;
+  }
 
-if (minPrice != null) {
-  where.push(`price_amount >= $${p++}`);
-  params.push(minPrice);
-}
+  // NUMERIC FILTERS (bez fallbacku – czyste dane)
+  if (minPrice != null) {
+    where.push(`price_amount >= $${p++}`);
+    params.push(minPrice);
+  }
 
-if (maxPrice != null) {
-  where.push(`price_amount <= $${p++}`);
-  params.push(maxPrice);
-}
+  if (maxPrice != null) {
+    where.push(`price_amount <= $${p++}`);
+    params.push(maxPrice);
+  }
 
-if (minArea != null) {
-  where.push(`area_m2 >= $${p++}`);
-  params.push(minArea);
-}
+  if (minArea != null) {
+    where.push(`area_m2 >= $${p++}`);
+    params.push(minArea);
+  }
 
-if (maxArea != null) {
-  where.push(`area_m2 <= $${p++}`);
-  params.push(maxArea);
-}
+  if (maxArea != null) {
+    where.push(`area_m2 <= $${p++}`);
+    params.push(maxArea);
+  }
 
-if (rooms != null) {
-  where.push(`rooms = $${p++}`);
-  params.push(rooms);
-}
-
+  if (rooms != null) {
+    where.push(`rooms = $${p++}`);
+    params.push(rooms);
+  }
 
     // ====== TRYB 1: page-based (LIMIT/OFFSET) ======
     if (page != null) {

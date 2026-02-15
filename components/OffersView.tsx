@@ -189,18 +189,12 @@ async function loadEverybot(opts?: {
 
     // ✅ NOWE FILTRY (z panelu)
     if (f.transactionType) qs.set("transactionType", f.transactionType);
-    function normalizePropertyTypeForDb(v: string) {
-      const s = v.trim().toLowerCase();
-      if (!s) return "";
-      if (s.includes("dom")) return "house";
-      if (s.includes("mieszkan")) return "apartment";
-      if (s.includes("działk") || s.includes("dzialk") || s.includes("grunt")) return "plot";
-      if (s.includes("lokal") || s.includes("biur") || s.includes("komerc")) return "commercial";
-      return s;
-    }
 
-    const pt = normalizePropertyTypeForDb(f.propertyType);
-    if (pt) qs.set("propertyType", pt);
+    const rawPt = (f.propertyType ?? "").trim().toLowerCase();
+    if (rawPt) {
+      // wysyłamy to co user wpisał (dom/mieszkanie/działka/lokal)
+      qs.set("propertyType", rawPt);
+    }
     if (f.voivodeship.trim()) qs.set("voivodeship", f.voivodeship.trim());
     if (f.city.trim()) qs.set("city", f.city.trim());
     if (f.district.trim()) qs.set("district", f.district.trim());
