@@ -399,31 +399,11 @@ async function runLiveHunter(
 async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
   const filters = filtersOverride ?? botFilters;
 
-  // 0) boundary run (jeśli nie mamy jeszcze runTs w stanie)
-  const effectiveRunTs = botMatchedSince ?? new Date().toISOString();
-  setBotMatchedSince(effectiveRunTs);
-
-  // 1) Najpierw cache (Neon) — tylko TEN run
-  const r1 = await loadEverybot({
-    filters,
-    cursor: null,
-    append: false,
-    matchedSince: effectiveRunTs,
-  });
-
-  // 2) Jeśli brak wyników w cache → odpal LiveHunter z TYM SAMYM runTs,
-  //    a potem odczytaj cache jeszcze raz (też tylko TEN run)
-  if (!r1.rows || r1.rows.length === 0) {
-    await runLiveHunter(filters, effectiveRunTs);
-
-    await loadEverybot({
-      filters,
-      cursor: null,
-      append: false,
-      matchedSince: effectiveRunTs,
-    });
-  }
+  // ✅ NEON ONLY
+  setBotMatchedSince(null);
+  await loadEverybot({ filters, cursor: null, append: false, matchedSince: null });
 }
+
 
   return (
     <div className="space-y-6">
@@ -515,12 +495,25 @@ async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
                 ? "border-ew-accent bg-ew-accent/10 text-ew-primary"
                 : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
             )}
-          onClick={() => {
-          setTab("everybot");
-          setBotCursor(null);
-          setBotHasMore(false);
-          searchEverybotWithFallback(botFilters);
-        }}
+           onClick={() => {
+              setTab("everybot");
+              setBotCursor(null);
+              setBotHasMore(false);
+
+              // ✅ stop live UI (jakby coś zostało)
+              setBotSearching(false);
+              setBotSearchSeconds(0);
+              if (searchIntervalRef.current) {
+                window.clearInterval(searchIntervalRef.current);
+                searchIntervalRef.current = null;
+              }
+              searchingRef.current = false;
+
+              // ✅ NEON ONLY (bez matchedSince)
+              setBotMatchedSince(null);
+              loadEverybot({ filters: botFilters, cursor: null, append: false, matchedSince: null });
+            }}
+
           >
             🤖 {t(lang, "offersTabEverybot" as any)}
           </button>
@@ -608,10 +601,40 @@ async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
             setBotRows([]);
           }}
           onSearch={async (filters) => {
+            const hasRealFilters =
+              !!filters.q?.trim() ||
+              !!filters.transactionType?.trim() ||
+              !!filters.propertyType?.trim() ||
+              !!filters.voivodeship?.trim() ||
+              !!filters.city?.trim() ||
+              !!filters.district?.trim() ||
+              !!filters.locationText?.trim() ||
+              !!filters.minPrice?.trim() ||
+              !!filters.maxPrice?.trim() ||
+              !!filters.minArea?.trim() ||
+              !!filters.maxArea?.trim() ||
+              !!filters.rooms?.trim();
+
+            // ✅ brak filtrów => TYLKO NEON, zero paska
+            if (!hasRealFilters) {
+              setBotSearching(false);
+              setBotSearchSeconds(0);
+              setBotMatchedSince(null);
+
+              await loadEverybot({
+                filters,
+                cursor: null,
+                append: false,
+                matchedSince: null,
+              });
+              return;
+            }
+
+            // ✅ są filtry => LIVE + NEON, pokazujemy pasek
             const runTs = new Date().toISOString();
             setBotMatchedSince(runTs);
 
-            // ubij poprzednie szukanie
+            // ubij poprzedni interval
             if (searchIntervalRef.current) {
               window.clearInterval(searchIntervalRef.current);
               searchIntervalRef.current = null;
@@ -623,8 +646,8 @@ async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
 
             await runLiveHunter(filters, runTs);
 
+            // polling maks 90s, ale TYLKO na ten runTs
             let ticks = 0;
-
             searchIntervalRef.current = window.setInterval(async () => {
               if (!searchingRef.current) return;
 
@@ -632,7 +655,7 @@ async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
               setBotSearchSeconds(ticks * 5);
 
               const got = await loadEverybot({
-                filters: botFilters,
+                filters,
                 cursor: null,
                 append: false,
                 matchedSince: runTs,
@@ -658,7 +681,6 @@ async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
               }
             }, 5000);
           }}
-
 
           />
             {/* Results */}
