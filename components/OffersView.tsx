@@ -184,7 +184,15 @@ async function loadEverybot(opts?: {
     qs.set("includePreview", "1");
     qs.set("onlyEnriched", "0");
 
-    if (q) qs.set("q", q);
+    const hasStructuredFilters =
+      f.propertyType?.trim() ||
+      f.city?.trim() ||
+      f.district?.trim();
+
+    if (q && !hasStructuredFilters) {
+      qs.set("q", q);
+    }
+
     if (source && source !== "all") qs.set("source", String(source));
       if (matchedSince) qs.set("matchedSince", matchedSince);
 

@@ -114,7 +114,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // ✅ SAFETY: OLX ma być tylko nieruchomości
-    where.push(`(source <> 'olx' OR source_url LIKE '%/nieruchomosci/%')`);
+    where.push(`(
+    source <> 'olx'
+    OR source_url LIKE '%/nieruchomosci/%'
+    OR source_url LIKE '%/d/oferta/%'
+    )`);
 
     if (!includeInactive && status) {
       where.push(`COALESCE(source_status, 'active') = $${p++}`);
@@ -122,45 +126,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (onlyEnriched) {
-    where.push(`status IN ('enriched','active')`);
-    }
-
-      if (q) {
-      // ✅ q może być "mieszkanie, Katowice" -> tokenizujemy
-      const terms = q
-        .split(/[,\s]+/g) // przecinki i spacje
-        .map((t) => t.trim())
-        .filter((t) => t.length >= 2);
-
-      if (terms.length) {
-        const ors: string[] = [];
-
-        for (const term of terms) {
-          ors.push(`(
-            LOWER(COALESCE(title,'')) LIKE $${p}
-            OR LOWER(COALESCE(location_text,'')) LIKE $${p}
-            OR LOWER(COALESCE(city,'')) LIKE $${p}
-            OR LOWER(COALESCE(district,'')) LIKE $${p}
-            OR LOWER(COALESCE(street,'')) LIKE $${p}
-          )`);
-          params.push(`%${term}%`);
-          p++;
-        }
-
-                // ✅ filtr q ma sens tylko jeśli rekord ma jakiekolwiek dane tekstowe
-          where.push(`(
-        (${includePreview ? "status = 'preview' OR" : ""} (
-          (
-            COALESCE(title,'') <> ''
-            OR COALESCE(location_text,'') <> ''
-            OR COALESCE(city,'') <> ''
-            OR COALESCE(district,'') <> ''
-            OR COALESCE(street,'') <> ''
-          )
-          AND (${ors.join(" OR ")})
-        ))
-      )`);
-      }
+      where.push(`status = 'enriched'`);
     }
 
     // --- NEW FILTERS FROM SEARCH PANEL ---
@@ -191,6 +157,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   minArea != null ||
   maxArea != null ||
   rooms != null;
+    // 🔥 Q działa TYLKO jeśli nie ma filtrów strukturalnych
+const hasStructuredFilters = hasDetailFilters;
+
+if (q && !hasStructuredFilters) {
+  const terms = q
+    .split(/[,\s]+/g)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 2);
+
+  if (terms.length) {
+    const ors: string[] = [];
+    for (const term of terms) {
+      ors.push(`(
+        LOWER(COALESCE(title,'')) LIKE $${p}
+        OR LOWER(COALESCE(location_text,'')) LIKE $${p}
+      )`);
+      params.push(`%${term}%`);
+      p++;
+    }
+    where.push(`(${ors.join(" OR ")})`);
+  }
+}
 
   // TRANSACTION TYPE (bez fallbacku – pole jest stabilne)
   if (transactionType) {
