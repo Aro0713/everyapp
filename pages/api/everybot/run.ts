@@ -23,6 +23,7 @@ async function callInternal(req: NextApiRequest, path: string, body: any) {
     },
     body: JSON.stringify(body),
   });
+
   const j = await r.json().catch(() => null);
   if (!r.ok) throw new Error(j?.error ?? `${path} HTTP ${r.status}`);
   return j;
@@ -55,10 +56,18 @@ type IncomingFilters = {
   minArea?: unknown;
   maxArea?: unknown;
   rooms?: unknown;
+  runTs?: unknown;
 };
 
 function pickString(v: unknown, fallback: string) {
   return typeof v === "string" ? v : fallback;
+}
+
+function normalizeSource(v: string): "all" | "otodom" | "olx" {
+  const s = (v ?? "").toLowerCase().trim();
+  if (s === "otodom") return "otodom";
+  if (s === "olx") return "olx";
+  return "all";
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -93,46 +102,48 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const qFromFilters = filters ? pickString(filters.q, "") : "";
       const sourceFromFilters = filters ? pickString(filters.source, "all") : "all";
 
-      const q =
-        qFromFilters ||
-        (typeof body.q === "string" ? body.q : "");
-
-      const source =
-        sourceFromFilters ||
-        (typeof body.source === "string" ? body.source : "all");
+      const q = (qFromFilters || (typeof body.q === "string" ? body.q : "") || "").trim();
+      const source = normalizeSource(
+        (sourceFromFilters || (typeof body.source === "string" ? body.source : "all") || "all").trim()
+      );
 
       const cursor =
         typeof body.cursor === "string" && body.cursor.trim() ? body.cursor.trim() : "1";
+
+      const runTs =
+        (filters && typeof filters.runTs === "string" && filters.runTs.trim()
+          ? filters.runTs.trim()
+          : typeof body.runTs === "string" && body.runTs.trim()
+          ? body.runTs.trim()
+          : new Date().toISOString());
 
       const harvestPages = 2;
       const harvestLimit = 30;
 
       // ✅ tylko whitelisted źródła dla run (all => otodom+olx)
-      const sourcesToRun = source === "all" ? ["otodom", "olx"] : [source];
+      const sourcesToRun: Array<"otodom" | "olx"> =
+        source === "all" ? ["otodom", "olx"] : [source];
 
       let harvestedTotal = 0;
       const harvestBySource: Record<string, any> = {};
       const nextCursorBySource: Record<string, string | null> = {};
 
       for (const src of sourcesToRun) {
-        const city = typeof filters?.city === "string" ? filters.city.trim() : "";
-          const district = typeof filters?.district === "string" ? filters.district.trim() : "";
-
         try {
-          // IMPORTANT: search endpoint nadal dostaje q/source/cursor/limit/pages
-          // (filtry szczegółowe działają na DB w /external_listings/list)
-         const j1 = await callInternal(req, "/api/everybot/search", {
-          // nowy kontrakt
-          filters: filters ?? { q, source: src },
-          // kompatybilność
-          q,
-          source: src,
-          cursor,
-          limit: harvestLimit,
-          pages: harvestPages,
-        });
+          const j1 = await callInternal(req, "/api/everybot/search", {
+            // kontrakt: runTs + filters
+            runTs,
+            filters: { ...(filters ?? {}), q, source: src, runTs },
 
-        harvestBySource[src] = j1;
+            // kompatybilność (tymczasowo)
+            q,
+            source: src,
+            cursor,
+            limit: harvestLimit,
+            pages: harvestPages,
+          });
+
+          harvestBySource[src] = j1;
           nextCursorBySource[src] =
             typeof j1?.nextCursor === "string" ? j1.nextCursor : null;
 
@@ -143,9 +154,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       }
 
-           return res.status(200).json({
+      return res.status(200).json({
         ok: true,
         officeId,
+        runTs,
         harvestedTotal,
         harvestBySource,
         nextCursorBySource,
@@ -158,7 +170,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           filters: filters ?? null,
         },
       });
-
     } finally {
       await releaseOfficeLock(officeId);
     }

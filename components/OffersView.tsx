@@ -162,9 +162,11 @@ async function loadEverybot(opts?: {
   filters?: typeof botFilters;
   cursor?: { updated_at: string; id: string } | null;
   append?: boolean;
+  matchedSince?: string | null;
 }): Promise<{ rows: ExternalRow[]; nextCursor: { updated_at: string; id: string } | null }> {
 
   const f = opts?.filters ?? botFilters;
+   const matchedSince = opts?.matchedSince ?? botMatchedSince ?? null;
   const q = (f.q ?? "").trim();
   const source = f.source ?? "all";
   const cursor = opts?.cursor ?? null;
@@ -180,6 +182,7 @@ async function loadEverybot(opts?: {
 
     if (q) qs.set("q", q);
     if (source && source !== "all") qs.set("source", String(source));
+      if (matchedSince) qs.set("matchedSince", matchedSince);
 
     // ✅ NOWE FILTRY (z panelu)
     if (f.transactionType) qs.set("transactionType", f.transactionType);
@@ -318,7 +321,7 @@ async function loadEverybot(opts?: {
 function isHttpUrl(v: unknown): v is string {
   return typeof v === "string" && /^https?:\/\//i.test(v.trim());
 }
-async function runLiveHunter(filtersOverride?: typeof botFilters) {
+async function runLiveHunter(filtersOverride?: typeof botFilters, runTs?: string) {
   const raw = filtersOverride ?? botFilters;
 
   const filters = {
@@ -335,22 +338,12 @@ async function runLiveHunter(filtersOverride?: typeof botFilters) {
     maxArea: (raw.maxArea ?? "").trim(),
     rooms: (raw.rooms ?? "").trim(),
   };
+  
+  const effectiveRunTs = runTs ?? new Date().toISOString();
 
-  function inferPropertyTypeFromQ(
-    q: string
-  ): "" | "house" | "apartment" | "plot" | "commercial" {
-    const s = q.toLowerCase();
-    if (s.includes("dom")) return "house";
-    if (s.includes("mieszkan")) return "apartment";
-    if (s.includes("działk") || s.includes("dzialk") || s.includes("grunt")) return "plot";
-    if (s.includes("lokal") || s.includes("biur") || s.includes("komerc")) return "commercial";
-    return "";
-  }
-
-  if (!filters.propertyType && filters.q) {
-    const inferred = inferPropertyTypeFromQ(filters.q);
-    if (inferred) filters.propertyType = inferred;
-  }
+  setBotMatchedSince(effectiveRunTs);
+  setBotCursor(null);
+  setBotHasMore(false);
 
   setBotLoading(true);
   setBotErr(null);
@@ -359,19 +352,20 @@ async function runLiveHunter(filtersOverride?: typeof botFilters) {
     const r = await fetch("/api/everybot/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ filters }),
+      body: JSON.stringify({ filters, runTs: effectiveRunTs }),
     });
 
     const j = await r.json().catch(() => null);
     if (!r.ok) throw new Error(j?.error ?? `RUN HTTP ${r.status}`);
 
-    await loadEverybot({ filters, cursor: null, append: false });
+    await loadEverybot({ filters, cursor: null, append: false, matchedSince: effectiveRunTs });
   } catch (e: any) {
     setBotErr(e?.message ?? "Live hunter failed");
   } finally {
     setBotLoading(false);
   }
 }
+
 
 async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
   const filters = filtersOverride ?? botFilters;
@@ -568,30 +562,30 @@ async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
             setBotRows([]);
           }}
            onSearch={async (filters) => {
-            const runTs = new Date().toISOString();
-            setBotMatchedSince(runTs);
+          const runTs = new Date().toISOString();
 
-            setBotSearching(true);
-            setBotSearchSeconds(0);
+          setBotSearching(true);
+          setBotSearchSeconds(0);
 
-            await searchEverybotWithFallback(filters);
+          await runLiveHunter(filters, runTs);
 
-            await new Promise((r) => setTimeout(r, 1000));
+          // opcjonalny polling (jeśli chcesz jeszcze dociągać enrich/statusy),
+          // ale NA TYM SAMYM matchedSince
+          await new Promise((r) => setTimeout(r, 800));
+          await refreshEverybotList();
+
+          let ticks = 0;
+          const intervalId = window.setInterval(async () => {
+            ticks += 1;
+            setBotSearchSeconds(ticks * 5);
             await refreshEverybotList();
 
-            let ticks = 0;
-
-            const intervalId = window.setInterval(async () => {
-              ticks += 1;
-              setBotSearchSeconds(ticks * 5);
-              await refreshEverybotList();
-
-              if (ticks >= 18) {
-                window.clearInterval(intervalId);
-                setBotSearching(false);
-              }
-            }, 5000);
-          }}
+            if (ticks >= 18) {
+              window.clearInterval(intervalId);
+              setBotSearching(false);
+            }
+          }, 5000);
+        }}
 
           />
             {/* Results */}
@@ -804,10 +798,11 @@ async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
                       onClick={() => {
                         if (botCursor) {
                           loadEverybot({
-                            filters: botFilters,
-                            cursor: botCursor,
-                            append: true,
-                          });
+                          filters: botFilters,
+                          cursor: botCursor,
+                          append: true,
+                          matchedSince: botMatchedSince,
+                        });
                         } else {
                           runLiveHunter();
                         }

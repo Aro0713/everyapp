@@ -25,6 +25,7 @@ export type NormalizedFilters = {
   location?: string;
   city?: string;
   district?: string;
+  street?: string;
 
   // liczby
   minPrice?: number | null;
@@ -38,6 +39,10 @@ export type NormalizedFilters = {
   priceMax?: number | null;
   areaMin?: number | null;
   areaMax?: number | null;
+
+  // RUN boundary (jedna prawda dla tego uruchomienia)
+  runTs?: string; // ISO (timestamptz)
 };
+
 
 

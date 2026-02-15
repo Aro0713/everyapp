@@ -20,35 +20,38 @@ export function portalSafeFiltersFor(
     case "otodom":
       // Otodom: najlepiej PATH (tx + typ) + opcjonalnie region.
       // City/district w URL są niestabilne -> tniemy w DB.
-         return {
+        return {
         q: filters.q,
         transactionType: filters.transactionType,
         propertyType: filters.propertyType,
         voivodeship: filters.voivodeship,
-        city: (filters as any).city,
-        district: (filters as any).district,
-        street: (filters as any).street,
-        minPrice: (filters as any).minPrice,
-        maxPrice: (filters as any).maxPrice,
-        minArea: (filters as any).minArea,
-        maxArea: (filters as any).maxArea,
-        rooms: (filters as any).rooms,
-        } as NormalizedFilters;
+        city: filters.city,
+        district: filters.district,
+        street: filters.street,
+        minPrice: filters.minPrice,
+        maxPrice: filters.maxPrice,
+        minArea: filters.minArea,
+        maxArea: filters.maxArea,
+        rooms: filters.rooms,
+        runTs: filters.runTs,
+        };
 
-         case "olx":
+        case "olx":
       // OLX: q + podstawowe filtry są stabilne, lokalizacja też zwykle działa.
          return {
         q: filters.q,
         transactionType: filters.transactionType,
         propertyType: filters.propertyType,
         voivodeship: filters.voivodeship,
-        city: (filters as any).city,
-        district: (filters as any).district,
-        priceMin: (filters as any).priceMin,
-        priceMax: (filters as any).priceMax,
-        areaMin: (filters as any).areaMin,
-        areaMax: (filters as any).areaMax,
-        rooms: (filters as any).rooms,
+        city: filters.city,
+        district: filters.district,
+        priceMin: filters.priceMin,
+        priceMax: filters.priceMax,
+        areaMin: filters.areaMin,
+        areaMax: filters.areaMax,
+        rooms: filters.rooms,
+        runTs: filters.runTs,
+
       } as NormalizedFilters;
 
     case "morizon":
@@ -58,12 +61,15 @@ export function portalSafeFiltersFor(
         transactionType: filters.transactionType,
         propertyType: filters.propertyType,
         voivodeship: filters.voivodeship,
-        city: (filters as any).city,
-        priceMin: (filters as any).priceMin,
-        priceMax: (filters as any).priceMax,
-        areaMin: (filters as any).areaMin,
-        areaMax: (filters as any).areaMax,
-        rooms: (filters as any).rooms,
+        city: filters.city,
+        district: filters.district,
+        priceMin: filters.priceMin,
+        priceMax: filters.priceMax,
+        areaMin: filters.areaMin,
+        areaMax: filters.areaMax,
+        rooms: filters.rooms,
+        runTs: filters.runTs,
+
       } as NormalizedFilters;
 
     case "gratka":
@@ -73,12 +79,15 @@ export function portalSafeFiltersFor(
         transactionType: filters.transactionType,
         propertyType: filters.propertyType,
         voivodeship: filters.voivodeship,
-        city: (filters as any).city,
-        priceMin: (filters as any).priceMin,
-        priceMax: (filters as any).priceMax,
-        areaMin: (filters as any).areaMin,
-        areaMax: (filters as any).areaMax,
-        rooms: (filters as any).rooms,
+         city: filters.city,
+        district: filters.district,
+        priceMin: filters.priceMin,
+        priceMax: filters.priceMax,
+        areaMin: filters.areaMin,
+        areaMax: filters.areaMax,
+        rooms: filters.rooms,
+        runTs: filters.runTs,
+
       } as NormalizedFilters;
 
     case "odwlasciciela":
@@ -89,12 +98,15 @@ export function portalSafeFiltersFor(
         transactionType: filters.transactionType,
         propertyType: filters.propertyType,
         voivodeship: filters.voivodeship,
-        city: (filters as any).city,
-        priceMin: (filters as any).priceMin,
-        priceMax: (filters as any).priceMax,
-        areaMin: (filters as any).areaMin,
-        areaMax: (filters as any).areaMax,
-        rooms: (filters as any).rooms,
+        city: filters.city,
+        district: filters.district,
+        priceMin: filters.priceMin,
+        priceMax: filters.priceMax,
+        areaMin: filters.areaMin,
+        areaMax: filters.areaMax,
+        rooms: filters.rooms,
+        runTs: filters.runTs,
+
       } as NormalizedFilters;
 
     default:

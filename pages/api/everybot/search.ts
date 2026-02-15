@@ -1087,6 +1087,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 50, 1), 200);
 
     const body = req.method === "POST" ? (req.body ?? {}) : {};
+    const runTsFromBody = req.method === "POST" ? optString((req.body ?? {}).runTs) : optString(req.query.runTs);
+    const runTsFromFilters = req.method === "POST" ? optString(((req.body ?? {}) as any)?.filters?.runTs) : null;
+    const runTs = runTsFromFilters ?? runTsFromBody ?? new Date().toISOString();
     const filters = (req.method === "POST" ? (body as any).filters : null) as any | null;
     const urlFromGet = req.method === "GET" ? optString(req.query.url) : null;
     const urlFromPost = req.method === "POST" ? optString(body.url) : null;
@@ -1354,9 +1357,9 @@ for (const r of rows) {
       $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,
       now(),'active', now()
     )
-    ON CONFLICT (office_id, source, source_listing_id)
-    DO UPDATE SET
-      matched_at = now(),
+      ON CONFLICT (office_id, source, source_listing_id)
+      DO UPDATE SET
+      matched_at = EXCLUDED.matched_at,
       source_url = EXCLUDED.source_url,
       title = EXCLUDED.title,
       price_amount = EXCLUDED.price_amount,
@@ -1397,7 +1400,7 @@ for (const r of rows) {
       r.status ?? "active",
 
       r.thumb_url ?? null,
-      r.matched_at ?? new Date().toISOString(),
+      runTs,
       r.transaction_type ?? null,
       r.property_type ?? null,
       r.area_m2 ?? null,

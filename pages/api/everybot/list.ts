@@ -30,7 +30,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const q = optString(body.q);
     const source = optString(body.source);
     const status = optString(body.status);
-
+    const matchedSince = optString(body.matchedSince);
     const limitRaw = optNumber(body.limit) ?? 50;
     const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 50;
 
@@ -41,17 +41,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       WHERE office_id = $1
         AND ($2::text IS NULL OR source = $2)
         AND ($3::text IS NULL OR status = $3)
+        AND ($4::timestamptz IS NULL OR matched_at >= $4::timestamptz)
         AND (
-          $4::text IS NULL
-          OR title ILIKE '%' || $4 || '%'
-          OR location_text ILIKE '%' || $4 || '%'
-          OR source_url ILIKE '%' || $4 || '%'
+          $5::text IS NULL
+          OR title ILIKE '%' || $5 || '%'
+          OR location_text ILIKE '%' || $5 || '%'
+          OR source_url ILIKE '%' || $5 || '%'
         )
-      ORDER BY imported_at DESC
-      LIMIT $5
+      ORDER BY matched_at DESC NULLS LAST, imported_at DESC
+      LIMIT $6
       `,
-      [officeId, source, status, q, limit]
+      [officeId, source, status, matchedSince, q, limit]
     );
+
 
     return res.status(200).json({ rows });
   } catch (e: any) {

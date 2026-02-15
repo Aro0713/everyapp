@@ -90,19 +90,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let p = 2;
 
     const matchedSince = optString(req.query.matchedSince);
+    const hasMatchedSince = !!matchedSince;
+
     if (matchedSince) {
       where.push(`matched_at >= $${p++}::timestamptz`);
       params.push(matchedSince);
     }
 
-    if (source && source !== "all") {
-      where.push(`source = $${p++}`);
-      params.push(source);
-    }
-    if (source && source !== "all") {
-      where.push(`source = $${p++}`);
-      params.push(source);
-    }
+   if (source && source !== "all") {
+    where.push(`source = $${p++}`);
+    params.push(source);
+  }
+
     // ✅ SAFETY: OLX ma być tylko nieruchomości
     where.push(`(source <> 'olx' OR source_url LIKE '%/nieruchomosci/%')`);
 
@@ -277,10 +276,13 @@ if (rooms != null) {
           updated_at
         FROM external_listings
         WHERE ${where.join(" AND ")}
-        ORDER BY updated_at DESC, id DESC
+        ORDER BY
+        CASE WHEN $MATCHED_SINCE_PRESENT THEN matched_at END DESC NULLS LAST,
+        updated_at DESC,
+        id DESC
         LIMIT $${p} OFFSET $${p + 1}
       `;
-
+      
       const listParams = [...params, limit, offset];
       const { rows } = await pool.query<Row>(sql, listParams);
 
@@ -318,7 +320,10 @@ if (rooms != null) {
         updated_at
       FROM external_listings
       WHERE ${where.join(" AND ")}
-      ORDER BY updated_at DESC, id DESC
+      ORDER BY
+      CASE WHEN $MATCHED_SINCE_PRESENT THEN matched_at END DESC NULLS LAST,
+      updated_at DESC,
+      id DESC
       LIMIT $${p++}
     `;
 
