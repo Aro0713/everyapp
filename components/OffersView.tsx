@@ -424,10 +424,22 @@ async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
               type="button"
               className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-ew-primary shadow-sm transition hover:bg-ew-accent/10"
               onClick={() => {
-                if (tab === "office") load();
-                else runLiveHunter();
+              if (tab === "office") {
+                load();
+              } else {
+                // ✅ EveryBOT refresh = tylko Neon
+                setBotSearching(false);
+                setBotSearchSeconds(0);
+                if (searchIntervalRef.current) {
+                  window.clearInterval(searchIntervalRef.current);
+                  searchIntervalRef.current = null;
+                }
+                searchingRef.current = false;
 
-              }}
+                setBotMatchedSince(null);
+                loadEverybot({ filters: botFilters, cursor: null, append: false, matchedSince: null });
+              }
+            }}
             >
               {t(lang, "offersRefresh" as any)}
             </button>
@@ -601,10 +613,7 @@ async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
             filters={botFilters}
             setFilters={(next) => {
             setBotFilters(next);
-            setBotCursor(null);
-            setBotHasMore(false);
-            setBotRows([]);
-          }}
+            }}
             onSearch={async (filters) => {
               const hasRealFilters =
                 !!filters.q?.trim() ||
@@ -667,11 +676,11 @@ async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
 
           />
             {/* Results */}
-            {botSearching && (
-                <div className="mb-3 rounded-xl bg-ew-accent/10 px-4 py-2 text-sm font-semibold text-ew-primary">
-                  🔄 {t(lang, "everybotSearching" as any)} ({botSearchSeconds}s / 90s)
-                </div>
-              )}
+           {botSearching && botMatchedSince && (
+              <div className="mb-3 rounded-xl bg-ew-accent/10 px-4 py-2 text-sm font-semibold text-ew-primary">
+                🔄 {t(lang, "everybotSearching" as any)} ({botSearchSeconds}s / 90s)
+              </div>
+            )}
             <div className="mt-6 rounded-2xl border border-gray-200 bg-white">
               {botLoading && botRows.length === 0 ? (
                 <div className="p-4 text-sm text-gray-500">
@@ -874,16 +883,18 @@ async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
                       type="button"
                       disabled={botLoading}
                       onClick={() => {
-                        if (botCursor) {
-                          loadEverybot({
+                      if (botCursor) {
+                        loadEverybot({
                           filters: botFilters,
                           cursor: botCursor,
                           append: true,
                           matchedSince: botMatchedSince,
                         });
-                        } else {
-                          runLiveHunter();
-                        }
+                      } else {
+                        // ✅ bez cursor = po prostu nie ma więcej z DB
+                        // (albo możesz zrobić page-based, ale NIE live)
+                        return;
+                      }
                       }}
 
                       className={clsx(
