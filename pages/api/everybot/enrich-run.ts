@@ -22,6 +22,45 @@ type Row = {
   source: SourceKey;
   source_url: string;
 };
+function parseLocationPartsFromText(locationText: string | null): {
+  voivodeship: string | null;
+  city: string | null;
+  district: string | null;
+  street: string | null;
+} {
+  if (!locationText) return { voivodeship: null, city: null, district: null, street: null };
+
+  const raw = locationText.replace(/\s+/g, " ").trim();
+  const parts = raw.split(",").map((s) => s.trim()).filter(Boolean);
+
+  const last = parts.length ? parts[parts.length - 1] : null;
+
+  // wygląda jak województwo: jedno słowo, litery/myślniki (np. "śląskie", "małopolskie")
+  const looksLikeVoiv =
+    !!last && /^[a-ząćęłńóśźż-]{4,}$/i.test(last) && !last.toLowerCase().startsWith("ul");
+
+  const voivodeship = looksLikeVoiv ? last! : null;
+
+  const city =
+    parts.length >= 2
+      ? (looksLikeVoiv ? parts[parts.length - 2] : parts[parts.length - 1])
+      : parts[0] ?? null;
+
+  const district =
+    looksLikeVoiv && parts.length >= 3 ? parts[parts.length - 3] :
+    !looksLikeVoiv && parts.length >= 2 ? parts[parts.length - 2] :
+    null;
+
+  const cut = looksLikeVoiv ? parts.length - 3 : parts.length - 2;
+  const street = cut > 0 ? parts.slice(0, cut).join(", ") : null;
+
+  return {
+    voivodeship: voivodeship || null,
+    city: city || null,
+    district: district || null,
+    street: street || null,
+  };
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
@@ -51,6 +90,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         from external_listings
         where enriched_at is null
             and status in ('preview','active')
+            and office_id is not null
         order by updated_at asc
         limit $1
         `,
@@ -83,7 +123,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
             const data = await enricher(it.source_url);
 
-        await pool.query(
+            const loc = parseLocationPartsFromText(data?.location_text ?? null);
+
+            await pool.query(
             `
             update external_listings
             set
@@ -97,6 +139,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 area_m2 = coalesce($8, area_m2),
                 rooms = coalesce($9, rooms),
                 price_per_m2 = coalesce($10, price_per_m2),
+
+                -- ✅ uzupełnij lokalizację (tylko jeśli coś wyciągnęliśmy)
+                voivodeship = coalesce($11, voivodeship),
+                city = coalesce($12, city),
+                district = coalesce($13, district),
+                street = coalesce($14, street),
 
                 status = 'enriched',
                 enriched_at = now(),
@@ -115,8 +163,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 data?.area_m2 ?? null,
                 data?.rooms ?? null,
                 data?.price_per_m2 ?? null,
+
+                loc.voivodeship,
+                loc.city,
+                loc.district,
+                loc.street,
             ]
             );
+
 
             processed++;
           } catch (e: any) {
