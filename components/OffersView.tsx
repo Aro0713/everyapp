@@ -66,6 +66,7 @@ function fmtPrice(v: ExternalRow["price_amount"], currency?: string | null) {
 export default function OffersView({ lang }: { lang: LangKey }) {
   const searchIntervalRef = useRef<number | null>(null);
   const searchingRef = useRef(false);
+  const tableRef = useRef<HTMLDivElement | null>(null);
   const [tab, setTab] = useState<OffersTab>("office");
 
   // --- Office listings ---
@@ -105,7 +106,7 @@ const [botFilters, setBotFilters] = useState<EverybotFilters>({
   rooms: "",
 });
 
-
+  const tableScrollRef = useRef<HTMLDivElement | null>(null);
   const [botLoading, setBotLoading] = useState(false);
   const [botErr, setBotErr] = useState<string | null>(null);
   const [botRows, setBotRows] = useState<ExternalRow[]>([]);
@@ -279,14 +280,24 @@ async function loadEverybot(opts?: {
     const j = await r.json();
     if (!r.ok) throw new Error(j?.error ?? "List error");
 
+    const scrollTop = tableRef.current?.scrollTop ?? 0;
+
     setBotRows(Array.isArray(j?.rows) ? j.rows : []);
-    setBotHasMore(Boolean(j?.nextCursor)); // jeśli używasz cursor
+    setBotHasMore(Boolean(j?.nextCursor));
+    setBotCursor(j?.nextCursor ?? null);
+
+    // przywróć scroll po renderze
+    requestAnimationFrame(() => {
+      if (tableRef.current) {
+        tableRef.current.scrollTop = scrollTop;
+      }
+    });
+
   } catch (e: any) {
     // nie spamuj errorami podczas polling
     console.warn("everybot refresh failed:", e?.message ?? e);
   }
 }
-
 
   async function importLink() {
     const url = importUrl.trim();
@@ -315,17 +326,101 @@ async function loadEverybot(opts?: {
     }
   }
 
-  useEffect(() => {
-    load();
+    useEffect(() => {
+      load();
+    }, []);
+    useEffect(() => {
+    return () => {
+      if (searchIntervalRef.current) {
+        window.clearInterval(searchIntervalRef.current);
+        searchIntervalRef.current = null;
+      }
+    };
   }, []);
-  useEffect(() => {
-  return () => {
-    if (searchIntervalRef.current) {
-      window.clearInterval(searchIntervalRef.current);
-      searchIntervalRef.current = null;
-    }
-  };
-}, []);
+  // 🔄 AUTO-REFRESH EveryBOT z Neon (co 20s, tylko gdy zakładka aktywna)
+    useEffect(() => {
+      if (tab !== "everybot") return;
+
+      let timer: number | null = null;
+
+      const tick = async () => {
+        // nie odświeżaj podczas LIVE
+        if (botSearching) return;
+
+        // tylko gdy karta widoczna
+        if (document.visibilityState !== "visible") return;
+
+        try {
+          await refreshEverybotList();
+        } catch (e) {
+          console.warn("Auto-refresh failed");
+        }
+      };
+
+      // pierwsze odpalenie po 20s
+      timer = window.setInterval(tick, 20000);
+
+      // refresh przy powrocie na kartę
+      const onVis = () => {
+        if (document.visibilityState === "visible") {
+          tick();
+        }
+      };
+
+      document.addEventListener("visibilitychange", onVis);
+
+      return () => {
+        if (timer) window.clearInterval(timer);
+        document.removeEventListener("visibilitychange", onVis);
+      };
+    }, [tab, botFilters, botMatchedSince, botSearching]);
+  
+    useEffect(() => {
+      const el = tableScrollRef.current;
+      if (!el) return;
+
+      let isDown = false;
+      let startX = 0;
+      let scrollLeft = 0;
+
+      const onMouseDown = (e: MouseEvent) => {
+        isDown = true;
+        el.classList.add("active");
+        startX = e.pageX - el.offsetLeft;
+        scrollLeft = el.scrollLeft;
+      };
+
+      const onMouseLeave = () => {
+        isDown = false;
+        el.classList.remove("active");
+      };
+
+      const onMouseUp = () => {
+        isDown = false;
+        el.classList.remove("active");
+      };
+
+      const onMouseMove = (e: MouseEvent) => {
+        if (!isDown) return;
+        e.preventDefault();
+        const x = e.pageX - el.offsetLeft;
+        const walk = (x - startX) * 1.2; // prędkość scrolla
+        el.scrollLeft = scrollLeft - walk;
+      };
+
+      el.addEventListener("mousedown", onMouseDown);
+      el.addEventListener("mouseleave", onMouseLeave);
+      el.addEventListener("mouseup", onMouseUp);
+      el.addEventListener("mousemove", onMouseMove);
+
+      return () => {
+        el.removeEventListener("mousedown", onMouseDown);
+        el.removeEventListener("mouseleave", onMouseLeave);
+        el.removeEventListener("mouseup", onMouseUp);
+        el.removeEventListener("mousemove", onMouseMove);
+      };
+    }, []);
+
 
   const empty = !loading && rows.length === 0 && !err;
 
@@ -573,7 +668,10 @@ async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
                 <p className="text-sm text-gray-500">{t(lang, "offersEmpty" as any)}</p>
               </div>
             ) : (
-              <div className="w-full overflow-x-auto">
+              <div
+                  ref={tableRef}
+                  className="w-full overflow-x-auto max-h-[70vh] overflow-y-auto"
+                >
                 <table className="w-full text-left text-sm">
                   <thead className="text-xs text-gray-500">
                     <tr>
@@ -719,8 +817,12 @@ async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
               ) : (
                 <>
 
-                <div className="w-full overflow-x-auto">
-                  <table className="w-full table-fixed text-left text-sm">
+                     <div
+                    ref={tableScrollRef}
+                    className="w-full overflow-x-auto touch-pan-x cursor-grab active:cursor-grabbing select-none"
+                     >
+                    <table className="w-full table-fixed text-left text-sm">
+
                     <thead className="text-xs text-gray-500">
                       <tr>
                       <th className="px-4 py-3 w-20">{t(lang, "everybotColPhoto" as any)}</th>
