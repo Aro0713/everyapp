@@ -64,10 +64,12 @@ function fmtPrice(v: ExternalRow["price_amount"], currency?: string | null) {
 }
 
 export default function OffersView({ lang }: { lang: LangKey }) {
-  const searchIntervalRef = useRef<number | null>(null);
+ const searchIntervalRef = useRef<number | null>(null);
   const searchingRef = useRef(false);
-  const tableRef = useRef<HTMLDivElement | null>(null);
+
+  const officeTableRef = useRef<HTMLDivElement | null>(null);
   const [tab, setTab] = useState<OffersTab>("office");
+  const everybotTableRef = useRef<HTMLDivElement | null>(null);
 
   // --- Office listings ---
   const [rows, setRows] = useState<ListingRow[]>([]);
@@ -106,7 +108,6 @@ const [botFilters, setBotFilters] = useState<EverybotFilters>({
   rooms: "",
 });
 
-  const tableScrollRef = useRef<HTMLDivElement | null>(null);
   const [botLoading, setBotLoading] = useState(false);
   const [botErr, setBotErr] = useState<string | null>(null);
   const [botRows, setBotRows] = useState<ExternalRow[]>([]);
@@ -247,57 +248,73 @@ async function loadEverybot(opts?: {
     setBotLoading(false);
   }
 }
-  async function refreshEverybotList() {
+ async function refreshEverybotList() {
   try {
+    const f = botFilters;
+
     const qs = new URLSearchParams();
     qs.set("limit", "50");
     qs.set("includeInactive", "1");
+    qs.set("includePreview", "1");
     qs.set("onlyEnriched", "0");
-    
+
     if (botMatchedSince) qs.set("matchedSince", botMatchedSince);
 
-    // jeśli masz source/filter w stanie – dodaj je
-    if (botFilters?.source && botFilters.source !== "all") qs.set("source", botFilters.source);
+    // source
+    if (f.source && f.source !== "all") qs.set("source", String(f.source));
 
-    // ważne: do list.ts wysyłasz filtry z panelu (tak jak robisz teraz)
-    if (botFilters?.transactionType) qs.set("transactionType", botFilters.transactionType);
-    if (botFilters?.propertyType) qs.set("propertyType", botFilters.propertyType);
-    if (botFilters?.locationText) qs.set("locationText", botFilters.locationText);
-    if (botFilters?.city) qs.set("city", botFilters.city);
-    if (botFilters?.district) qs.set("district", botFilters.district);
-    if (botFilters?.voivodeship) qs.set("voivodeship", botFilters.voivodeship);
-    if (botFilters?.street) qs.set("street", botFilters.street);
-    if (botFilters?.minPrice != null) qs.set("minPrice", String(botFilters.minPrice));
-    if (botFilters?.maxPrice != null) qs.set("maxPrice", String(botFilters.maxPrice));
-    if (botFilters?.minArea != null) qs.set("minArea", String(botFilters.minArea));
-    if (botFilters?.maxArea != null) qs.set("maxArea", String(botFilters.maxArea));
-    if (botFilters?.rooms != null) qs.set("rooms", String(botFilters.rooms));
+    // q tylko bez structured
+    const hasStructuredFilters =
+      !!f.propertyType?.trim() ||
+      !!f.city?.trim() ||
+      !!f.district?.trim();
 
-    // q jako fallback/phrase
-    if (botFilters?.q) qs.set("q", botFilters.q);
+    const q = (f.q ?? "").trim();
+    if (q && !hasStructuredFilters) qs.set("q", q);
+
+    // transaction
+    if (f.transactionType?.trim()) qs.set("transactionType", f.transactionType.trim());
+
+    // propertyType lowercase
+    const rawPt = (f.propertyType ?? "").trim().toLowerCase();
+    if (rawPt) qs.set("propertyType", rawPt);
+
+    // region/city/district
+    if (f.voivodeship?.trim()) qs.set("voivodeship", f.voivodeship.trim());
+    if (f.city?.trim()) qs.set("city", f.city.trim());
+    if (f.district?.trim()) qs.set("district", f.district.trim());
+
+    // locationText tylko gdy brak city/district
+    const hasCityOrDistrict = !!(f.city?.trim() || f.district?.trim());
+    if (!hasCityOrDistrict && f.locationText?.trim()) {
+      qs.set("locationText", f.locationText.trim());
+    }
+
+    // numeric – tylko gdy niepuste
+    if (f.minPrice?.trim()) qs.set("minPrice", f.minPrice.trim());
+    if (f.maxPrice?.trim()) qs.set("maxPrice", f.maxPrice.trim());
+    if (f.minArea?.trim()) qs.set("minArea", f.minArea.trim());
+    if (f.maxArea?.trim()) qs.set("maxArea", f.maxArea.trim());
+    if (f.rooms?.trim()) qs.set("rooms", f.rooms.trim());
 
     const r = await fetch(`/api/external_listings/list?${qs.toString()}`);
-    const j = await r.json();
+    const j = await r.json().catch(() => null);
     if (!r.ok) throw new Error(j?.error ?? "List error");
 
-    const scrollTop = tableRef.current?.scrollTop ?? 0;
+    const scrollLeft = everybotTableRef.current?.scrollLeft ?? 0;
 
     setBotRows(Array.isArray(j?.rows) ? j.rows : []);
     setBotHasMore(Boolean(j?.nextCursor));
     setBotCursor(j?.nextCursor ?? null);
 
-    // przywróć scroll po renderze
     requestAnimationFrame(() => {
-      if (tableRef.current) {
-        tableRef.current.scrollTop = scrollTop;
-      }
+      if (everybotTableRef.current) everybotTableRef.current.scrollLeft = scrollLeft;
     });
-
   } catch (e: any) {
-    // nie spamuj errorami podczas polling
     console.warn("everybot refresh failed:", e?.message ?? e);
   }
 }
+
 
   async function importLink() {
     const url = importUrl.trim();
@@ -375,52 +392,46 @@ async function loadEverybot(opts?: {
       };
     }, [tab, botFilters, botMatchedSince, botSearching]);
   
-    useEffect(() => {
-      const el = tableScrollRef.current;
-      if (!el) return;
+useEffect(() => {
+  const el = everybotTableRef.current;
+  if (!el) return;
 
-      let isDown = false;
-      let startX = 0;
-      let scrollLeft = 0;
+  let isDown = false;
+  let startX = 0;
+  let scrollLeft = 0;
 
-      const onMouseDown = (e: MouseEvent) => {
-        isDown = true;
-        el.classList.add("active");
-        startX = e.pageX - el.offsetLeft;
-        scrollLeft = el.scrollLeft;
-      };
+  const onMouseDown = (e: MouseEvent) => {
+    // ignoruj klik w linki
+    if ((e.target as HTMLElement).closest("a, button")) return;
 
-      const onMouseLeave = () => {
-        isDown = false;
-        el.classList.remove("active");
-      };
+    isDown = true;
+    el.style.cursor = "grabbing";
+    startX = e.pageX;
+    scrollLeft = el.scrollLeft;
+  };
 
-      const onMouseUp = () => {
-        isDown = false;
-        el.classList.remove("active");
-      };
+  const onMouseUp = () => {
+    isDown = false;
+    el.style.cursor = "grab";
+  };
 
-      const onMouseMove = (e: MouseEvent) => {
-        if (!isDown) return;
-        e.preventDefault();
-        const x = e.pageX - el.offsetLeft;
-        const walk = (x - startX) * 1.2; // prędkość scrolla
-        el.scrollLeft = scrollLeft - walk;
-      };
+  const onMouseMove = (e: MouseEvent) => {
+    if (!isDown) return;
+    e.preventDefault();
+    const walk = (e.pageX - startX) * 1.2;
+    el.scrollLeft = scrollLeft - walk;
+  };
 
-      el.addEventListener("mousedown", onMouseDown);
-      el.addEventListener("mouseleave", onMouseLeave);
-      el.addEventListener("mouseup", onMouseUp);
-      el.addEventListener("mousemove", onMouseMove);
+  el.addEventListener("mousedown", onMouseDown);
+  window.addEventListener("mouseup", onMouseUp);
+  window.addEventListener("mousemove", onMouseMove);
 
-      return () => {
-        el.removeEventListener("mousedown", onMouseDown);
-        el.removeEventListener("mouseleave", onMouseLeave);
-        el.removeEventListener("mouseup", onMouseUp);
-        el.removeEventListener("mousemove", onMouseMove);
-      };
-    }, []);
-
+  return () => {
+    el.removeEventListener("mousedown", onMouseDown);
+    window.removeEventListener("mouseup", onMouseUp);
+    window.removeEventListener("mousemove", onMouseMove);
+  };
+}, []);
 
   const empty = !loading && rows.length === 0 && !err;
 
@@ -669,7 +680,7 @@ async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
               </div>
             ) : (
               <div
-                  ref={tableRef}
+                  ref={officeTableRef}
                   className="w-full overflow-x-auto max-h-[70vh] overflow-y-auto"
                 >
                 <table className="w-full text-left text-sm">
@@ -822,44 +833,39 @@ async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
               ) : (
                 <>
 
-                     <div
-                    ref={tableScrollRef}
-                    className="w-full overflow-x-auto touch-pan-x cursor-grab active:cursor-grabbing select-none"
-                     >
+                  <div
+                    ref={everybotTableRef}
+                    className="w-full overflow-x-auto touch-pan-x cursor-grab active:cursor-grabbing"
+                  >
                     <table className="w-full table-fixed text-left text-sm">
+                      <thead className="text-xs text-gray-500">
+                        <tr>
+                          <th className="px-4 py-3 w-20">{t(lang, "everybotColPhoto" as any)}</th>
+                          <th className="px-4 py-3 w-28">{t(lang, "everybotColActions" as any)}</th>
+                          <th className="px-4 py-3 w-64">{t(lang, "everybotColTitle" as any)}</th>
+                          <th className="px-4 py-3 w-20">{t(lang, "everybotColPortal" as any)}</th>
+                          <th className="px-4 py-3 w-28">{t(lang, "everybotColMatchedAt" as any)}</th>
+                          <th className="px-4 py-3 w-20">{t(lang, "everybotColTransactionType" as any)}</th>
+                          <th className="px-4 py-3 w-28">{t(lang, "everybotColPrice" as any)}</th>
 
-                    <thead className="text-xs text-gray-500">
-                      <tr>
-                      <th className="px-4 py-3 w-20">{t(lang, "everybotColPhoto" as any)}</th>
+                          <th className="px-4 py-3 w-20 hidden md:table-cell">{t(lang, "everybotColArea" as any)}</th>
+                          <th className="px-4 py-3 w-24 hidden lg:table-cell">{t(lang, "everybotColPricePerM2" as any)}</th>
 
-                      {/* ✅ NOWA KOLUMNA */}
-                      <th className="px-4 py-3 w-28">{t(lang, "everybotColActions" as any)}</th>
+                          <th className="px-4 py-3 w-14 hidden md:table-cell">{t(lang, "everybotColRooms" as any)}</th>
+                          <th className="px-4 py-3 w-14 hidden lg:table-cell">{t(lang, "everybotColFloor" as any)}</th>
+                          <th className="px-4 py-3 w-16 hidden xl:table-cell">{t(lang, "everybotColYearBuilt" as any)}</th>
 
-                      <th className="px-4 py-3 w-64">{t(lang, "everybotColTitle" as any)}</th>
-                      <th className="px-4 py-3 w-20">{t(lang, "everybotColPortal" as any)}</th>
-                      <th className="px-4 py-3 w-28">{t(lang, "everybotColMatchedAt" as any)}</th>
-                      <th className="px-4 py-3 w-20">{t(lang, "everybotColTransactionType" as any)}</th>
-                      <th className="px-4 py-3 w-28">{t(lang, "everybotColPrice" as any)}</th>
+                          <th className="px-4 py-3 w-32 hidden xl:table-cell">{t(lang, "everybotColVoivodeship" as any)}</th>
+                          <th className="px-4 py-3 w-28 hidden lg:table-cell">{t(lang, "everybotColCity" as any)}</th>
+                          <th className="px-4 py-3 w-28 hidden xl:table-cell">{t(lang, "everybotColDistrict" as any)}</th>
+                          <th className="px-4 py-3 w-40 hidden xl:table-cell">{t(lang, "everybotColStreet" as any)}</th>
+                        </tr>
+                      </thead>
 
-                      <th className="px-4 py-3 w-20 hidden md:table-cell">{t(lang, "everybotColArea" as any)}</th>
-                      <th className="px-4 py-3 w-24 hidden lg:table-cell">{t(lang, "everybotColPricePerM2" as any)}</th>
-
-                      {/* ✅ zwężone */}
-                      <th className="px-4 py-3 w-14 hidden md:table-cell">{t(lang, "everybotColRooms" as any)}</th>
-                      <th className="px-4 py-3 w-14 hidden lg:table-cell">{t(lang, "everybotColFloor" as any)}</th>
-                      <th className="px-4 py-3 w-16 hidden xl:table-cell">{t(lang, "everybotColYearBuilt" as any)}</th>
-
-                      <th className="px-4 py-3 w-32 hidden xl:table-cell">{t(lang, "everybotColVoivodeship" as any)}</th>
-                      <th className="px-4 py-3 w-28 hidden lg:table-cell">{t(lang, "everybotColCity" as any)}</th>
-                      <th className="px-4 py-3 w-28 hidden xl:table-cell">{t(lang, "everybotColDistrict" as any)}</th>
-                      <th className="px-4 py-3 w-40 hidden xl:table-cell">{t(lang, "everybotColStreet" as any)}</th>
-                    </tr>
-
-                    </thead>
-
-                    <tbody>
-                      {botRows.map((r) => (
-                        <tr key={r.id} className="border-t border-gray-100">
+                      <tbody>
+                        {botRows.map((r) => (
+                          <tr key={r.id} className="border-t border-gray-100">
+                  
                        {/* Zdjęcie */}
                         <td className="px-4 py-3 w-20">
                           {r.thumb_url ? (
