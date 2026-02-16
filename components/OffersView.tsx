@@ -258,8 +258,6 @@ async function loadEverybot(opts?: {
     qs.set("includePreview", "1");
     qs.set("onlyEnriched", "0");
 
-    if (botMatchedSince) qs.set("matchedSince", botMatchedSince);
-
     // source
     if (f.source && f.source !== "all") qs.set("source", String(f.source));
 
@@ -356,41 +354,20 @@ async function loadEverybot(opts?: {
   }, []);
   // 🔄 AUTO-REFRESH EveryBOT z Neon (co 20s, tylko gdy zakładka aktywna)
     useEffect(() => {
-      if (tab !== "everybot") return;
+  if (tab !== "everybot") return;
+  if (botSearching) return;         // 🔴 NIE refreshuj w trakcie LIVE
+  if (botMatchedSince) return;      // 🔴 NIE refreshuj gdy aktywny LIVE run
 
-      let timer: number | null = null;
+  const tick = async () => {
+    if (document.visibilityState !== "visible") return;
+    await refreshEverybotList();
+  };
 
-      const tick = async () => {
-        // nie odświeżaj podczas LIVE
-        if (botSearching) return;
+  const timer = window.setInterval(tick, 20000);
 
-        // tylko gdy karta widoczna
-        if (document.visibilityState !== "visible") return;
+  return () => window.clearInterval(timer);
+}, [tab]); // 🔥 usuń botFilters, botMatchedSince, botSearching
 
-        try {
-          await refreshEverybotList();
-        } catch (e) {
-          console.warn("Auto-refresh failed");
-        }
-      };
-
-      // pierwsze odpalenie po 20s
-      timer = window.setInterval(tick, 20000);
-
-      // refresh przy powrocie na kartę
-      const onVis = () => {
-        if (document.visibilityState === "visible") {
-          tick();
-        }
-      };
-
-      document.addEventListener("visibilitychange", onVis);
-
-      return () => {
-        if (timer) window.clearInterval(timer);
-        document.removeEventListener("visibilitychange", onVis);
-      };
-    }, [tab, botFilters, botMatchedSince, botSearching]);
   
 useEffect(() => {
   const el = everybotTableRef.current;
@@ -432,6 +409,69 @@ useEffect(() => {
     window.removeEventListener("mousemove", onMouseMove);
   };
 }, []);
+  useEffect(() => {
+  const el = everybotTableRef.current;
+  if (!el) return;
+
+  let isDown = false;
+  let startX = 0;
+  let startScrollLeft = 0;
+
+  const onMouseDown = (e: MouseEvent) => {
+    // ignoruj klik w linki / przyciski
+    if ((e.target as HTMLElement).closest("a,button,input,select,textarea,label")) return;
+
+    isDown = true;
+    startX = e.pageX;
+    startScrollLeft = el.scrollLeft;
+    el.style.cursor = "grabbing";
+  };
+
+  const onMouseUp = () => {
+    isDown = false;
+    el.style.cursor = "grab";
+  };
+
+  const onMouseMove = (e: MouseEvent) => {
+    if (!isDown) return;
+    e.preventDefault();
+    const walk = (e.pageX - startX) * 1.2;
+    el.scrollLeft = startScrollLeft - walk;
+  };
+
+  el.addEventListener("mousedown", onMouseDown);
+  window.addEventListener("mouseup", onMouseUp);
+  window.addEventListener("mousemove", onMouseMove);
+
+  return () => {
+    el.removeEventListener("mousedown", onMouseDown);
+    window.removeEventListener("mouseup", onMouseUp);
+    window.removeEventListener("mousemove", onMouseMove);
+  };
+}, []);
+useEffect(() => {
+  if (tab !== "everybot") return;
+
+  const tick = async () => {
+    if (botSearching) return;
+    if (botMatchedSince) return; // 🔥 nie dotykaj Neon listy, gdy aktywny LIVE run
+    if (document.visibilityState !== "visible") return;
+
+    await refreshEverybotList();
+  };
+
+  const timer = window.setInterval(tick, 20000);
+
+  const onVis = () => {
+    if (document.visibilityState === "visible") tick();
+  };
+  document.addEventListener("visibilitychange", onVis);
+
+  return () => {
+    window.clearInterval(timer);
+    document.removeEventListener("visibilitychange", onVis);
+  };
+}, [tab, botSearching, botMatchedSince]);
 
   const empty = !loading && rows.length === 0 && !err;
 
@@ -530,6 +570,7 @@ async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
     matchedSince: null,
   });
 }
+
 
   return (
     <div className="space-y-6">
