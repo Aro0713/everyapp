@@ -192,26 +192,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // 1) TRANSACTION TYPE
     // Preview: przepuszczamy. Non-preview: wymagamy match.
     // Dodatkowo fallback na title/location_text (bo często nie masz jeszcze transaction_type)
-    if (transactionType) {
+        if (transactionType) {
       const v = transactionType.toLowerCase();
       where.push(`(
-        status = 'preview'
-        OR LOWER(COALESCE(transaction_type,'')) = $${p}
-        OR LOWER(COALESCE(title,'')) LIKE $${p + 1}
-        OR LOWER(COALESCE(location_text,'')) LIKE $${p + 1}
+        transaction_type IS NULL
+        OR transaction_type = ''
+        OR LOWER(transaction_type) = $${p}
       )`);
-      params.push(v, `%${v}%`);
-      p += 2;
+      params.push(v);
+      p++;
     }
 
     // 2) PROPERTY TYPE (fallback na title/location_text)
-    if (propertyType) {
+        if (propertyType) {
       const v = propertyType.toLowerCase();
       where.push(`(
-        status = 'preview'
-        OR LOWER(COALESCE(property_type,'')) LIKE $${p}
-        OR LOWER(COALESCE(title,'')) LIKE $${p}
-        OR LOWER(COALESCE(location_text,'')) LIKE $${p}
+        property_type IS NULL
+        OR property_type = ''
+        OR LOWER(property_type) LIKE $${p}
       )`);
       params.push(`%${v}%`);
       p++;
@@ -231,13 +229,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // 4) CITY (fallback na location_text/title)
-    if (city) {
+        if (city) {
       const v = city.toLowerCase();
       where.push(`(
-        status = 'preview'
-        OR LOWER(COALESCE(city,'')) LIKE $${p}
-        OR LOWER(COALESCE(location_text,'')) LIKE $${p}
-        OR LOWER(COALESCE(title,'')) LIKE $${p}
+        city IS NULL
+        OR city = ''
+        OR LOWER(city) LIKE $${p}
       )`);
       params.push(`%${v}%`);
       p++;
@@ -284,18 +281,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // 8) NUMERIC FILTERS
     // Preview: przepuszczamy. Non-preview: wymagamy liczbowego warunku.
-    if (minPrice != null) {
+      if (minPrice != null) {
       where.push(`(
-        status = 'preview'
+        price_amount IS NULL
         OR price_amount >= $${p}
       )`);
       params.push(minPrice);
       p++;
     }
-
     if (maxPrice != null) {
       where.push(`(
-        status = 'preview'
+        price_amount IS NULL
         OR price_amount <= $${p}
       )`);
       params.push(maxPrice);
@@ -304,16 +300,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (minArea != null) {
       where.push(`(
-        status = 'preview'
+        area_m2 IS NULL
         OR area_m2 >= $${p}
       )`);
       params.push(minArea);
       p++;
     }
-
     if (maxArea != null) {
       where.push(`(
-        status = 'preview'
+        area_m2 IS NULL
         OR area_m2 <= $${p}
       )`);
       params.push(maxArea);
@@ -321,13 +316,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (rooms != null) {
-      where.push(`(
-        status = 'preview'
-        OR rooms = $${p}
-      )`);
-      params.push(rooms);
-      p++;
-    }
+    where.push(`(
+      rooms IS NULL
+      OR rooms = $${p}
+    )`);
+    params.push(rooms);
+    p++;
+  }
+
 
     // ====== TRYB 1: page-based (LIMIT/OFFSET) ======
     if (page != null) {
