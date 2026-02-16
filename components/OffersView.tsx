@@ -356,7 +356,7 @@ async function loadEverybot(opts?: {
     useEffect(() => {
   if (tab !== "everybot") return;
   if (botSearching) return;         // 🔴 NIE refreshuj w trakcie LIVE
-  if (botMatchedSince) return;      // 🔴 NIE refreshuj gdy aktywny LIVE run
+  if (botMatchedSince) return; // 🔥 nie odświeżaj Neon gdy aktywny LIVE run
 
   const tick = async () => {
     if (document.visibilityState !== "visible") return;
