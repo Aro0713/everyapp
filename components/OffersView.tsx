@@ -170,7 +170,7 @@ async function loadEverybot(opts?: {
 }): Promise<{ rows: ExternalRow[]; nextCursor: { updated_at: string; id: string } | null }> {
 
   const f = opts?.filters ?? botFilters;
-   const matchedSince = opts?.matchedSince ?? botMatchedSince ?? null;
+  const matchedSince = opts?.matchedSince ?? null;
   const q = (f.q ?? "").trim();
   const source = f.source ?? "all";
   const cursor = opts?.cursor ?? null;
