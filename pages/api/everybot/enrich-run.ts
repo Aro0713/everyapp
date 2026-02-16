@@ -32,33 +32,39 @@ function parseLocationPartsFromText(locationText: string | null): {
 
   const raw = locationText.replace(/\s+/g, " ").trim();
   const parts = raw.split(",").map((s) => s.trim()).filter(Boolean);
+  const n = parts.length;
 
-  const last = parts.length ? parts[parts.length - 1] : null;
+  if (n === 0) return { voivodeship: null, city: null, district: null, street: null };
 
-  // wygląda jak województwo: jedno słowo, litery/myślniki (np. "śląskie", "małopolskie")
-  const looksLikeVoiv =
-    !!last && /^[a-ząćęłńóśźż-]{4,}$/i.test(last) && !last.toLowerCase().startsWith("ul");
+  const last = parts[n - 1];
+  const looksLikeVoiv = /^[a-zA-Ząćęłńóśźż-]{4,}$/.test(last) && !last.toLowerCase().startsWith("ul");
 
-  const voivodeship = looksLikeVoiv ? last! : null;
+  if (looksLikeVoiv && n === 2) {
+    return { city: parts[0] || null, district: null, street: null, voivodeship: last || null };
+  }
 
-  const city =
-    parts.length >= 2
-      ? (looksLikeVoiv ? parts[parts.length - 2] : parts[parts.length - 1])
-      : parts[0] ?? null;
+  if (looksLikeVoiv && n === 3) {
+    return { city: parts[0] || null, district: parts[1] || null, street: null, voivodeship: last || null };
+  }
 
-  const district =
-    looksLikeVoiv && parts.length >= 3 ? parts[parts.length - 3] :
-    !looksLikeVoiv && parts.length >= 2 ? parts[parts.length - 2] :
-    null;
+  if (looksLikeVoiv && n >= 4) {
+    return {
+      street: parts.slice(0, n - 3).join(", ") || null,
+      district: parts[n - 3] || null,
+      city: parts[n - 2] || null,
+      voivodeship: last || null,
+    };
+  }
 
-  const cut = looksLikeVoiv ? parts.length - 3 : parts.length - 2;
-  const street = cut > 0 ? parts.slice(0, cut).join(", ") : null;
+  if (n === 1) {
+    return { city: parts[0] || null, district: null, street: null, voivodeship: null };
+  }
 
   return {
-    voivodeship: voivodeship || null,
-    city: city || null,
-    district: district || null,
-    street: street || null,
+    street: n > 2 ? parts.slice(0, n - 2).join(", ") : null,
+    district: parts[n - 2] || null,
+    city: parts[n - 1] || null,
+    voivodeship: null,
   };
 }
 

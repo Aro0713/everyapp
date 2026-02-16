@@ -24,25 +24,42 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(405).json({ error: "Method not allowed" });
         }
 
-    // ✅ Vercel Cron auth (bez sekretów w repo)
-    const ua = String(req.headers["user-agent"] || "");
-    if (!ua.startsWith("vercel-cron")) {
-      return res.status(401).json({ error: "UNAUTHORIZED" });
-    }
+        const ua = String(req.headers["user-agent"] || "");
+        const auth = String(req.headers["authorization"] || "");
+        const secret = process.env.EVERYBOT_CRON_SECRET || "";
+
+        const okCronUa = ua.startsWith("vercel-cron");
+        const okBearer = !!secret && auth === `Bearer ${secret}`;
+
+        if (!okCronUa && !okBearer) {
+        return res.status(401).json({ error: "UNAUTHORIZED" });
+        }
 
     const limit = 100;
 
-
-    const { rows } = await pool.query<Row>(
-      `
-      select id, office_id, source_url
-      from external_listings
-      where status = 'enriched'
-      order by updated_at asc
-      limit $1
-      `,
-      [limit]
-    );
+        const { rows } = await pool.query<Row>(
+        `
+        select id, office_id, source_url
+        from external_listings
+        where
+            status in ('preview','active','enriched')
+            and source_url is not null
+            and source_url <> ''
+            and (
+            last_checked_at is null
+            or last_checked_at < now() - interval '6 hours'
+            )
+        order by
+            -- najpierw nigdy nie sprawdzane
+            (last_checked_at is null) desc,
+            -- potem najdawniej sprawdzane
+            last_checked_at asc nulls first,
+            -- i dopiero potem "świeżość" rekordu
+            updated_at desc
+        limit $1
+        `,
+        [limit]
+        );
 
     if (!rows.length) return res.status(200).json({ ok: true, processed: 0 });
 
@@ -63,9 +80,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         for (const it of items) {
           // TODO: Twoja logika verify (np. sprawdź czy URL nadal żyje)
           await pool.query(
-            `update external_listings set status='active', updated_at=now() where id=$1`,
+            `
+            update external_listings
+            set
+                last_checked_at = now(),
+                last_seen_at = coalesce(last_seen_at, now()),
+                source_status = coalesce(source_status, 'active'),
+                updated_at = now()
+            where id = $1
+            `,
             [it.id]
-          );
+            );
           processed++;
         }
       } finally {
