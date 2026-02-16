@@ -169,161 +169,156 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const hasStructuredFilters = hasDetailFilters;
 
-    if (q && !hasStructuredFilters) {
-      const terms = q
-        .split(/[,\s]+/g)
-        .map((t) => t.trim())
-        .filter((t) => t.length >= 2);
+  // q działa tylko gdy nie ma structured filters (jak masz)
+if (q && !hasStructuredFilters) {
+  const terms = q
+    .split(/[,\s]+/g)
+    .map((t) => t.trim().toLowerCase())
+    .filter((t) => t.length >= 2);
 
-      if (terms.length) {
-        const ors: string[] = [];
-        for (const term of terms) {
-          ors.push(`(
-            LOWER(COALESCE(title,'')) LIKE $${p}
-            OR LOWER(COALESCE(location_text,'')) LIKE $${p}
-          )`);
-          params.push(`%${term}%`);
-          p++;
-        }
-        where.push(`(${ors.join(" OR ")})`);
-      }
-    }
-
-    // 1) TRANSACTION TYPE
-    // Preview: przepuszczamy. Non-preview: wymagamy match.
-    // Dodatkowo fallback na title/location_text (bo często nie masz jeszcze transaction_type)
-        if (transactionType) {
-      const v = transactionType.toLowerCase();
-      where.push(`(
-        transaction_type IS NULL
-        OR transaction_type = ''
-        OR LOWER(transaction_type) = $${p}
-      )`);
-      params.push(v);
-      p++;
-    }
-
-    // 2) PROPERTY TYPE (fallback na title/location_text)
-        if (propertyType) {
-      const v = propertyType.toLowerCase();
-      where.push(`(
-        property_type IS NULL
-        OR property_type = ''
-        OR LOWER(property_type) LIKE $${p}
-      )`);
-      params.push(`%${v}%`);
-      p++;
-    }
-
-    // 3) LOCATION TEXT (fallback na title/city)
-    if (locationText) {
-      const v = locationText.toLowerCase();
-      where.push(`(
-        status = 'preview'
+  if (terms.length) {
+    const ors: string[] = [];
+    for (const term of terms) {
+      ors.push(`(
+        LOWER(COALESCE(title,'')) LIKE $${p}
         OR LOWER(COALESCE(location_text,'')) LIKE $${p}
-        OR LOWER(COALESCE(title,'')) LIKE $${p}
-        OR LOWER(COALESCE(city,'')) LIKE $${p}
       )`);
-      params.push(`%${v}%`);
+      params.push(`%${term}%`);
       p++;
     }
-
-    // 4) CITY (fallback na location_text/title)
-        if (city) {
-      const v = city.toLowerCase();
-      where.push(`(
-        city IS NULL
-        OR city = ''
-        OR LOWER(city) LIKE $${p}
-      )`);
-      params.push(`%${v}%`);
-      p++;
-    }
-
-    // 5) DISTRICT (fallback na location_text/title)
-    if (district) {
-      const v = district.toLowerCase();
-      where.push(`(
-        status = 'preview'
-        OR LOWER(COALESCE(district,'')) LIKE $${p}
-        OR LOWER(COALESCE(location_text,'')) LIKE $${p}
-        OR LOWER(COALESCE(title,'')) LIKE $${p}
-      )`);
-      params.push(`%${v}%`);
-      p++;
-    }
-
-    // 6) STREET (fallback na location_text/title)
-    if (street) {
-      const v = street.toLowerCase();
-      where.push(`(
-        status = 'preview'
-        OR LOWER(COALESCE(street,'')) LIKE $${p}
-        OR LOWER(COALESCE(location_text,'')) LIKE $${p}
-        OR LOWER(COALESCE(title,'')) LIKE $${p}
-      )`);
-      params.push(`%${v}%`);
-      p++;
-    }
-
-    // 7) VOIVODESHIP (fallback na location_text/title)
-    if (voivodeship) {
-      const v = voivodeship.toLowerCase();
-      where.push(`(
-        status = 'preview'
-        OR LOWER(COALESCE(voivodeship,'')) LIKE $${p}
-        OR LOWER(COALESCE(location_text,'')) LIKE $${p}
-        OR LOWER(COALESCE(title,'')) LIKE $${p}
-      )`);
-      params.push(`%${v}%`);
-      p++;
-    }
-
-    // 8) NUMERIC FILTERS
-    // Preview: przepuszczamy. Non-preview: wymagamy liczbowego warunku.
-      if (minPrice != null) {
-      where.push(`(
-        price_amount IS NULL
-        OR price_amount >= $${p}
-      )`);
-      params.push(minPrice);
-      p++;
-    }
-    if (maxPrice != null) {
-      where.push(`(
-        price_amount IS NULL
-        OR price_amount <= $${p}
-      )`);
-      params.push(maxPrice);
-      p++;
-    }
-
-    if (minArea != null) {
-      where.push(`(
-        area_m2 IS NULL
-        OR area_m2 >= $${p}
-      )`);
-      params.push(minArea);
-      p++;
-    }
-    if (maxArea != null) {
-      where.push(`(
-        area_m2 IS NULL
-        OR area_m2 <= $${p}
-      )`);
-      params.push(maxArea);
-      p++;
-    }
-
-    if (rooms != null) {
-    where.push(`(
-      rooms IS NULL
-      OR rooms = $${p}
-    )`);
-    params.push(rooms);
-    p++;
+    where.push(`(${ors.join(" OR ")})`);
   }
+}
 
+// 1) TRANSACTION TYPE (STRICT: tylko transaction_type)
+if (transactionType) {
+  const v = transactionType.toLowerCase().trim();
+  where.push(`(
+    transaction_type IS NULL
+    OR transaction_type = ''
+    OR LOWER(transaction_type) = $${p}
+  )`);
+  params.push(v);
+  p++;
+}
+
+// 2) PROPERTY TYPE (STRICT: tylko property_type)
+if (propertyType) {
+  const v = propertyType.toLowerCase().trim();
+  where.push(`(
+    property_type IS NULL
+    OR property_type = ''
+    OR LOWER(property_type) LIKE $${p}
+  )`);
+  params.push(`%${v}%`);
+  p++;
+}
+
+// 3) LOCATION TEXT (STRICT: tylko location_text)
+if (locationText) {
+  const v = locationText.toLowerCase().trim();
+  where.push(`(
+    location_text IS NULL
+    OR location_text = ''
+    OR LOWER(location_text) LIKE $${p}
+  )`);
+  params.push(`%${v}%`);
+  p++;
+}
+
+// 4) CITY (STRICT: tylko city)
+if (city) {
+  const v = city.toLowerCase().trim();
+  where.push(`(
+    city IS NULL
+    OR city = ''
+    OR LOWER(city) LIKE $${p}
+  )`);
+  params.push(`%${v}%`);
+  p++;
+}
+
+// 5) DISTRICT (STRICT: tylko district)
+if (district) {
+  const v = district.toLowerCase().trim();
+  where.push(`(
+    district IS NULL
+    OR district = ''
+    OR LOWER(district) LIKE $${p}
+  )`);
+  params.push(`%${v}%`);
+  p++;
+}
+
+// 6) STREET (STRICT: tylko street)
+if (street) {
+  const v = street.toLowerCase().trim();
+  where.push(`(
+    street IS NULL
+    OR street = ''
+    OR LOWER(street) LIKE $${p}
+  )`);
+  params.push(`%${v}%`);
+  p++;
+}
+
+// 7) VOIVODESHIP (STRICT: tylko voivodeship)
+if (voivodeship) {
+  const v = voivodeship.toLowerCase().trim();
+  where.push(`(
+    voivodeship IS NULL
+    OR voivodeship = ''
+    OR LOWER(voivodeship) LIKE $${p}
+  )`);
+  params.push(`%${v}%`);
+  p++;
+}
+
+// 8) NUMERIC FILTERS (NULL-pass-through, szybkie)
+if (minPrice != null) {
+  where.push(`(
+    price_amount IS NULL
+    OR price_amount >= $${p}
+  )`);
+  params.push(minPrice);
+  p++;
+}
+
+if (maxPrice != null) {
+  where.push(`(
+    price_amount IS NULL
+    OR price_amount <= $${p}
+  )`);
+  params.push(maxPrice);
+  p++;
+}
+
+if (minArea != null) {
+  where.push(`(
+    area_m2 IS NULL
+    OR area_m2 >= $${p}
+  )`);
+  params.push(minArea);
+  p++;
+}
+
+if (maxArea != null) {
+  where.push(`(
+    area_m2 IS NULL
+    OR area_m2 <= $${p}
+  )`);
+  params.push(maxArea);
+  p++;
+}
+
+if (rooms != null) {
+  where.push(`(
+    rooms IS NULL
+    OR rooms = $${p}
+  )`);
+  params.push(rooms);
+  p++;
+}
 
     // ====== TRYB 1: page-based (LIMIT/OFFSET) ======
     if (page != null) {
