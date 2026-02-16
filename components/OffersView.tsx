@@ -793,10 +793,15 @@ async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
             }}
 
           />
-            {/* Results */}
-           {botSearching && botMatchedSince && (
-              <div className="mb-3 rounded-xl bg-ew-accent/10 px-4 py-2 text-sm font-semibold text-ew-primary">
-                🔄 {t(lang, "everybotSearching" as any)} ({botSearchSeconds}s / 90s)
+                {/* Results */}
+              {botSearching && (
+              <div className="mb-4">
+                <div className="mb-2 text-sm font-semibold text-ew-primary">
+                  🔄 {t(lang, "everybotSearching" as any)}
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-ew-accent/20">
+                  <div className="h-full w-full animate-pulse bg-ew-accent transition-all duration-300" />
+                </div>
               </div>
             )}
             <div className="mt-6 rounded-2xl border border-gray-200 bg-white">
