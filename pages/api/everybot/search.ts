@@ -184,19 +184,40 @@ function parseLocationParts(locationText: string | null): {
 } {
   if (!locationText) return { voivodeship: null, city: null, district: null, street: null };
 
-  // Otodom zwykle: "Miasto, Dzielnica, Ulica" albo "Miasto, Dzielnica"
-  const parts = locationText.split(",").map((s) => s.trim()).filter(Boolean);
+  const raw = locationText.replace(/\s+/g, " ").trim();
+  const parts = raw.split(",").map((s) => s.trim()).filter(Boolean);
 
-  const city = parts[0] ?? null;
-  const district = parts.length >= 2 ? parts[1] : null;
-  const street = parts.length >= 3 ? parts.slice(2).join(", ") : null;
+  // heurystyka: województwo zwykle jest na końcu i jest jednym słowem (np. "mazowieckie")
+  const last = parts.length ? parts[parts.length - 1] : null;
+  const looksLikeVoiv = last ? /^[a-ząćęłńóśźż-]{4,}$/i.test(last) && !last.toLowerCase().startsWith("ul") : false;
 
-  // Województwo często NIE występuje w listingu – próbujemy heurystyki
-  const voivMatch = locationText.match(/\b(woj\.?\s*[a-ząćęłńóśźż-]+)\b/i);
-  const voivodeship = voivMatch ? voivMatch[1].replace(/^woj\.?\s*/i, "").trim() : null;
+  const voivodeship = looksLikeVoiv ? last! : null;
 
-  return { voivodeship, city, district, street };
+  // miasto w Otodom często jest przed województwem:
+  // "ul. X, dzielnica, miasto, województwo"
+  const city =
+    parts.length >= 2
+      ? (looksLikeVoiv ? parts[parts.length - 2] : parts[parts.length - 1])
+      : parts[0] ?? null;
+
+  // dzielnica jest zwykle przed miastem (jeśli jest)
+  const district =
+    looksLikeVoiv && parts.length >= 3 ? parts[parts.length - 3] :
+    !looksLikeVoiv && parts.length >= 2 ? parts[parts.length - 2] :
+    null;
+
+  // ulica = wszystko przed district/city
+  const cut = looksLikeVoiv ? parts.length - 3 : parts.length - 2;
+  const street = cut > 0 ? parts.slice(0, cut).join(", ") : null;
+
+  return {
+    voivodeship,
+    city: city || null,
+    district: district || null,
+    street: street || null,
+  };
 }
+
 
 function parseFloorFromText(s: string | null): string | null {
   if (!s) return null;
