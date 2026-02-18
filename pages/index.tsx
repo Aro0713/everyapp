@@ -32,17 +32,18 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-ew-bg text-ew-primary">
-      {/* TOPBAR (logo nie wjeżdża na kontenery) */}
-            <header className="sticky top-0 z-50 border-b border-gray-200 bg-ew-bg/90 backdrop-blur">
+
+      {/* TOPBAR – CIEMNO NIEBIESKI */}
+      <header className="sticky top-0 z-50 bg-ew-primary text-white">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-end px-4 sm:px-6">
           <div className="flex items-center gap-2">
-            <div className="rounded-2xl border border-gray-200 bg-white px-2 py-1 shadow-sm">
+            <div className="rounded-2xl bg-white/10 px-2 py-1">
               <LanguageSwitcher currentLang={lang} />
             </div>
 
             <Link
               href="/login"
-              className="inline-flex items-center justify-center rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-ew-primary shadow-sm transition hover:bg-ew-accent/10"
+              className="inline-flex items-center justify-center rounded-2xl bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20"
             >
               {t(lang, "ctaLogin")}
             </Link>
@@ -53,12 +54,14 @@ export default function Home() {
       {/* LAYOUT: lewy duży + po prawej 3 mniejsze */}
       <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
         <div className="grid gap-6 lg:grid-cols-12 lg:items-stretch">
+
           {/* LEFT BIG */}
           <div className="lg:col-span-7">
-            <div className="h-full rounded-3xl border border-gray-200 bg-white p-10 shadow-sm flex flex-col justify-between">
+            <div className="h-full rounded-3xl border border-ew-accent/20 bg-ew-accent/10 p-10 shadow-sm flex flex-col justify-between">
 
               {/* GÓRNA CZĘŚĆ */}
               <div>
+
                 {/* DUŻE LOGO */}
                 <div className="mb-6">
                   <Image
@@ -71,17 +74,17 @@ export default function Home() {
                   />
                 </div>
 
-                {/* TYTUŁ – zmniejszony */}
-                <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight">
+                {/* TYTUŁ */}
+                <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight text-ew-primary">
                   {t(lang, "heroTagline")}
                 </h1>
 
-                <p className="mt-4 max-w-xl text-sm sm:text-base leading-relaxed text-gray-600">
+                <p className="mt-4 max-w-xl text-sm sm:text-base leading-relaxed text-gray-700">
                   {t(lang, "heroDescStrong")}
                 </p>
 
                 {/* Osobisty Agent AI */}
-                <div className="mt-6 rounded-3xl border border-gray-200 bg-ew-accent/10 p-6">
+                <div className="mt-6 rounded-3xl border border-ew-accent/20 bg-white p-6">
                   <p className="text-sm font-extrabold text-ew-primary">
                     {t(lang, "landingAiAssistantTitle" as any)}
                   </p>
@@ -89,6 +92,7 @@ export default function Home() {
                     {t(lang, "landingAiAssistantDesc" as any)}
                   </p>
                 </div>
+
               </div>
 
               {/* DOLNA CZĘŚĆ */}
@@ -105,30 +109,36 @@ export default function Home() {
               {valueCards.map((it) => (
                 <div
                   key={it.t}
-                  className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm"
+                  className="rounded-3xl border border-ew-accent/20 bg-ew-accent/10 p-6 shadow-sm"
                 >
-                  <p className="text-sm font-extrabold">{t(lang, it.t as any)}</p>
-                  <p className="mt-2 text-sm text-gray-600 leading-relaxed">
+                  <p className="text-sm font-extrabold text-ew-primary">
+                    {t(lang, it.t as any)}
+                  </p>
+
+                  <p className="mt-2 text-sm text-gray-700 leading-relaxed">
                     {t(lang, it.d as any)}
                   </p>
 
-                  <div className="mt-4 rounded-2xl bg-ew-accent/10 px-4 py-3 text-xs font-semibold text-ew-primary">
+                  <div className="mt-4 rounded-2xl bg-white px-4 py-3 text-xs font-semibold text-ew-primary">
                     {t(lang, "featuresNote")}
                   </div>
                 </div>
               ))}
             </div>
           </div>
-          
+
         </div>
-      </section>  
+      </section>
+
       {/* FOOTER */}
-      <footer className="mt-10 border-t border-gray-200 bg-ew-bg">
+      <footer className="mt-10 border-t border-ew-accent/20 bg-ew-bg">
         <div className="mx-auto max-w-7xl px-4 py-6 text-center text-xs text-gray-500 sm:px-6">
           {t(lang, "footerRights", { year })}
         </div>
       </footer>
-    </main> 
+
+    </main>
   );
 }
+
 
