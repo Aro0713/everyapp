@@ -37,8 +37,6 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // MVP: placeholder. Tu podepniesz Clerk/NextAuth albo własne API.
-      // Na razie tylko walidacja frontowa:
       if (!email.trim() || !email.includes("@")) {
         setError(t(lang, "loginErrorEmail"));
         return;
@@ -49,25 +47,23 @@ export default function LoginPage() {
       }
 
       const r = await fetch("/api/login", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ email, password }),
-});
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
 
-if (!r.ok) {
-  // opcjonalnie: odczytaj kod błędu z API
-  const err = await r.json().catch(() => null);
-  setError(
-  err?.error === "INVALID_CREDENTIALS"
-    ? t(lang, "loginErrorInvalidCredentials")
-    : t(lang, "loginErrorGeneric")
-);
-  return;
-}
+      if (!r.ok) {
+        const err = await r.json().catch(() => null);
+        setError(
+          err?.error === "INVALID_CREDENTIALS"
+            ? t(lang, "loginErrorInvalidCredentials")
+            : t(lang, "loginErrorGeneric")
+        );
+        return;
+      }
 
-if (remember) setCookie("rememberMe", "1");
-window.location.href = "/panel";
-
+      if (remember) setCookie("rememberMe", "1");
+      window.location.href = "/panel";
     } finally {
       setLoading(false);
     }
@@ -81,105 +77,81 @@ window.location.href = "/panel";
       </Head>
 
       <main className="min-h-screen bg-ew-bg text-ew-primary">
-        {/* Topbar */}
-       <div className="fixed left-4 right-4 top-4 z-50 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-            <Link href="/" className="inline-flex items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-ew-primary shadow-lg transition hover:bg-ew-accent/10">
-          <span
-            className="
-                inline-flex items-center justify-center
-                rounded-xl
-                bg-white/30 backdrop-blur
-                ring-1 ring-black/10
-                px-2 py-1
-            "
-            >
-            <Image
-                src="/everyapp-logo.svg"
-                alt="EveryAPP"
-                width={120}
-                height={30}
-                className="h-6 w-auto"
-                priority
-            />
-            </span>
-            <span className="sr-only">EveryAPP</span>
-            <span>{t(lang, "loginBackHome")}</span>
-            </Link>
-        </div>
+        {/* TOPBAR – ciemno niebieski, niższy, z czytelnym logo */}
+        <header className="sticky top-0 z-50 bg-ew-primary text-white">
+          <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6">
+            <div className="flex items-center gap-3">
+              <Link href="/" className="inline-flex items-center gap-3">
+                <Image
+                  src="/everyapp-logo.svg"
+                  alt="EveryAPP"
+                  width={220}
+                  height={55}
+                  priority
+                  className="h-8 w-auto"
+                />
+                <span className="sr-only">EveryAPP</span>
+              </Link>
 
-        <div className="rounded-2xl border border-gray-200 bg-white px-2 py-1 shadow-lg">
-            <LanguageSwitcher currentLang={lang} />
-        </div>
-        </div>
-
-        {/* Header strip */}
-        <section className="relative overflow-hidden bg-ew-primary text-white">
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/5 via-transparent to-black/15" />
-          <div className="mx-auto max-w-6xl px-6 py-14 md:py-16">
-            <div className="mb-4">
-            <Image
-                src="/everyapp-logo.svg"
-                alt="EveryAPP"
-                width={220}
-                height={55}
-                className="h-10 w-auto"
-                priority
-            />
-            </div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-white/85">
-              <span className="h-1.5 w-1.5 rounded-full bg-ew-accent" />
-              {t(lang, "loginBadge")}
+              <Link
+                href="/"
+                className="hidden sm:inline-flex items-center justify-center rounded-2xl bg-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/20"
+              >
+                {t(lang, "loginBackHome")}
+              </Link>
             </div>
 
-            <h1 className="mt-5 text-3xl font-extrabold tracking-tight md:text-4xl">
-              {t(lang, "loginHeadline")}
-            </h1>
-            <p className="mt-3 max-w-2xl text-white/80">
-              {t(lang, "loginSubhead")}
-            </p>
+            <div className="flex items-center gap-2">
+              <div className="rounded-2xl bg-white/10 px-2 py-1">
+                <LanguageSwitcher currentLang={lang} />
+              </div>
+            </div>
           </div>
-        </section>
+        </header>
 
-        {/* Form */}
-        <section className="mx-auto max-w-6xl px-6 py-10 md:py-14">
-          <div className="grid gap-8 md:grid-cols-12 md:items-start">
+        {/* FORM – od razu 2 kolumny (bez header strip) */}
+        <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
+          <div className="grid gap-6 md:grid-cols-12 md:items-start">
             {/* Left copy */}
             <div className="md:col-span-6">
-  <div className="rounded-3xl border border-gray-200 bg-white p-8 shadow-sm">
-    <p className="text-xs font-semibold uppercase tracking-wide text-ew-accent">
-      {t(lang, "loginBenefitsBadge")}
-    </p>
-    <h2 className="mt-3 text-2xl font-extrabold tracking-tight">
-      {t(lang, "loginBenefitsTitle")}
-    </h2>
-    <p className="mt-3 text-sm leading-relaxed text-gray-600">
-      {t(lang, "loginBenefitsDesc")}
-    </p>
+              <div className="rounded-3xl border border-ew-accent/20 bg-ew-accent/10 p-8 shadow-sm">
+                <div className="inline-flex items-center gap-2 rounded-full border border-ew-accent/20 bg-white px-3 py-1 text-xs font-semibold text-ew-primary">
+                  <span className="h-1.5 w-1.5 rounded-full bg-ew-accent" />
+                  {t(lang, "loginBadge")}
+                </div>
 
-    <div className="mt-6 grid gap-3 sm:grid-cols-2">
-      {[
-        "loginBenefit1",
-        "loginBenefit2",
-        "loginBenefit3",
-        "loginBenefit4",
-      ].map((k) => (
-        <div
-          key={k}
-          className="rounded-2xl border border-gray-200 bg-ew-accent/10 p-4"
-        >
-          <p className="text-sm font-semibold text-ew-primary">
-            {t(lang, k as any)}
-          </p>
-        </div>
-      ))}
-    </div>
-  </div>
-</div>
+                <h1 className="mt-4 text-2xl font-extrabold tracking-tight sm:text-3xl">
+                  {t(lang, "loginHeadline")}
+                </h1>
+                <p className="mt-2 text-sm text-gray-700 sm:text-base">
+                  {t(lang, "loginSubhead")}
+                </p>
+
+                <div className="mt-6">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ew-primary">
+                    {t(lang, "loginBenefitsBadge")}
+                  </p>
+                  <h2 className="mt-3 text-xl font-extrabold tracking-tight">
+                    {t(lang, "loginBenefitsTitle")}
+                  </h2>
+                  <p className="mt-3 text-sm leading-relaxed text-gray-700">
+                    {t(lang, "loginBenefitsDesc")}
+                  </p>
+
+                  <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                    {["loginBenefit1", "loginBenefit2", "loginBenefit3", "loginBenefit4"].map((k) => (
+                      <div key={k} className="rounded-2xl border border-ew-accent/20 bg-white p-4">
+                        <p className="text-sm font-semibold text-ew-primary">{t(lang, k as any)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
 
             {/* Right form card */}
             <div className="md:col-span-6">
-              <div className="rounded-3xl border border-gray-200 bg-white p-8 shadow-sm">
+              <div className="rounded-3xl border border-ew-accent/20 bg-ew-accent/10 p-8 shadow-sm">
                 <form onSubmit={onSubmit} className="space-y-5">
                   <div>
                     <label className="block text-sm font-semibold" htmlFor="email">
@@ -192,7 +164,7 @@ window.location.href = "/panel";
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder={t(lang, "loginEmailPlaceholder")}
-                      className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
+                      className="mt-2 w-full rounded-2xl border border-ew-accent/20 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
                     />
                   </div>
 
@@ -207,7 +179,7 @@ window.location.href = "/panel";
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder={t(lang, "loginPasswordPlaceholder")}
-                      className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
+                      className="mt-2 w-full rounded-2xl border border-ew-accent/20 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
                     />
                   </div>
 
@@ -222,7 +194,10 @@ window.location.href = "/panel";
                       {t(lang, "loginRemember")}
                     </label>
 
-                    <Link href="/reset-password" className="text-sm font-semibold text-ew-primary hover:text-ew-primary/80">
+                    <Link
+                      href="/reset-password"
+                      className="text-sm font-semibold text-ew-primary hover:text-ew-primary/80"
+                    >
                       {t(lang, "loginForgot")}
                     </Link>
                   </div>
@@ -236,29 +211,35 @@ window.location.href = "/panel";
                   <button
                     type="submit"
                     disabled={loading}
-                    className="inline-flex w-full items-center justify-center rounded-2xl bg-ew-accent px-6 py-3.5 text-sm font-semibold text-ew-primary shadow-sm transition hover:-translate-y-0.5 hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex w-full items-center justify-center rounded-2xl bg-ew-primary px-6 py-3.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {loading ? t(lang, "loginSubmitting") : t(lang, "loginSubmit")}
                   </button>
 
-                  <p className="text-xs text-gray-500">
-                    {t(lang, "loginLegal")}
-                  </p>
+                  <p className="text-xs text-gray-600">{t(lang, "loginLegal")}</p>
                 </form>
               </div>
-                <p className="mt-4 text-center text-sm text-gray-600">
+
+              <p className="mt-4 text-center text-sm text-gray-600">
                 {t(lang, "loginNoAccount")}{" "}
                 <Link href="/register" className="font-semibold text-ew-primary hover:underline">
-                    {t(lang, "loginRegisterLink")}
+                  {t(lang, "loginRegisterLink")}
                 </Link>
-                </p>
-                <p className="mt-3 text-xs text-gray-500">
-                {t(lang, "loginFooterHint")}
-                </p>
+              </p>
+
+              <p className="mt-3 text-xs text-gray-500">{t(lang, "loginFooterHint")}</p>
             </div>
           </div>
         </section>
+
+        {/* FOOTER */}
+        <footer className="border-t border-ew-accent/20 bg-ew-bg">
+          <div className="mx-auto max-w-7xl px-4 py-6 text-center text-xs text-gray-500 sm:px-6">
+            {t(lang, "footerRights", { year: String(new Date().getFullYear()) })}
+          </div>
+        </footer>
       </main>
+
     </>
   );
 }
