@@ -69,29 +69,47 @@ export default function Home() {
         <div className="grid gap-6 lg:grid-cols-12 lg:items-stretch">
           {/* LEFT BIG */}
           <div className="lg:col-span-7">
-            <div className="h-full rounded-3xl border border-gray-200 bg-white p-7 shadow-sm">
-              <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-ew-accent/10 px-3 py-1 text-xs font-semibold text-ew-primary">
-                <span className="h-1.5 w-1.5 rounded-full bg-ew-accent" />
-                {t(lang, "heroBadge")}
+            <div className="h-full rounded-3xl border border-gray-200 bg-white p-10 shadow-sm flex flex-col justify-between">
+
+              {/* GÓRNA CZĘŚĆ */}
+              <div>
+                {/* DUŻE LOGO */}
+                <div className="mb-6">
+                  <Image
+                    src="/everyapp-logo.svg"
+                    alt="EveryAPP"
+                    width={360}
+                    height={90}
+                    priority
+                    className="h-auto w-[280px] sm:w-[340px]"
+                  />
+                </div>
+
+                {/* TYTUŁ – zmniejszony */}
+                <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight">
+                  {t(lang, "heroTagline")}
+                </h1>
+
+                <p className="mt-4 max-w-xl text-sm sm:text-base leading-relaxed text-gray-600">
+                  {t(lang, "heroDescStrong")}
+                </p>
+
+                {/* Osobisty Agent AI */}
+                <div className="mt-6 rounded-3xl border border-gray-200 bg-ew-accent/10 p-6">
+                  <p className="text-sm font-extrabold text-ew-primary">
+                    {t(lang, "landingAiAssistantTitle" as any)}
+                  </p>
+                  <p className="mt-2 text-sm text-gray-700 leading-relaxed">
+                    {t(lang, "landingAiAssistantDesc" as any)}
+                  </p>
+                </div>
               </div>
 
-              <h1 className="mt-4 text-4xl font-extrabold tracking-tight sm:text-5xl">
-                {t(lang, "heroTagline")}
-              </h1>
-
-              <p className="mt-4 max-w-2xl text-base leading-relaxed text-gray-600">
-                {t(lang, "heroDescStrong")}
-              </p>
-
-              {/* Osobisty Agent AI */}
-              <div className="mt-6 rounded-3xl border border-gray-200 bg-ew-accent/10 p-6">
-                <p className="text-sm font-extrabold text-ew-primary">
-                  {t(lang, "landingAiAssistantTitle" as any)}
-                </p>
-                <p className="mt-2 text-sm text-gray-700 leading-relaxed">
-                  {t(lang, "landingAiAssistantDesc" as any)}
-                </p>
+              {/* DOLNA CZĘŚĆ */}
+              <div className="pt-6 text-xs text-gray-500">
+                {t(lang, "footerRights", { year })}
               </div>
+
             </div>
           </div>
 
@@ -116,12 +134,8 @@ export default function Home() {
             </div>
           </div>
         </div>
-
-        {/* FOOTER */}
-        <div className="mt-8 text-center text-xs text-gray-500">
-          {t(lang, "footerRights", { year })}
-        </div>
       </section>
     </main>
   );
 }
+
