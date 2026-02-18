@@ -69,7 +69,7 @@ export default function LoginPage() {
     }
   }
 
-  return (
+   return (
     <>
       <Head>
         <title>{t(lang, "loginPageTitle")}</title>
@@ -77,82 +77,42 @@ export default function LoginPage() {
       </Head>
 
       <main className="min-h-screen bg-ew-bg text-ew-primary">
-        {/* TOPBAR – ciemno niebieski, niższy, z czytelnym logo */}
+
+        {/* TOPBAR – cienki, bez logo */}
         <header className="sticky top-0 z-50 bg-ew-primary text-white">
-          <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6">
-            <div className="flex items-center gap-3">
-              <Link href="/" className="inline-flex items-center gap-3">
-                <Image
-                  src="/everyapp-logo.svg"
-                  alt="EveryAPP"
-                  width={220}
-                  height={55}
-                  priority
-                  className="h-8 w-auto"
-                />
-                <span className="sr-only">EveryAPP</span>
-              </Link>
-
-              <Link
-                href="/"
-                className="hidden sm:inline-flex items-center justify-center rounded-2xl bg-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/20"
-              >
-                {t(lang, "loginBackHome")}
-              </Link>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <div className="rounded-2xl bg-white/10 px-2 py-1">
-                <LanguageSwitcher currentLang={lang} />
-              </div>
+          <div className="mx-auto flex h-12 max-w-7xl items-center justify-end px-4 sm:px-6">
+            <div className="rounded-2xl bg-white/10 px-2 py-1">
+              <LanguageSwitcher currentLang={lang} />
             </div>
           </div>
         </header>
 
-        {/* FORM – od razu 2 kolumny (bez header strip) */}
-        <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
-          <div className="grid gap-6 md:grid-cols-12 md:items-start">
-            {/* Left copy */}
+        {/* CONTENT */}
+        <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6">
+          <div className="grid gap-10 md:grid-cols-12 md:items-center">
+
+            {/* LEFT – DUŻE LOGO */}
             <div className="md:col-span-6">
-              <div className="rounded-3xl border border-ew-accent/20 bg-ew-accent/10 p-8 shadow-sm">
-                <div className="inline-flex items-center gap-2 rounded-full border border-ew-accent/20 bg-white px-3 py-1 text-xs font-semibold text-ew-primary">
-                  <span className="h-1.5 w-1.5 rounded-full bg-ew-accent" />
-                  {t(lang, "loginBadge")}
-                </div>
-
-                <h1 className="mt-4 text-2xl font-extrabold tracking-tight sm:text-3xl">
-                  {t(lang, "loginHeadline")}
-                </h1>
-                <p className="mt-2 text-sm text-gray-700 sm:text-base">
-                  {t(lang, "loginSubhead")}
-                </p>
-
-                <div className="mt-6">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-ew-primary">
-                    {t(lang, "loginBenefitsBadge")}
-                  </p>
-                  <h2 className="mt-3 text-xl font-extrabold tracking-tight">
-                    {t(lang, "loginBenefitsTitle")}
-                  </h2>
-                  <p className="mt-3 text-sm leading-relaxed text-gray-700">
-                    {t(lang, "loginBenefitsDesc")}
-                  </p>
-
-                  <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                    {["loginBenefit1", "loginBenefit2", "loginBenefit3", "loginBenefit4"].map((k) => (
-                      <div key={k} className="rounded-2xl border border-ew-accent/20 bg-white p-4">
-                        <p className="text-sm font-semibold text-ew-primary">{t(lang, k as any)}</p>
-                      </div>
-                    ))}
-                  </div>
+              <div className="flex items-center justify-center md:justify-start">
+                <div className="rounded-3xl border border-ew-accent/20 bg-ew-accent/10 px-10 py-12 shadow-sm">
+                  <Image
+                    src="/everyapp-logo.svg"
+                    alt="EveryAPP"
+                    width={520}
+                    height={130}
+                    priority
+                    className="h-auto w-[320px] sm:w-[420px] md:w-[460px]"
+                  />
                 </div>
               </div>
             </div>
 
-            {/* Right form card */}
+            {/* RIGHT – LOGIN CARD */}
             <div className="md:col-span-6">
               <div className="rounded-3xl border border-ew-accent/20 bg-ew-accent/10 p-8 shadow-sm">
+
                 <form onSubmit={onSubmit} className="space-y-5">
+
                   <div>
                     <label className="block text-sm font-semibold" htmlFor="email">
                       {t(lang, "loginEmail")}
@@ -216,19 +176,26 @@ export default function LoginPage() {
                     {loading ? t(lang, "loginSubmitting") : t(lang, "loginSubmit")}
                   </button>
 
-                  <p className="text-xs text-gray-600">{t(lang, "loginLegal")}</p>
+                  <p className="text-xs text-gray-600">
+                    {t(lang, "loginLegal")}
+                  </p>
+
                 </form>
+
               </div>
 
-              <p className="mt-4 text-center text-sm text-gray-600">
+              <p className="mt-6 text-center text-sm text-gray-600">
                 {t(lang, "loginNoAccount")}{" "}
                 <Link href="/register" className="font-semibold text-ew-primary hover:underline">
                   {t(lang, "loginRegisterLink")}
                 </Link>
               </p>
 
-              <p className="mt-3 text-xs text-gray-500">{t(lang, "loginFooterHint")}</p>
+              <p className="mt-3 text-center text-xs text-gray-500">
+                {t(lang, "loginFooterHint")}
+              </p>
             </div>
+
           </div>
         </section>
 
@@ -238,8 +205,8 @@ export default function LoginPage() {
             {t(lang, "footerRights", { year: String(new Date().getFullYear()) })}
           </div>
         </footer>
-      </main>
 
+      </main>
     </>
   );
 }
