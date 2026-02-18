@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
 import { DEFAULT_LANG, isLangKey, t } from "@/utils/i18n";
@@ -69,17 +69,37 @@ function StatPill({
     </div>
   );
 }
+    export default function PanelPage() {
+      // -------------------- i18n --------------------
+    const [lang, setLang] = useState<LangKey>(DEFAULT_LANG);
 
-export default function PanelPage() {
-  const [lang, setLang] = useState<LangKey>(DEFAULT_LANG);
-  const [sidebarPinned, setSidebarPinned] = useState(false); // opcjonalnie: “przypnij”
-    const [sidebarHover, setSidebarHover] = useState(false);
+    // -------------------- routing --------------------
+    const router = useRouter();
 
-    const sidebarVisible = sidebarPinned || sidebarHover;
+    // -------------------- responsive / sidebar --------------------
+    const [isMobile, setIsMobile] = useState(false);          // < lg
+    const [sidebarOpen, setSidebarOpen] = useState(false);    // mobile/tablet drawer
+    const [sidebarPinned, setSidebarPinned] = useState(false); // desktop pin
+    const [sidebarHover, setSidebarHover] = useState(false);   // desktop hover state
 
-  const [activeView, setActiveView] = useState<PanelView>("dashboard");
-  
-  const router = useRouter();
+    // hover delays (prevents "too sensitive" menu)
+    const hoverEnterRef = useRef<number | null>(null);
+    const hoverLeaveRef = useRef<number | null>(null);
+
+    // computed visibility
+    const sidebarVisible = isMobile ? sidebarOpen : (sidebarPinned || sidebarHover);
+
+    // -------------------- active view --------------------
+    const [activeView, setActiveView] = useState<PanelView>("dashboard");
+
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 1024); // <lg
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
 
   useEffect(() => {
     const c = getCookie("lang");
@@ -124,119 +144,172 @@ const activeNavItem = useMemo(() => {
       <main className="min-h-screen bg-ew-bg text-ew-primary">
         <div className="flex min-h-screen">
           {/* SIDEBAR (auto-hide on hover) */}
-        <aside
-        onMouseEnter={() => setSidebarHover(true)}
-        onMouseLeave={() => setSidebarHover(false)}
-        className={clsx(
-            "fixed left-0 top-0 z-50 hidden h-screen md:block",
-            "transition-all duration-200"
-        )}
-        >
-        {/* Hot-zone: niewidoczny pasek do wywołania menu */}
-        {!sidebarVisible ? (
-            <div
-            className="absolute left-0 top-0 h-full w-3"
-            onMouseEnter={() => setSidebarHover(true)}
-            />
-        ) : null}
-
-        {/* Właściwy panel */}
-        <div
+        {/* SIDEBAR */}
+          <aside
             className={clsx(
-            "h-full border-r border-white/10 bg-ew-primary text-white",
-            "transition-transform duration-200 will-change-transform",
-            "w-72",
-            sidebarVisible ? "translate-x-0" : "-translate-x-[calc(100%-0.75rem)]"
+              "fixed left-0 top-0 z-50 h-screen",
+              "transition-all duration-200",
+              // mobile: show (overlay mode). desktop: show from md (jak było)
+              isMobile ? "block" : "hidden md:block"
             )}
-        >
-            <div className="flex h-16 items-center justify-between px-5">
-            <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/25 backdrop-blur ring-1 ring-white/30">
-                <img src="/everyapp-logo.svg" alt="EveryAPP" className="h-7 w-auto" />
-                </div>
+            onMouseEnter={() => {
+              if (isMobile) return;
 
-                <div className="leading-tight">
-                <div className="text-sm font-extrabold tracking-tight">EveryAPP</div>
-                <div className="text-xs text-white/70">{t(lang, "panelSidebarSub")}</div>
-                </div>
-            </div>
+              if (hoverLeaveRef.current) window.clearTimeout(hoverLeaveRef.current);
+              if (hoverEnterRef.current) window.clearTimeout(hoverEnterRef.current);
 
-            {/* Przypięcie (opcjonalnie, ale przydatne) */}
-            <button
+              // ENTER DELAY – menu nie wyskakuje natychmiast
+              hoverEnterRef.current = window.setTimeout(() => setSidebarHover(true), 180);
+            }}
+            onMouseLeave={() => {
+              if (isMobile) return;
+
+              if (hoverEnterRef.current) window.clearTimeout(hoverEnterRef.current);
+              if (hoverLeaveRef.current) window.clearTimeout(hoverLeaveRef.current);
+
+              // LEAVE DELAY – nie znika agresywnie
+              hoverLeaveRef.current = window.setTimeout(() => setSidebarHover(false), 220);
+            }}
+          >
+            {/* MOBILE OVERLAY (klik poza menu zamyka) */}
+            {isMobile && sidebarVisible ? (
+              <button
                 type="button"
-                onClick={() => setSidebarPinned((v) => !v)}
-                className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-white/90 transition hover:bg-white/10"
-                aria-label={t(lang, "panelToggleSidebar")}
-                title={t(lang, "panelToggleSidebar")}
+                aria-label="Close sidebar overlay"
+                className="fixed inset-0 bg-black/30"
+                onClick={() => setSidebarOpen(false)}
+              />
+            ) : null}
+
+            {/* Hot-zone: mniejszy + tylko na desktop */}
+            {!isMobile && !sidebarVisible ? (
+              <div
+                className="absolute left-0 top-0 h-full w-2"
+                onMouseEnter={() => {
+                  if (hoverEnterRef.current) window.clearTimeout(hoverEnterRef.current);
+                  hoverEnterRef.current = window.setTimeout(() => setSidebarHover(true), 180);
+                }}
+              />
+            ) : null}
+
+            {/* Właściwy panel */}
+            <div
+              className={clsx(
+                "h-full border-r border-white/10 bg-ew-primary text-white",
+                "transition-transform duration-200 will-change-transform",
+                "w-72",
+                // mobile: slide in/out full hidden
+                isMobile
+                  ? (sidebarVisible ? "translate-x-0" : "-translate-x-full")
+                  : (sidebarVisible ? "translate-x-0" : "-translate-x-[calc(100%-0.5rem)]")
+              )}
             >
-                {sidebarPinned ? "📌" : "📍"}
-            </button>
-            </div>
+              {/* HEADER */}
+              <div className="flex h-16 items-center justify-between px-5">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/25 backdrop-blur ring-1 ring-white/30">
+                    <img src="/everyapp-logo.svg" alt="EveryAPP" className="h-7 w-auto" />
+                  </div>
 
-            <nav className="px-3 pb-6 pt-2">
-            {nav.map((it) => {
-                const isActive = it.view ? activeView === it.view : false;
-                const isDisabled = !!it.disabled;
-
-                const rowClass = clsx(
-                "mt-1 flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm transition",
-                isActive && "bg-white/10 text-white",
-                !isActive && !isDisabled && "text-white/85 hover:bg-white/10 hover:text-white",
-                isDisabled && "cursor-not-allowed opacity-50"
-                );
-
-                return (
-                <button
-                    key={it.key}
-                    type="button"
-                    className={rowClass}
-                    title={t(lang, it.key as any)}
-                    disabled={isDisabled}
-                    onClick={() => {
-                    if (it.disabled) return;
-
-                    if (it.href) {
-                        router.push(it.href);
-                        return;
-                    }
-
-                    if (it.view) setActiveView(it.view);
-                    }}
-                >
-                    <span className="truncate">{t(lang, it.key as any)}</span>
-                    {it.badge ? (
-                    <span className="rounded-full bg-ew-accent/20 px-2 py-0.5 text-[11px] font-semibold text-ew-accent">
-                        {it.badge}
-                    </span>
-                    ) : null}
-                </button>
-                );
-            })}
-            </nav>
-
-            <div className="mt-auto px-4 pb-5">
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
-                <p className="text-xs font-semibold text-white/80">{t(lang, "panelSidebarHintTitle")}</p>
-                <p className="mt-1 text-xs text-white/65">{t(lang, "panelSidebarHintDesc")}</p>
-
-                <div className="mt-3 flex gap-2">
-                <Link
-                    href="/"
-                    className="inline-flex flex-1 items-center justify-center rounded-2xl bg-ew-accent px-3 py-2 text-xs font-bold text-ew-primary transition hover:opacity-95"
-                >
-                    {t(lang, "panelGoHome")}
-                </Link>
-                <Link
-                    href="/login"
-                    className="inline-flex flex-1 items-center justify-center rounded-2xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-white/90 transition hover:bg-white/10"
-                >
-                    {t(lang, "panelLogout")}
-                </Link>
+                  <div className="leading-tight">
+                    <div className="text-sm font-extrabold tracking-tight">EveryAPP</div>
+                    <div className="text-xs text-white/70">{t(lang, "panelSidebarSub")}</div>
+                  </div>
                 </div>
+
+                {/* Mobile close button */}
+                {isMobile ? (
+                  <button
+                    type="button"
+                    onClick={() => setSidebarOpen(false)}
+                    className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-white/90 transition hover:bg-white/10"
+                    aria-label="Close"
+                    title="Close"
+                  >
+                    ✕
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setSidebarPinned((v) => !v)}
+                    className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-white/90 transition hover:bg-white/10"
+                    aria-label={t(lang, "panelToggleSidebar")}
+                    title={t(lang, "panelToggleSidebar")}
+                  >
+                    {sidebarPinned ? "📌" : "📍"}
+                  </button>
+                )}
+              </div>
+
+              {/* NAV */}
+              <nav className="px-3 pb-6 pt-2">
+                {nav.map((it) => {
+                  const isActive = it.view ? activeView === it.view : false;
+                  const isDisabled = !!it.disabled;
+
+                  const rowClass = clsx(
+                    "mt-1 flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm transition",
+                    isActive && "bg-white/10 text-white",
+                    !isActive && !isDisabled && "text-white/85 hover:bg-white/10 hover:text-white",
+                    isDisabled && "cursor-not-allowed opacity-50"
+                  );
+
+                  return (
+                    <button
+                      key={it.key}
+                      type="button"
+                      className={rowClass}
+                      title={t(lang, it.key as any)}
+                      disabled={isDisabled}
+                      onClick={() => {
+                        if (it.disabled) return;
+
+                        if (it.href) {
+                          router.push(it.href);
+                        } else if (it.view) {
+                          setActiveView(it.view);
+                        }
+
+                        // mobile: close after selecting item
+                        if (isMobile) setSidebarOpen(false);
+                      }}
+                    >
+                      <span className="truncate">{t(lang, it.key as any)}</span>
+                      {it.badge ? (
+                        <span className="rounded-full bg-ew-accent/20 px-2 py-0.5 text-[11px] font-semibold text-ew-accent">
+                          {it.badge}
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </nav>
+
+              {/* FOOTER */}
+              <div className="mt-auto px-4 pb-5">
+                <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-xs font-semibold text-white/80">{t(lang, "panelSidebarHintTitle")}</p>
+                  <p className="mt-1 text-xs text-white/65">{t(lang, "panelSidebarHintDesc")}</p>
+
+                  <div className="mt-3 flex gap-2">
+                    <Link
+                      href="/"
+                      className="inline-flex flex-1 items-center justify-center rounded-2xl bg-ew-accent px-3 py-2 text-xs font-bold text-ew-primary transition hover:opacity-95"
+                    >
+                      {t(lang, "panelGoHome")}
+                    </Link>
+                    <Link
+                      href="/login"
+                      className="inline-flex flex-1 items-center justify-center rounded-2xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-white/90 transition hover:bg-white/10"
+                    >
+                      {t(lang, "panelLogout")}
+                    </Link>
+                  </div>
+                </div>
+              </div>
             </div>
-            </div>
-        </div>
-        </aside>
+          </aside>
+
 
           {/* CONTENT */}
                    <section className="flex min-w-0 flex-1 flex-col md:pl-3">
@@ -245,6 +318,16 @@ const activeNavItem = useMemo(() => {
             <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/80 backdrop-blur">
               <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
                 <div className="flex min-w-0 items-center gap-3">
+                    {/* Mobile menu button */}
+                    <button
+                      type="button"
+                      onClick={() => setSidebarOpen(true)}
+                      className="md:hidden inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-200 bg-white text-ew-primary shadow-sm transition hover:bg-ew-accent/10"
+                      aria-label="Open menu"
+                      title="Open menu"
+                    >
+                      ☰
+                    </button>
                   <div className="min-w-0">
                     <h1 className="truncate text-lg font-extrabold tracking-tight text-ew-primary">
                     {t(lang, activeNavItem.key as any)}
