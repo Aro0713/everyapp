@@ -33,22 +33,8 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-ew-bg text-ew-primary">
       {/* TOPBAR (logo nie wjeżdża na kontenery) */}
-      <header className="sticky top-0 z-50 border-b border-gray-200 bg-ew-bg/90 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
-          <div className="flex items-center gap-3">
-            <Image
-              src="/everyapp-logo.svg"
-              alt="EveryAPP"
-              width={220}
-              height={55}
-              priority
-              className="h-auto w-[160px] sm:w-[180px]"
-            />
-            <div className="hidden sm:block text-sm text-gray-600">
-              {t(lang, "heroTagline")}
-            </div>
-          </div>
-
+            <header className="sticky top-0 z-50 border-b border-gray-200 bg-ew-bg/90 backdrop-blur">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-end px-4 sm:px-6">
           <div className="flex items-center gap-2">
             <div className="rounded-2xl border border-gray-200 bg-white px-2 py-1 shadow-sm">
               <LanguageSwitcher currentLang={lang} />
@@ -81,7 +67,7 @@ export default function Home() {
                     width={360}
                     height={90}
                     priority
-                    className="h-auto w-[280px] sm:w-[340px]"
+                    className="h-auto w-[340px] sm:w-[420px]"
                   />
                 </div>
 
@@ -133,9 +119,16 @@ export default function Home() {
               ))}
             </div>
           </div>
+          
         </div>
-      </section>
-    </main>
+      </section>  
+      {/* FOOTER */}
+      <footer className="mt-10 border-t border-gray-200 bg-ew-bg">
+        <div className="mx-auto max-w-7xl px-4 py-6 text-center text-xs text-gray-500 sm:px-6">
+          {t(lang, "footerRights", { year })}
+        </div>
+      </footer>
+    </main> 
   );
 }
 
