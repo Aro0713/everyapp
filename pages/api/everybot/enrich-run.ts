@@ -95,8 +95,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         select id, office_id, source, source_url
         from external_listings
         where enriched_at is null
-            and status in ('preview','active')
-            and office_id is not null
+        and status in ('preview','active')
+        and (location_text is null or location_text = '' or city is null or voivodeship is null)
         order by updated_at asc
         limit $1
         `,
@@ -128,6 +128,44 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             if (!enricher) throw new Error(`No enricher for source=${it.source}`);
 
             const data = await enricher(it.source_url);
+            let locationText = (data?.location_text ?? null) as string | null;
+
+            if (it.source === "otodom" && (!locationText || !locationText.trim())) {
+            const r = await fetch(it.source_url, {
+                method: "GET",
+                redirect: "follow",
+                headers: {
+                "user-agent":
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+                "accept": "text/html,application/xhtml+xml",
+                "accept-language": "pl-PL,pl;q=0.9,en;q=0.8",
+                "cache-control": "no-cache",
+                "pragma": "no-cache",
+                },
+            });
+
+            const html = await r.text().catch(() => "");
+
+            // og:description / description często zawiera "Miasto, powiat/dzielnica, województwo"
+            const ogDesc =
+                html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)?.[1]?.trim() ??
+                null;
+
+            const metaDesc =
+                html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i)?.[1]?.trim() ??
+                null;
+
+            // heurystyka: bierz fragment po przecinku, jeśli wygląda jak "..., ..., śląskie"
+            const pick = (s: string | null) => {
+                if (!s) return null;
+                // próbuj znaleźć końcówkę "..., ..., <woj>"
+                const m = s.match(/([A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż0-9 .-]+,\s*[A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż0-9 .-]+,\s*[A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż-]{4,})/);
+                return (m?.[1] ?? null)?.trim() ?? null;
+            };
+
+            locationText = pick(ogDesc) ?? pick(metaDesc) ?? null;
+            }
+
 
             const loc = parseLocationPartsFromText(data?.location_text ?? null);
 

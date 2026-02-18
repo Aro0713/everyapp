@@ -5239,7 +5239,94 @@ everybotSearching: {
   ua: "Пошук триває...",
   lt: "Vykdoma paieška...",
   vi: "Đang tìm kiếm..."
-}
+},
+  landingAiAssistantTitle: {
+    pl: "Osobisty Agent AI",
+    en: "Personal AI Agent",
+    de: "Persönlicher KI-Agent",
+    cs: "Osobní AI agent",
+    sk: "Osobný AI agent",
+    ua: "Персональний AI-агент",
+    lt: "Asmeninis AI agentas",
+    vi: "Trợ lý AI cá nhân",
+  },
+
+  landingAiAssistantDesc: {
+    pl: "Twój prywatny asystent, który porządkuje zadania, podpowiada następny krok po rozmowie i domyka proces w tle.",
+    en: "Your private assistant that organizes tasks, suggests the next step after a call, and keeps the process moving in the background.",
+    de: "Dein privater Assistent, der Aufgaben ordnet, den nächsten Schritt nach dem Gespräch vorschlägt und den Prozess im Hintergrund vorantreibt.",
+    cs: "Váš soukromý asistent, který třídí úkoly, navrhuje další krok po hovoru a udržuje proces v chodu na pozadí.",
+    sk: "Váš súkromný asistent, ktorý usporiada úlohy, navrhne ďalší krok po hovore a udržiava proces v pohybe na pozadí.",
+    ua: "Ваш приватний асистент, який впорядковує завдання, підказує наступний крок після розмови та веде процес у фоні.",
+    lt: "Jūsų privatus asistentas, kuris sutvarko užduotis, pasiūlo kitą žingsnį po skambučio ir palaiko procesą fone.",
+    vi: "Trợ lý riêng giúp bạn sắp xếp công việc, gợi ý bước tiếp theo sau cuộc gọi và duy trì quy trình chạy ngầm.",
+  },
+
+  landingValue1Title: {
+    pl: "Automatyzacja po rozmowie",
+    en: "Post-call automation",
+    de: "Automatisierung nach dem Gespräch",
+    cs: "Automatizace po hovoru",
+    sk: "Automatizácia po hovore",
+    ua: "Автоматизація після розмови",
+    lt: "Automatizavimas po skambučio",
+    vi: "Tự động hóa sau cuộc gọi",
+  },
+
+  landingValue1Desc: {
+    pl: "Zamień rozmowę w działania: notatki, follow-up, zadania i terminy — w jednym kliknięciu.",
+    en: "Turn conversations into actions: notes, follow-ups, tasks, and meetings — in one click.",
+    de: "Verwandle Gespräche in Aktionen: Notizen, Follow-ups, Aufgaben und Termine — mit einem Klick.",
+    cs: "Přeměňte hovory na akce: poznámky, follow-up, úkoly a schůzky — na jedno kliknutí.",
+    sk: "Zmeňte hovory na akcie: poznámky, follow-up, úlohy a stretnutia — jedným kliknutím.",
+    ua: "Перетворіть розмови на дії: нотатки, фолоу-ап, завдання та зустрічі — в один клік.",
+    lt: "Paverskite pokalbius veiksmais: užrašai, follow-up, užduotys ir susitikimai — vienu paspaudimu.",
+    vi: "Biến cuộc gọi thành hành động: ghi chú, follow-up, nhiệm vụ và lịch hẹn — chỉ với một cú nhấp.",
+  },
+
+  landingValue2Title: {
+    pl: "Kalendarz i spotkania",
+    en: "Calendar & meetings",
+    de: "Kalender & Termine",
+    cs: "Kalendář a schůzky",
+    sk: "Kalendár a stretnutia",
+    ua: "Календар і зустрічі",
+    lt: "Kalendorius ir susitikimai",
+    vi: "Lịch & cuộc hẹn",
+  },
+
+  landingValue2Desc: {
+    pl: "Jedno miejsce na spotkania firmowe i prywatne, z prostymi statusami i przypomnieniami.",
+    en: "One place for business and personal meetings, with simple statuses and reminders.",
+    de: "Ein Ort für geschäftliche und private Termine — mit einfachen Statusen und Erinnerungen.",
+    cs: "Jedno místo pro pracovní i soukromé schůzky, se stavy a připomenutími.",
+    sk: "Jedno miesto pre pracovné aj súkromné stretnutia, so stavmi a pripomienkami.",
+    ua: "Єдине місце для робочих і приватних зустрічей зі статусами та нагадуваннями.",
+    lt: "Viena vieta darbiniams ir asmeniniams susitikimams, su būsenomis ir priminimais.",
+    vi: "Một nơi cho lịch hẹn công việc và cá nhân, với trạng thái đơn giản và nhắc nhở.",
+  },
+
+  landingValue3Title: {
+    pl: "Kontrola efektywności",
+    en: "Performance control",
+    de: "Leistungsübersicht",
+    cs: "Kontrola výkonu",
+    sk: "Kontrola výkonu",
+    ua: "Контроль ефективності",
+    lt: "Efektyvumo kontrolė",
+    vi: "Theo dõi hiệu quả",
+  },
+
+  landingValue3Desc: {
+    pl: "KPI w czasie rzeczywistym: aktywność, pipeline, skuteczność i szybkie decyzje.",
+    en: "Real-time KPIs: activity, pipeline, effectiveness, and faster decisions.",
+    de: "KPIs in Echtzeit: Aktivität, Pipeline, Wirksamkeit und schnellere Entscheidungen.",
+    cs: "KPI v reálném čase: aktivita, pipeline, efektivita a rychlejší rozhodnutí.",
+    sk: "KPI v reálnom čase: aktivita, pipeline, efektivita a rýchlejšie rozhodnutia.",
+    ua: "KPI в реальному часі: активність, pipeline, ефективність і швидші рішення.",
+    lt: "Realaus laiko KPI: aktyvumas, pipeline, efektyvumas ir greitesni sprendimai.",
+    vi: "KPI theo thời gian thực: hoạt động, pipeline, hiệu quả và quyết định nhanh hơn.",
+  },
 
 } as const);
 
