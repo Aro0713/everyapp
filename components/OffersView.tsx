@@ -560,7 +560,7 @@ async function runRcnBatch() {
     <div className="space-y-6">
       {/* HEADER */}
       <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="relative z-20 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-extrabold tracking-tight text-ew-primary">
               {t(lang, "offersTitle" as any)}
@@ -570,7 +570,7 @@ async function runRcnBatch() {
             </p>
           </div>
 
-          <div className="flex gap-2">
+          <div className="relative z-30 flex flex-wrap justify-end gap-2">
             <button
               type="button"
               className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-ew-primary shadow-sm transition hover:bg-ew-accent/10"
@@ -600,7 +600,7 @@ async function runRcnBatch() {
                   type="button"
                   disabled={botLoading}
                   className={clsx(
-                    "rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm transition",
+                    "pointer-events-auto rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm transition",
                     botLoading
                       ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
                       : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
@@ -617,7 +617,8 @@ async function runRcnBatch() {
                   type="button"
                   disabled={botLoading}
                   className={clsx(
-                    "rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm transition",
+                    "pointer-events-auto rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm transition"
+,
                     botLoading
                       ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
                       : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
