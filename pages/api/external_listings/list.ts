@@ -13,6 +13,12 @@ type Row = {
   title: string | null;
   description: string | null;
   price_amount: number | null;
+  lat: number | null;
+  lng: number | null;
+  rcn_last_price: number | null;
+  rcn_last_date: string | null;
+  rcn_link: string | null;
+
   currency: string | null;
   location_text: string | null;
 
@@ -52,6 +58,17 @@ function optNumber(v: unknown): number | null {
   if (typeof v === "string" && v.trim() && Number.isFinite(Number(v))) return Number(v);
   return null;
 }
+function normalizeVoivodeshipInput(v: string | null): string | null {
+  const s = (v ?? "").trim();
+  if (!s) return null;
+
+  return (
+    s
+      .replace(/^wojew[oó]dztwo\s+/i, "")
+      .replace(/^woj\.?\s+/i, "")
+      .trim() || null
+  );
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
@@ -90,13 +107,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const includePreview = optString(req.query.includePreview) !== "0"; // domyślnie TAK
 
     const where: string[] = [`1=1`];
+    const params: any[] = [];
+      let p = 1;
+
+      // ✅ zawsze tnij po biurze
+      where.push(`office_id = $${p++}`);
+      params.push(officeId);
 
     if (!includePreview) {
       where.push(`status <> 'preview'`);
     }
-
-    const params: any[] = [];
-    let p = 1;
 
     const matchedSince = optString(req.query.matchedSince);
     if (matchedSince) {
@@ -144,7 +164,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const locationText = optString(req.query.locationText);
     const city = optString(req.query.city);
     const district = optString(req.query.district);
-    const voivodeship = optString(req.query.voivodeship);
+    const voivodeship = normalizeVoivodeshipInput(optString(req.query.voivodeship));
     const street = optString(req.query.street);
     const minPrice = optNumber(req.query.minPrice);
     const maxPrice = optNumber(req.query.maxPrice);
@@ -333,7 +353,6 @@ if (rooms != null) {
       const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
 
       const offset = (page - 1) * limit;
-
       const sql = `
         SELECT
           id, office_id, source, source_url, status,
@@ -346,6 +365,11 @@ if (rooms != null) {
           voivodeship, city, district, street,
           owner_phone,
           source_status, last_seen_at, last_checked_at, enriched_at,
+
+          -- NOWE KOLUMNY
+          lat, lng,
+          rcn_last_price, rcn_last_date, rcn_link,
+
           updated_at
         FROM external_listings
         WHERE ${where.join(" AND ")}
@@ -375,7 +399,7 @@ if (rooms != null) {
       p += 2;
     }
 
-     const sql = `
+      const sql = `
       SELECT
         id, office_id, source, source_url, status,
         title, description,
@@ -387,6 +411,11 @@ if (rooms != null) {
         voivodeship, city, district, street,
         owner_phone,
         source_status, last_seen_at, last_checked_at, enriched_at,
+
+        -- NOWE KOLUMNY
+        lat, lng,
+        rcn_last_price, rcn_last_date, rcn_link,
+
         updated_at
       FROM external_listings
       WHERE ${where.join(" AND ")}

@@ -68,6 +68,15 @@ function fmtPrice(v: ExternalRow["price_amount"], currency?: string | null) {
   if (!Number.isFinite(n)) return String(v);
   return `${n.toLocaleString()} ${currency ?? ""}`.trim();
 }
+function normalizeVoivodeshipInput(v?: string | null): string | null {
+  const s = (v ?? "").trim();
+  if (!s) return null;
+
+  return s
+    .replace(/^wojew[oó]dztwo\s+/i, "")
+    .replace(/^woj\.?\s+/i, "")
+    .trim() || null;
+}
 
 export default function OffersView({ lang }: { lang: LangKey }) {
  const searchIntervalRef = useRef<number | null>(null);
@@ -212,7 +221,8 @@ async function loadEverybot(opts?: {
       // wysyłamy to co user wpisał (dom/mieszkanie/działka/lokal)
       qs.set("propertyType", rawPt);
     }
-    if (f.voivodeship.trim()) qs.set("voivodeship", f.voivodeship.trim());
+    const vNorm = normalizeVoivodeshipInput(f.voivodeship);
+    if (vNorm) qs.set("voivodeship", vNorm);
     if (f.city.trim()) qs.set("city", f.city.trim());
     if (f.district.trim()) qs.set("district", f.district.trim());
 
@@ -284,7 +294,8 @@ async function loadEverybot(opts?: {
     if (rawPt) qs.set("propertyType", rawPt);
 
     // region/city/district
-    if (f.voivodeship?.trim()) qs.set("voivodeship", f.voivodeship.trim());
+    const vNorm = normalizeVoivodeshipInput(f.voivodeship);
+    if (vNorm) qs.set("voivodeship", vNorm);
     if (f.city?.trim()) qs.set("city", f.city.trim());
     if (f.district?.trim()) qs.set("district", f.district.trim());
 
