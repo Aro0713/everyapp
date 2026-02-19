@@ -89,14 +89,11 @@ async function wfsGetFeatureGeoJson(
 
   u.searchParams.set("COUNT", "50");
 
-  // ✅ outputFormat: niektóre serwery wolą "application/json"
-  u.searchParams.set("OUTPUTFORMAT", "application/json");
-
   const url = u.toString();
 
   const r = await fetch(url, {
     headers: {
-      accept: "application/json, text/xml;q=0.9, */*;q=0.8",
+      accept: "text/xml, application/xml;q=0.9, */*;q=0.8",
       "user-agent": "EveryAPP/EveryBOT RCN client",
     },
   });
@@ -116,7 +113,7 @@ async function wfsGetFeatureGeoJson(
   } catch {
     // serwer może zwrócić XML mimo OUTPUTFORMAT
     console.log("RCN_WFS_NON_JSON", { typeName, body: txt.slice(0, 200) });
-    return null;
+    return txt;
   }
 }
 
@@ -129,41 +126,31 @@ function buildGeoportalLink(lat: number, lng: number) {
   return u.toString();
 }
 
-function extractBestTransactionFromGeoJson(geojson: any) {
-  const feats: any[] = Array.isArray(geojson?.features) ? geojson.features : [];
-  if (!feats.length) return null;
+function extractBestTransactionFromXml(xml: string) {
+  if (!xml || typeof xml !== "string") return null;
 
-  // znajdź klucze w properties na podstawie pierwszego feature
-  const props0 = feats[0]?.properties ?? {};
-  const priceKey = pickKeyCaseInsensitive(props0, PRICE_KEYS);
-  const dateKey = pickKeyCaseInsensitive(props0, DATE_KEYS);
+  // szybki test: czy są jakiekolwiek featureMember/featureMembers
+  const hasFeatures =
+    xml.includes("featureMember") ||
+    xml.includes("featureMembers") ||
+    xml.includes(":lokale") ||
+    xml.includes(":dzialki") ||
+    xml.includes(":budynki");
 
-  // jeśli nie ma dateKey, wybierz “ostatni” po prostu jako pierwszy (czasem WFS ma domyślny sort)
-  let best = feats[0];
-  let bestDate: Date | null = dateKey ? parseDateLoose(best?.properties?.[dateKey]) : null;
+  if (!hasFeatures) return null;
 
-  for (const f of feats) {
-    if (!dateKey) continue;
-    const d = parseDateLoose(f?.properties?.[dateKey]);
-    if (!d) continue;
-    if (!bestDate || d > bestDate) {
-      best = f;
-      bestDate = d;
-    }
-  }
+  // mega-MVP: wyciągnij pierwszą liczbę, która wygląda jak cena (>= 1000)
+  const priceMatch = xml.match(/>(\d{4,})<\/(cena|cena_brutto|cena_transakcyjna|wartosc|wartość|price)>/i);
+  const price = priceMatch ? Number(priceMatch[1]) : null;
 
-  const props = best?.properties ?? {};
-  const priceRaw = priceKey ? props[priceKey] : null;
-  const dateRaw = dateKey ? props[dateKey] : null;
-
-  const price = optNumber(priceRaw);
-  const date = parseDateLoose(dateRaw);
+  // mega-MVP: wyciągnij pierwszą datę ISO yyyy-mm-dd
+  const dateMatch = xml.match(/>(\d{4}-\d{2}-\d{2})</);
+  const dateISO = dateMatch ? dateMatch[1] : null;
 
   return {
-    price,
-    dateISO: date ? date.toISOString().slice(0, 10) : null, // yyyy-mm-dd
-    // dla debug: jakie pola wykryliśmy
-    detected: { priceKey, dateKey },
+    price: Number.isFinite(price as any) ? price : null,
+    dateISO,
+    detected: { priceKey: priceMatch?.[2] ?? null, dateKey: dateISO ? "date" : null },
   };
 }
 
@@ -212,9 +199,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         let best: { price: number | null; dateISO: string | null; detected: any } | null = null;
 
         for (const layer of LAYERS) {
-          const geo = await wfsGetFeatureGeoJson(layer, bbox);
-          if (!geo) continue;
-          const pick = extractBestTransactionFromGeoJson(geo);
+        const xml = await wfsGetFeatureGeoJson(layer, bbox);
+        if (!xml) continue;
+        const pick = extractBestTransactionFromXml(String(xml));
           if (pick && (pick.price != null || pick.dateISO != null)) {
             best = pick;
             break;
