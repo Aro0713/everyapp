@@ -67,33 +67,55 @@ function bboxFromPoint(lat: number, lng: number, meters: number) {
   return { minx, miny, maxx, maxy };
 }
 
-async function wfsGetFeatureGeoJson(typeName: string, bbox: { minx: number; miny: number; maxx: number; maxy: number }) {
+async function wfsGetFeatureGeoJson(
+  typeName: string,
+  bbox: { minx: number; miny: number; maxx: number; maxy: number }
+) {
+  // Geoportal jest kapryśny na format CRS w BBOX.
+  // Najstabilniej: SRSNAME=EPSG:4326 i BBOX z EPSG:4326 (bez URN).
   const u = new URL(WFS_BASE);
-  u.searchParams.set("service", "WFS");
-  u.searchParams.set("request", "GetFeature");
-  u.searchParams.set("version", "2.0.0");
-  u.searchParams.set("typeNames", typeName);
-  // WFS bbox: minx,miny,maxx,maxy,CRS
-  u.searchParams.set("bbox", `${bbox.minx},${bbox.miny},${bbox.maxx},${bbox.maxy},urn:ogc:def:crs:EPSG::4326`);
-  u.searchParams.set("count", "50");
-  // GeoJSON jeśli wspierane
-  u.searchParams.set("outputFormat", "application/json");
 
-  const r = await fetch(u.toString(), {
+  // ✅ UPPERCASE param names (większa kompatybilność z serwerami WMS/WFS)
+  u.searchParams.set("SERVICE", "WFS");
+  u.searchParams.set("REQUEST", "GetFeature");
+  u.searchParams.set("VERSION", "2.0.0");
+  u.searchParams.set("TYPENAMES", typeName);
+
+  // ✅ jawny CRS
+  u.searchParams.set("SRSNAME", "EPSG:4326");
+
+  // ✅ BBOX: minx,miny,maxx,maxy,EPSG:4326 (bez urn:ogc:def:crs...)
+  u.searchParams.set("BBOX", `${bbox.minx},${bbox.miny},${bbox.maxx},${bbox.maxy},EPSG:4326`);
+
+  u.searchParams.set("COUNT", "50");
+
+  // ✅ outputFormat: niektóre serwery wolą "application/json"
+  u.searchParams.set("OUTPUTFORMAT", "application/json");
+
+  const url = u.toString();
+
+  const r = await fetch(url, {
     headers: {
-      "accept": "application/json, text/xml;q=0.9, */*;q=0.8",
+      accept: "application/json, text/xml;q=0.9, */*;q=0.8",
       "user-agent": "EveryAPP/EveryBOT RCN client",
     },
   });
 
   const txt = await r.text().catch(() => "");
-  if (!r.ok) throw new Error(`WFS_GETFEATURE_FAILED ${r.status} ${txt.slice(0, 200)}`);
+
+  // ❗️Zamiast throw na 400, zwracamy null (żeby pętla mogła zapisać chociaż link i rcn_enriched_at)
+  if (!r.ok) {
+    // log tylko pierwsze 200 znaków (żeby nie zalać logów)
+    console.log("RCN_WFS_FAIL", { status: r.status, typeName, url: url.slice(0, 300), body: txt.slice(0, 200) });
+    return null;
+  }
 
   // GeoJSON
   try {
     return JSON.parse(txt);
   } catch {
-    // czasem serwer ignoruje outputFormat i zwraca XML
+    // serwer może zwrócić XML mimo OUTPUTFORMAT
+    console.log("RCN_WFS_NON_JSON", { typeName, body: txt.slice(0, 200) });
     return null;
   }
 }
