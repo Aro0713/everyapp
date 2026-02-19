@@ -44,6 +44,18 @@ function buildQuery(r: Row): string | null {
 
   return null;
 }
+function sanitizeGeocodeQuery(q: string): string {
+  const s = (q ?? "").trim();
+
+  // usuń kontrolne / dziwne znaki, zostaw litery/cyfry/spacje i podstawową interpunkcję
+  const cleaned = s
+    .replace(/[^\p{L}\p{N}\s,.\-\/]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // Photon lubi krótsze zapytania – ucinamy, żeby uniknąć 400 przy śmieciach
+  return cleaned.slice(0, 140);
+}
 
 /**
  * Photon (komercyjnie: hostuj sam; MVP: publiczny endpoint działa, ale nie spamuj)
@@ -51,28 +63,42 @@ function buildQuery(r: Row): string | null {
  * Alternatywa: Nominatim (jeszcze ostrzejszy rate-limit)
  */
 async function geocodePhoton(q: string): Promise<{ lat: number; lng: number; confidence: number } | null> {
+  const qq = sanitizeGeocodeQuery(q);
+
+  // twarda bramka – nie wysyłamy śmieci
+  if (!qq || qq.length < 3) return null;
+
   const u = new URL("https://photon.komoot.io/api/");
-  u.searchParams.set("q", q);
+  u.searchParams.set("q", qq);
   u.searchParams.set("lang", "pl");
   u.searchParams.set("limit", "1");
 
-  const r = await fetch(u.toString(), {
-    headers: {
-      "accept": "application/json",
-      "user-agent": "EveryAPP/EveryBOT geocoder (contact: admin@everyapp.pl)",
-    },
-  });
+ const ctrl = new AbortController();
+const t = setTimeout(() => ctrl.abort(), 10000);
 
-  if (!r.ok) return null;
-  const j = await r.json().catch(() => null);
+const r = await fetch(u.toString(), {
+  signal: ctrl.signal,
+  headers: {
+    accept: "application/json",
+    "user-agent": "EveryAPP/EveryBOT geocoder (contact: admin@everyapp.pl)",
+  },
+}).finally(() => clearTimeout(t));
+
+
+  const bodyText = await r.text().catch(() => "");
+  if (!r.ok) {
+    // pokaż realny powód 400/429 w Vercel logs
+    throw new Error(`PHOTON_HTTP_${r.status} ${bodyText.slice(0, 200)}`);
+  }
+
+  const j = bodyText ? JSON.parse(bodyText) : null;
   const f = j?.features?.[0];
   const coords = f?.geometry?.coordinates; // [lon,lat]
   const lon = optNumber(coords?.[0]);
   const lat = optNumber(coords?.[1]);
   if (lat == null || lon == null) return null;
 
-  // photon daje "properties.osm_value"/"type" itp., ale confidence wyliczamy prosto
-  const conf = 0.6; // MVP: stała; potem możesz podbić gdy match jest "house"/"street"
+  const conf = 0.6;
   return { lat, lng: lon, confidence: conf };
 }
 
@@ -98,7 +124,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       FROM external_listings
       WHERE office_id = $1
         AND (lat IS NULL OR lng IS NULL)
-        AND geocoded_at IS NULL
+        AND (geocoded_at IS NULL OR (geocode_confidence = 0 AND geocoded_at < now() - interval '30 days'))
         AND (city IS NOT NULL OR location_text IS NOT NULL)
       ORDER BY enriched_at DESC NULLS LAST, updated_at DESC
       LIMIT $2
@@ -110,44 +136,45 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const errors: Array<{ id: string; q: string; error: string }> = [];
 
     for (const r0 of rows) {
-      const q = buildQuery(r0);
-      if (!q) continue;
+    const q = buildQuery(r0);
+    if (!q) continue;
 
-      try {
-        const geo = await geocodePhoton(q);
-        if (!geo) {
-          await pool.query(
-            `UPDATE external_listings
-             SET geocoded_at = now(), geocode_source = 'photon', geocode_confidence = 0
-             WHERE office_id = $1 AND id = $2`,
-            [officeId, r0.id]
-          );
-          processed += 1;
-          await sleep(250);
-          continue;
-        }
+    let geo: { lat: number; lng: number; confidence: number } | null = null;
 
-        await pool.query(
-          `
-          UPDATE external_listings
-          SET lat = $1,
-              lng = $2,
-              geocoded_at = now(),
-              geocode_source = 'photon',
-              geocode_confidence = $3,
-              updated_at = now()
-          WHERE office_id = $4 AND id = $5
-          `,
-          [geo.lat, geo.lng, geo.confidence, officeId, r0.id]
-        );
-
-        processed += 1;
-
-        // rate-limit (MVP)
-        await sleep(250);
-      } catch (e: any) {
+    try {
+        geo = await geocodePhoton(q);
+    } catch (e: any) {
         errors.push({ id: r0.id, q, error: e?.message ?? "geocode failed" });
-      }
+        await sleep(250);
+        continue;
+    }
+
+    if (!geo) {
+        await pool.query(
+        `UPDATE external_listings
+        SET geocoded_at = now(), geocode_source = 'photon', geocode_confidence = 0
+        WHERE office_id = $1 AND id = $2`,
+        [officeId, r0.id]
+        );
+        processed += 1;
+        await sleep(250);
+        continue;
+    }
+
+    await pool.query(
+        `UPDATE external_listings
+        SET lat = $1,
+            lng = $2,
+            geocoded_at = now(),
+            geocode_source = 'photon',
+            geocode_confidence = $3,
+            updated_at = now()
+        WHERE office_id = $4 AND id = $5`,
+        [geo.lat, geo.lng, geo.confidence, officeId, r0.id]
+    );
+
+    processed += 1;
+    await sleep(250);
     }
 
     return res.status(200).json({ ok: true, officeId, requested: limit, processed, errors });
