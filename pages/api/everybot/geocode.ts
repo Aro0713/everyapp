@@ -70,7 +70,7 @@ async function geocodePhoton(q: string): Promise<{ lat: number; lng: number; con
 
   const u = new URL("https://photon.komoot.io/api/");
   u.searchParams.set("q", qq);
-  u.searchParams.set("lang", "pl");
+  u.searchParams.set("lang", "default");
   u.searchParams.set("limit", "1");
 
  const ctrl = new AbortController();
