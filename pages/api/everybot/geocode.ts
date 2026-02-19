@@ -144,7 +144,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
         geo = await geocodePhoton(q);
     } catch (e: any) {
-        errors.push({ id: r0.id, q, error: e?.message ?? "geocode failed" });
+       const msg = e?.message ?? "geocode failed";
+        errors.push({ id: r0.id, q, error: msg });
+
+        // ✅ log tylko pierwszy raz, żeby nie zalać Vercel
+        if (errors.length === 1) {
+        console.log("PHOTON_FAIL_SAMPLE", { id: r0.id, q, msg });
+        }
+
         await sleep(250);
         continue;
     }
@@ -177,7 +184,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await sleep(250);
     }
 
-    return res.status(200).json({ ok: true, officeId, requested: limit, processed, errors });
+        return res.status(200).json({
+    ok: true,
+    officeId,
+    requested: limit,
+    processed,
+    errorsCount: errors.length,
+    errors: errors.slice(0, 5),
+    });
+
   } catch (e: any) {
     console.error("EVERYBOT_GEOCODE_ERROR", e);
     return res.status(400).json({ error: e?.message ?? "Bad request" });
