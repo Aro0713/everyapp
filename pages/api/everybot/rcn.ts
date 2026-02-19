@@ -156,16 +156,44 @@ function extractBestTransactionFromXml(xml: string) {
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
+    const isCron = req.headers["x-cron-internal"] === "1";
+
     if (req.method !== "POST") {
       res.setHeader("Allow", "POST");
       return res.status(405).json({ error: "Method not allowed" });
     }
 
-    const userId = getUserIdFromRequest(req);
-    if (!userId) return res.status(401).json({ error: "UNAUTHORIZED" });
+    // ✅ CRON auth (bez sesji)
+    if (isCron) {
+      const cronSecret = req.headers["x-cron-secret"];
+      if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
+        return res.status(401).json({ error: "UNAUTHORIZED_CRON" });
+      }
+    }
 
-    const officeId = await getOfficeIdForUserId(userId);
-    if (!officeId) return res.status(400).json({ error: "MISSING_OFFICE_ID" });
+    // ✅ officeId zależnie od trybu
+    let officeId: string | null = null;
+
+    if (!isCron) {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) return res.status(401).json({ error: "UNAUTHORIZED" });
+
+      officeId = await getOfficeIdForUserId(userId);
+      if (!officeId) return res.status(400).json({ error: "MISSING_OFFICE_ID" });
+    } else {
+      // MVP: wybierz biuro z największą liczbą rekordów (żeby nie brać losowego)
+      const r = await pool.query<{ office_id: string }>(
+        `
+        SELECT office_id
+        FROM external_listings
+        GROUP BY office_id
+        ORDER BY COUNT(*) DESC
+        LIMIT 1
+        `
+      );
+      officeId = r.rows?.[0]?.office_id ?? null;
+      if (!officeId) return res.status(400).json({ error: "MISSING_OFFICE_ID" });
+    }
 
     const limitRaw = optNumber((req.body ?? {}).limit) ?? 50;
     const limit = Math.min(Math.max(limitRaw, 1), 200);
@@ -199,9 +227,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         let best: { price: number | null; dateISO: string | null; detected: any } | null = null;
 
         for (const layer of LAYERS) {
-        const xml = await wfsGetFeatureGeoJson(layer, bbox);
-        if (!xml) continue;
-        const pick = extractBestTransactionFromXml(String(xml));
+          const xml = await wfsGetFeatureGeoJson(layer, bbox);
+          if (!xml) continue;
+          const pick = extractBestTransactionFromXml(String(xml));
           if (pick && (pick.price != null || pick.dateISO != null)) {
             best = pick;
             break;
@@ -226,7 +254,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         processed += 1;
 
-        // debug: tylko do odpowiedzi, nie do DB
         debug.push({ id: r0.id, ...best?.detected });
 
         await sleep(250);

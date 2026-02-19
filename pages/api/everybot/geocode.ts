@@ -104,16 +104,44 @@ const r = await fetch(u.toString(), {
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
+    const isCron = req.headers["x-cron-internal"] === "1";
+
     if (req.method !== "POST") {
       res.setHeader("Allow", "POST");
       return res.status(405).json({ error: "Method not allowed" });
     }
 
-    const userId = getUserIdFromRequest(req);
-    if (!userId) return res.status(401).json({ error: "UNAUTHORIZED" });
+    // ✅ CRON auth (bez sesji)
+    if (isCron) {
+      const cronSecret = req.headers["x-cron-secret"];
+      if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
+        return res.status(401).json({ error: "UNAUTHORIZED_CRON" });
+      }
+    }
 
-    const officeId = await getOfficeIdForUserId(userId);
-    if (!officeId) return res.status(400).json({ error: "MISSING_OFFICE_ID" });
+    // ✅ officeId zależnie od trybu
+    let officeId: string | null = null;
+
+    if (!isCron) {
+      const userId = getUserIdFromRequest(req);
+      if (!userId) return res.status(401).json({ error: "UNAUTHORIZED" });
+
+      officeId = await getOfficeIdForUserId(userId);
+      if (!officeId) return res.status(400).json({ error: "MISSING_OFFICE_ID" });
+    } else {
+      // MVP: wybierz biuro z największą liczbą rekordów (żeby nie brać losowego)
+      const r = await pool.query<{ office_id: string }>(
+        `
+        SELECT office_id
+        FROM external_listings
+        GROUP BY office_id
+        ORDER BY COUNT(*) DESC
+        LIMIT 1
+        `
+      );
+      officeId = r.rows?.[0]?.office_id ?? null;
+      if (!officeId) return res.status(400).json({ error: "MISSING_OFFICE_ID" });
+    }
 
     const limitRaw = optNumber((req.body ?? {}).limit) ?? 50;
     const limit = Math.min(Math.max(limitRaw, 1), 200);
@@ -136,63 +164,62 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const errors: Array<{ id: string; q: string; error: string }> = [];
 
     for (const r0 of rows) {
-    const q = buildQuery(r0);
-    if (!q) continue;
+      const q = buildQuery(r0);
+      if (!q) continue;
 
-    let geo: { lat: number; lng: number; confidence: number } | null = null;
+      let geo: { lat: number; lng: number; confidence: number } | null = null;
 
-    try {
+      try {
         geo = await geocodePhoton(q);
-    } catch (e: any) {
-       const msg = e?.message ?? "geocode failed";
+      } catch (e: any) {
+        const msg = e?.message ?? "geocode failed";
         errors.push({ id: r0.id, q, error: msg });
 
         // ✅ log tylko pierwszy raz, żeby nie zalać Vercel
         if (errors.length === 1) {
-        console.log("PHOTON_FAIL_SAMPLE", { id: r0.id, q, msg });
+          console.log("PHOTON_FAIL_SAMPLE", { id: r0.id, q, msg });
         }
 
         await sleep(250);
         continue;
-    }
+      }
 
-    if (!geo) {
+      if (!geo) {
         await pool.query(
-        `UPDATE external_listings
-        SET geocoded_at = now(), geocode_source = 'photon', geocode_confidence = 0
-        WHERE office_id = $1 AND id = $2`,
-        [officeId, r0.id]
+          `UPDATE external_listings
+           SET geocoded_at = now(), geocode_source = 'photon', geocode_confidence = 0
+           WHERE office_id = $1 AND id = $2`,
+          [officeId, r0.id]
         );
         processed += 1;
         await sleep(250);
         continue;
-    }
+      }
 
-    await pool.query(
+      await pool.query(
         `UPDATE external_listings
-        SET lat = $1,
-            lng = $2,
-            geocoded_at = now(),
-            geocode_source = 'photon',
-            geocode_confidence = $3,
-            updated_at = now()
-        WHERE office_id = $4 AND id = $5`,
+         SET lat = $1,
+             lng = $2,
+             geocoded_at = now(),
+             geocode_source = 'photon',
+             geocode_confidence = $3,
+             updated_at = now()
+         WHERE office_id = $4 AND id = $5`,
         [geo.lat, geo.lng, geo.confidence, officeId, r0.id]
-    );
+      );
 
-    processed += 1;
-    await sleep(250);
+      processed += 1;
+      await sleep(250);
     }
 
-        return res.status(200).json({
-    ok: true,
-    officeId,
-    requested: limit,
-    processed,
-    errorsCount: errors.length,
-    errors: errors.slice(0, 5),
+    return res.status(200).json({
+      ok: true,
+      officeId,
+      requested: limit,
+      processed,
+      errorsCount: errors.length,
+      errors: errors.slice(0, 5),
     });
-
   } catch (e: any) {
     console.error("EVERYBOT_GEOCODE_ERROR", e);
     return res.status(400).json({ error: e?.message ?? "Bad request" });
