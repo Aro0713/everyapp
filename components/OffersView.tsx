@@ -34,6 +34,12 @@ type ExternalRow = {
   imported_at: string;
   updated_at: string;
   thumb_url: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  rcn_last_price?: number | null;
+  rcn_last_date?: string | null;
+  rcn_link?: string | null;
+
 
   // NOWE kolumny (Esti-like)
   owner_phone?: string | null;
@@ -352,63 +358,7 @@ async function loadEverybot(opts?: {
       }
     };
   }, []);
-  // 🔄 AUTO-REFRESH EveryBOT z Neon (co 20s, tylko gdy zakładka aktywna)
-    useEffect(() => {
-  if (tab !== "everybot") return;
-  if (botSearching) return;         // 🔴 NIE refreshuj w trakcie LIVE
-  if (botMatchedSince) return; // 🔥 nie odświeżaj Neon gdy aktywny LIVE run
-
-  const tick = async () => {
-    if (document.visibilityState !== "visible") return;
-    await refreshEverybotList();
-  };
-
-  const timer = window.setInterval(tick, 20000);
-
-  return () => window.clearInterval(timer);
-}, [tab]); // 🔥 usuń botFilters, botMatchedSince, botSearching
-
   
-useEffect(() => {
-  const el = everybotTableRef.current;
-  if (!el) return;
-
-  let isDown = false;
-  let startX = 0;
-  let scrollLeft = 0;
-
-  const onMouseDown = (e: MouseEvent) => {
-    // ignoruj klik w linki
-    if ((e.target as HTMLElement).closest("a, button")) return;
-
-    isDown = true;
-    el.style.cursor = "grabbing";
-    startX = e.pageX;
-    scrollLeft = el.scrollLeft;
-  };
-
-  const onMouseUp = () => {
-    isDown = false;
-    el.style.cursor = "grab";
-  };
-
-  const onMouseMove = (e: MouseEvent) => {
-    if (!isDown) return;
-    e.preventDefault();
-    const walk = (e.pageX - startX) * 1.2;
-    el.scrollLeft = scrollLeft - walk;
-  };
-
-  el.addEventListener("mousedown", onMouseDown);
-  window.addEventListener("mouseup", onMouseUp);
-  window.addEventListener("mousemove", onMouseMove);
-
-  return () => {
-    el.removeEventListener("mousedown", onMouseDown);
-    window.removeEventListener("mouseup", onMouseUp);
-    window.removeEventListener("mousemove", onMouseMove);
-  };
-}, []);
   useEffect(() => {
   const el = everybotTableRef.current;
   if (!el) return;
@@ -570,6 +520,29 @@ async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
     matchedSince: null,
   });
 }
+async function runGeocodeBatch() {
+  const r = await fetch("/api/everybot/geocode", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ limit: 50 }),
+  });
+  const j = await r.json().catch(() => null);
+  if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
+  await refreshEverybotList();
+  return j;
+}
+
+async function runRcnBatch() {
+  const r = await fetch("/api/everybot/rcn", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ limit: 50, radiusMeters: 250 }),
+  });
+  const j = await r.json().catch(() => null);
+  if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
+  await refreshEverybotList();
+  return j;
+}
 
 
   return (
@@ -610,6 +583,43 @@ async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
             >
               {t(lang, "offersRefresh" as any)}
             </button>
+            {tab === "everybot" && (
+              <>
+                <button
+                  type="button"
+                  disabled={botLoading}
+                  className={clsx(
+                    "rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm transition",
+                    botLoading
+                      ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
+                      : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
+                  )}
+                  onClick={async () => {
+                    try { await runGeocodeBatch(); }
+                    catch (e: any) { alert(`Geocode failed: ${e?.message ?? e}`); }
+                  }}
+                >
+                  🌍 Geocode 50
+                </button>
+
+                <button
+                  type="button"
+                  disabled={botLoading}
+                  className={clsx(
+                    "rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm transition",
+                    botLoading
+                      ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
+                      : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
+                  )}
+                  onClick={async () => {
+                    try { await runRcnBatch(); }
+                    catch (e: any) { alert(`RCN failed: ${e?.message ?? e}`); }
+                  }}
+                >
+                  🧾 RCN 50
+                </button>
+              </>
+            )}
 
             <button
               type="button"
@@ -888,6 +898,8 @@ async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
                           <th className="px-4 py-3 w-28">{t(lang, "everybotColMatchedAt" as any)}</th>
                           <th className="px-4 py-3 w-20">{t(lang, "everybotColTransactionType" as any)}</th>
                           <th className="px-4 py-3 w-28">{t(lang, "everybotColPrice" as any)}</th>
+                          <th className="px-4 py-3 w-32 hidden lg:table-cell">RCN</th>
+                          <th className="px-4 py-3 w-24 hidden lg:table-cell">Geoportal</th>
 
                           <th className="px-4 py-3 w-20 hidden md:table-cell">{t(lang, "everybotColArea" as any)}</th>
                           <th className="px-4 py-3 w-24 hidden lg:table-cell">{t(lang, "everybotColPricePerM2" as any)}</th>
@@ -929,8 +941,8 @@ async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
                               <a
                                 href={r.source_url}
                                 target="_blank"
-                                rel="noreferrer"
-                                className="text-ew-accent underline underline-offset-2 text-xs"
+                                rel="noopener noreferrer"
+                                className="text-ew-accent underline underline-offset-2 text-xs whitespace-nowrap"
                               >
                                 {t(lang, "everybotOpen" as any)}
                               </a>
@@ -943,7 +955,7 @@ async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
                               disabled={savingId === r.id || savedIds.has(r.id)}
                               onClick={() => saveExternalListing(r.id, "save")}
                               className={clsx(
-                                "text-left text-xs font-semibold",
+                              "text-left text-xs font-semibold whitespace-nowrap",
                                 savedIds.has(r.id)
                                   ? "text-gray-400 cursor-not-allowed"
                                   : savingId === r.id
@@ -1008,7 +1020,28 @@ async function searchEverybotWithFallback(filtersOverride?: typeof botFilters) {
 
                           {/* Cena */}
                           <td className="px-4 py-3">{fmtPrice(r.price_amount, r.currency)}</td>
+                          {/* RCN */}
+                            <td className="px-4 py-3 hidden lg:table-cell">
+                              {r.rcn_last_price != null
+                                ? `${Number(r.rcn_last_price).toLocaleString()} PLN${r.rcn_last_date ? ` (${r.rcn_last_date})` : ""}`
+                                : "-"}
+                            </td>
 
+                            {/* Geoportal link */}
+                            <td className="px-4 py-3 hidden lg:table-cell">
+                              {r.rcn_link ? (
+                                <a
+                                  href={r.rcn_link}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-ew-accent underline underline-offset-2 text-xs"
+                                >
+                                  Geoportal
+                                </a>
+                              ) : (
+                                "—"
+                              )}
+                            </td>
                           {/* Powierzchnia */}
                           <td className="px-4 py-3 hidden md:table-cell">
                             {r.area_m2 ? `${r.area_m2}` : "-"}
