@@ -156,7 +156,7 @@ function extractBestTransaction(payload: any) {
 function extractBestTransactionFromXml(xml: string) {
   if (!xml || typeof xml !== "string") return null;
 
-  // szybki test: czy są jakiekolwiek featureMember/featureMembers
+  // szybki test: czy są jakiekolwiek features
   const hasFeatures =
     xml.includes("featureMember") ||
     xml.includes("featureMembers") ||
@@ -166,18 +166,50 @@ function extractBestTransactionFromXml(xml: string) {
 
   if (!hasFeatures) return null;
 
-  // mega-MVP: wyciągnij pierwszą liczbę, która wygląda jak cena (>= 1000)
-  const priceMatch = xml.match(/>(\d{4,})<\/(cena|cena_brutto|cena_transakcyjna|wartosc|wartość|price)>/i);
-  const price = priceMatch ? Number(priceMatch[1]) : null;
+  const norm = xml.replace(/\s+/g, " "); // ułatwia regex
 
-  // mega-MVP: wyciągnij pierwszą datę ISO yyyy-mm-dd
-  const dateMatch = xml.match(/>(\d{4}-\d{2}-\d{2})</);
-  const dateISO = dateMatch ? dateMatch[1] : null;
+  // helper: łap tagi z opcjonalnym prefixem ns: (np. ms:cena_transakcyjna)
+  const pickFirstByTagNames = (tagNames: string[]) => {
+    for (const key of tagNames) {
+      const k = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); // escape
+      // <ms:cena_transakcyjna>123</ms:cena_transakcyjna> albo <cena_transakcyjna>123</cena_transakcyjna>
+      const re = new RegExp(`<(?:(\\w+):)?${k}\\b[^>]*>([^<]+)</(?:(\\w+):)?${k}>`, "i");
+      const m = norm.match(re);
+      if (m?.[2]) return { key, value: m[2].trim() };
+    }
+    return null;
+  };
+
+  const priceHit = pickFirstByTagNames(PRICE_KEYS);
+  const dateHit = pickFirstByTagNames(DATE_KEYS);
+
+  const price = priceHit?.value
+    ? Number(String(priceHit.value).replace(/\s/g, "").replace(",", ".").replace(/[^\d.]/g, ""))
+    : null;
+
+  const dateISO = (() => {
+    const v = dateHit?.value ? String(dateHit.value).trim() : "";
+    if (!v) return null;
+
+    // najczęściej ISO yyyy-mm-dd
+    const m1 = v.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+    if (m1?.[1]) return m1[1];
+
+    // czasem dd.mm.yyyy
+    const m2 = v.match(/\b(\d{2})\.(\d{2})\.(\d{4})\b/);
+    if (m2) return `${m2[3]}-${m2[2]}-${m2[1]}`;
+
+    // fallback: Date parser
+    const d = parseDateLoose(v);
+    return d ? d.toISOString().slice(0, 10) : null;
+  })();
+
+  if ((price == null || !Number.isFinite(price)) && !dateISO) return null;
 
   return {
     price: Number.isFinite(price as any) ? price : null,
     dateISO,
-    detected: { priceKey: priceMatch?.[2] ?? null, dateKey: dateISO ? "date" : null },
+    detected: { priceKey: priceHit?.key ?? null, dateKey: dateHit?.key ?? null },
   };
 }
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
