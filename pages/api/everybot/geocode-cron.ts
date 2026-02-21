@@ -1,5 +1,15 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 
+function getBaseUrl(req: NextApiRequest) {
+  const proto = (req.headers["x-forwarded-proto"] as string) || "https";
+  const host =
+    (req.headers["x-forwarded-host"] as string) ||
+    (req.headers.host as string) ||
+    "localhost:3000";
+
+  return `${proto}://${host}`;
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     if (req.method !== "POST" && req.method !== "GET") {
@@ -17,7 +27,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(401).json({ error: "UNAUTHORIZED_CRON" });
     }
 
-    const r = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/everybot/geocode`, {
+    const base = getBaseUrl(req);
+
+    const r = await fetch(`${base}/api/everybot/geocode`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -35,7 +47,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       status: r.status,
       response: j,
     });
-
   } catch (e: any) {
     console.error("GEOCODE_CRON_ERROR", e);
     return res.status(400).json({ error: e?.message ?? "Bad request" });
