@@ -182,20 +182,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!officeId) return res.status(400).json({ error: "MISSING_OFFICE_ID" });
     } else {
       // MVP: wybierz biuro z największą liczbą rekordów (żeby nie brać losowego)
-      const r = await pool.query<{ office_id: string }>(
-            `
-            SELECT office_id
-            FROM external_listings
-            WHERE lat IS NOT NULL AND lng IS NOT NULL
-                AND (
-                rcn_enriched_at IS NULL
-                rcn_enriched_at < now() - interval '7 days'
-                )
-            GROUP BY office_id
-            ORDER BY COUNT(*) DESC
-            LIMIT 1
-            `
-            );
+     const r = await pool.query<{ office_id: string }>(
+        `
+        SELECT office_id
+        FROM external_listings
+        WHERE lat IS NOT NULL AND lng IS NOT NULL
+            AND (
+            rcn_enriched_at IS NULL
+            OR rcn_enriched_at < now() - interval '7 days'
+            )
+        GROUP BY office_id
+        ORDER BY COUNT(*) DESC
+        LIMIT 1
+        `
+        );
       officeId = r.rows?.[0]?.office_id ?? null;
       if (!officeId) return res.status(400).json({ error: "MISSING_OFFICE_ID" });
     }
@@ -213,7 +213,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         AND lat IS NOT NULL AND lng IS NOT NULL
         AND (
           rcn_enriched_at IS NULL
-          OR rcn_enriched_at < now() - interval '30 days'
+          OR rcn_enriched_at < now() - interval '7 days'
         )
       ORDER BY rcn_enriched_at NULLS FIRST, updated_at DESC, id DESC
       LIMIT $2

@@ -136,6 +136,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         FROM external_listings
         WHERE (lat IS NULL OR lng IS NULL)
         AND (city IS NOT NULL OR location_text IS NOT NULL)
+        AND (
+            geocoded_at IS NULL
+            OR (geocode_confidence = 0 AND geocoded_at < now() - interval '7 days')
+        )
         GROUP BY office_id
         ORDER BY COUNT(*) DESC
         LIMIT 1
@@ -190,11 +194,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       if (!geo) {
-        await pool.query(
-          `UPDATE external_listings
-           SET geocoded_at = now(), geocode_source = 'photon', geocode_confidence = 0
-           WHERE office_id = $1 AND id = $2`,
-          [officeId, r0.id]
+      await pool.query(
+        `UPDATE external_listings
+        SET geocoded_at = now(),
+            geocode_source = 'photon',
+            geocode_confidence = 0,
+            updated_at = now()
+        WHERE office_id = $1 AND id = $2`,
+        [officeId, r0.id]
         );
         processed += 1;
         await sleep(250);
