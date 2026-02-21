@@ -153,7 +153,6 @@ function extractBestTransactionFromXml(xml: string) {
     detected: { priceKey: priceMatch?.[2] ?? null, dateKey: dateISO ? "date" : null },
   };
 }
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     const isCron = req.headers["x-cron-internal"] === "1";
@@ -171,6 +170,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
+    // ✅ parametry requestu (wspólne)
+    const limitRaw = optNumber((req.body ?? {}).limit) ?? 50;
+    const limit = Math.min(Math.max(limitRaw, 1), 200);
+
+    const radiusMeters = optNumber((req.body ?? {}).radiusMeters) ?? 250;
+    const retryHours = optNumber((req.body ?? {}).retryHours) ?? 6; // ✅ domyślnie 6h
+    const force = String((req.body ?? {}).force ?? "") === "1"; // ✅ force=1 => ignoruj rcn_enriched_at
+
     // ✅ officeId zależnie od trybu
     let officeId: string | null = null;
 
@@ -182,28 +189,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!officeId) return res.status(400).json({ error: "MISSING_OFFICE_ID" });
     } else {
       // MVP: wybierz biuro z największą liczbą rekordów (żeby nie brać losowego)
-     const r = await pool.query<{ office_id: string }>(
+      const r = await pool.query<{ office_id: string }>(
         `
         SELECT office_id
         FROM external_listings
         WHERE lat IS NOT NULL AND lng IS NOT NULL
-            AND (
-            rcn_enriched_at IS NULL
-            OR rcn_enriched_at < now() - interval '7 days'
-            )
+          AND (
+            $1::boolean = true
+            OR rcn_enriched_at IS NULL
+            OR rcn_enriched_at < now() - ($2::text || ' hours')::interval
+          )
         GROUP BY office_id
         ORDER BY COUNT(*) DESC
         LIMIT 1
-        `
-        );
+        `,
+        [force, String(retryHours)]
+      );
+
       officeId = r.rows?.[0]?.office_id ?? null;
       if (!officeId) return res.status(400).json({ error: "MISSING_OFFICE_ID" });
     }
-
-    const limitRaw = optNumber((req.body ?? {}).limit) ?? 50;
-    const limit = Math.min(Math.max(limitRaw, 1), 200);
-
-    const radiusMeters = optNumber((req.body ?? {}).radiusMeters) ?? 250;
 
     const { rows } = await pool.query<Row>(
       `
@@ -212,13 +217,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       WHERE office_id = $1
         AND lat IS NOT NULL AND lng IS NOT NULL
         AND (
-          rcn_enriched_at IS NULL
-          OR rcn_enriched_at < now() - interval '7 days'
+          $3::boolean = true
+          OR rcn_enriched_at IS NULL
+          OR rcn_enriched_at < now() - ($4::text || ' hours')::interval
         )
       ORDER BY rcn_enriched_at NULLS FIRST, updated_at DESC, id DESC
       LIMIT $2
       `,
-      [officeId, limit]
+      [officeId, limit, force, String(retryHours)]
     );
 
     let processed = 0;
@@ -234,6 +240,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         for (const layer of LAYERS) {
           const xml = await wfsGetFeatureGeoJson(layer, bbox);
           if (!xml) continue;
+
           const pick = extractBestTransactionFromXml(String(xml));
           if (pick && (pick.price != null || pick.dateISO != null)) {
             best = pick;
@@ -246,19 +253,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         await pool.query(
           `
           UPDATE external_listings
-            SET
+          SET
             rcn_last_price = $1,
             rcn_last_date = $2::date,
             rcn_link = $3,
             rcn_enriched_at = now(),
             updated_at = now()
-            WHERE office_id = $4 AND id = $5
+          WHERE office_id = $4 AND id = $5
           `,
           [best?.price ?? null, best?.dateISO ?? null, link, officeId, r0.id]
         );
 
         processed += 1;
-
         debug.push({ id: r0.id, ...(best?.detected ?? {}) });
 
         await sleep(250);
@@ -273,6 +279,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       requested: limit,
       processed,
       radiusMeters,
+      retryHours,
+      force,
       errors,
       debug,
     });

@@ -192,7 +192,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         AND (city IS NOT NULL OR location_text IS NOT NULL)
         AND (
             geocoded_at IS NULL
-            OR (geocode_confidence = 0 AND geocoded_at < now() - interval '7 days')
+            OR geocode_confidence = 0
         )
         GROUP BY office_id
         ORDER BY COUNT(*) DESC
@@ -211,10 +211,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       SELECT id, office_id, location_text, street, city, district, voivodeship
       FROM external_listings
       WHERE office_id = $1
-        AND (lat IS NULL OR lng IS NULL)
-        AND (
-            geocoded_at IS NULL
-            OR (geocode_confidence = 0 AND geocoded_at < now() - interval '7 days')
+            AND (lat IS NULL OR lng IS NULL)
+            AND (
+                geocoded_at IS NULL
+                OR geocode_confidence = 0
             )
         AND (city IS NOT NULL OR (location_text IS NOT NULL AND btrim(location_text) <> ''))
         ORDER BY
