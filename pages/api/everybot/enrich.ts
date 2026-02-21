@@ -29,15 +29,18 @@ function toSourceKey(s: string): SourceKey | null {
   if (v === "gratka") return "gratka";
   if (v === "morizon") return "morizon";
 
-  // odwlasciciela.pl (u Ciebie historycznie było "owner")
-if (v === "owner" || v === "od_wlasciciela" || v === "od-wlasciciela" || v === "odwlasciciela") return "odwlasciciela";
-if (v === "no" || v === "nieruchomosci-online" || v === "nieruchomoscisonline" || v === "nieruchomosci_online") return "nieruchomosci_online";
- {
+  // odwlasciciela.pl
+  if (v === "owner" || v === "od_wlasciciela" || v === "od-wlasciciela" || v === "odwlasciciela") {
     return "odwlasciciela";
   }
 
-}
+  // nieruchomosci-online
+  if (v === "no" || v === "nieruchomosci-online" || v === "nieruchomoscisonline" || v === "nieruchomosci_online") {
+    return "nieruchomosci_online";
+  }
 
+  return null;
+}
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));

@@ -10,6 +10,7 @@ type Row = {
   location_text: string | null;
   street: string | null;
   city: string | null;
+  district: string | null;
   voivodeship: string | null;
 };
 
@@ -26,42 +27,79 @@ function sleep(ms: number) {
 }
 
 function buildQuery(r: Row): string | null {
-  const parts = [
-    r.street,
-    r.city,
-    r.voivodeship,
-  ].map((x) => (x ?? "").trim()).filter(Boolean);
+  // ✅ Zawsze próbujemy z pól strukturalnych (najlepsza skuteczność)
+  const street = (r.street ?? "").trim();
+  const district = (r.district ?? "").trim();
+  const city = (r.city ?? "").trim();
+  const voiv = (r.voivodeship ?? "").trim();
 
-  // najlepszy przypadek: ulica + miasto
-  if (parts.length >= 2) return parts.join(", ");
+  // 1) street + city (+ voiv) + Poland
+  const q1 = joinParts([street || null, district || null, city || null, voiv || null, "Poland"]);
+  if (street && city && q1) return q1;
 
-  // fallback: location_text + city
-  const lt = (r.location_text ?? "").trim();
-  const c = (r.city ?? "").trim();
-  if (lt && c) return `${lt}, ${c}`;
-  if (lt) return lt;
-  if (c) return c;
+  // 2) district + city (+ voiv) + Poland
+  const q2 = joinParts([district || null, city || null, voiv || null, "Poland"]);
+  if (city && q2) return q2;
+
+  // 3) city + voiv + Poland
+  const q3 = joinParts([city || null, voiv || null, "Poland"]);
+  if (city && q3) return q3;
+
+  // 4) ostatni fallback: oczyszczony location_text + (voiv/city) + Poland
+  const ltRaw = (r.location_text ?? "").trim();
+  const lt = ltRaw ? cleanLooseLocationText(ltRaw) : "";
+  const q4 = joinParts([lt || null, city || null, voiv || null, "Poland"]);
+  if (lt && q4) return q4;
 
   return null;
 }
-function sanitizeGeocodeQuery(q: string): string {
-  const s = (q ?? "").trim();
+function cleanLooseLocationText(s: string): string {
+  // OLX często: "Warszawa - Dzisiaj 12:30", "Warszawa · dzisiaj", "Warszawa, 2 dni temu"
+  let out = (s ?? "").trim();
 
-  // usuń kontrolne / dziwne znaki, zostaw litery/cyfry/spacje i podstawową interpunkcję
-  const cleaned = s
+  // usuń część po "·" (często data)
+  out = out.split("·")[0]?.trim() ?? out;
+
+  // usuń część po " - " jeśli wygląda na datę/czas/relatywne
+  out = out.replace(/\s+-\s+(dzisiaj|wczoraj|jutro|[0-9]{1,2}\s+\w+|[0-9]{1,2}:[0-9]{2}|[0-9]+\s+dni?\s+temu).*/i, "").trim();
+
+  // usuń końcówki typu "2 dni temu", "dzisiaj", "wczoraj"
+  out = out.replace(/\b(dzisiaj|wczoraj|jutro|przedwczoraj)\b/gi, "").trim();
+  out = out.replace(/\b\d+\s*(dni|dzień|godz|godzin|min|minut)\s*temu\b/gi, "").trim();
+
+  // usuń podwójne separatory
+  out = out.replace(/\s+/g, " ").trim();
+  return out;
+}
+
+function joinParts(parts: Array<string | null | undefined>): string | null {
+  const xs = parts
+    .map((x) => (x ?? "").trim())
+    .filter(Boolean);
+
+  if (!xs.length) return null;
+  return xs.join(", ");
+}
+function sanitizeGeocodeQuery(q: string): string {
+  const s0 = (q ?? "").trim();
+  if (!s0) return "";
+
+  // usuń relatywne daty/czas
+  let s = s0
+    .replace(/\b(dzisiaj|wczoraj|jutro|przedwczoraj)\b/gi, " ")
+    .replace(/\b\d+\s*(dni|dzień|godz|godzin|min|minut)\s*temu\b/gi, " ")
+    .replace(/\b\d{1,2}:\d{2}\b/g, " ");
+
+  // usuń kontrolne/dziwne znaki
+  s = s
     .replace(/[^\p{L}\p{N}\s,.\-\/]/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
 
-  // Photon lubi krótsze zapytania – ucinamy, żeby uniknąć 400 przy śmieciach
-  return cleaned.slice(0, 140);
+  // Photon: krócej = lepiej
+  return s.slice(0, 120);
 }
 
-/**
- * Photon (komercyjnie: hostuj sam; MVP: publiczny endpoint działa, ale nie spamuj)
- * Public: https://photon.komoot.io/api/?q=...&lang=pl&limit=1
- * Alternatywa: Nominatim (jeszcze ostrzejszy rate-limit)
- */
 async function geocodePhoton(q: string): Promise<{ lat: number; lng: number; confidence: number } | null> {
   const qq = sanitizeGeocodeQuery(q);
 
@@ -70,24 +108,22 @@ async function geocodePhoton(q: string): Promise<{ lat: number; lng: number; con
 
   const u = new URL("https://photon.komoot.io/api/");
   u.searchParams.set("q", qq);
-  u.searchParams.set("lang", "default");
+  u.searchParams.set("lang", "pl");
   u.searchParams.set("limit", "1");
 
- const ctrl = new AbortController();
-const t = setTimeout(() => ctrl.abort(), 10000);
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 10000);
 
-const r = await fetch(u.toString(), {
-  signal: ctrl.signal,
-  headers: {
-    accept: "application/json",
-    "user-agent": "EveryAPP/EveryBOT geocoder (contact: admin@everyapp.pl)",
-  },
-}).finally(() => clearTimeout(t));
-
+  const r = await fetch(u.toString(), {
+    signal: ctrl.signal,
+    headers: {
+      accept: "application/json",
+      "user-agent": "EveryAPP/EveryBOT geocoder (contact: admin@everyapp.pl)",
+    },
+  }).finally(() => clearTimeout(t));
 
   const bodyText = await r.text().catch(() => "");
   if (!r.ok) {
-    // pokaż realny powód 400/429 w Vercel logs
     throw new Error(`PHOTON_HTTP_${r.status} ${bodyText.slice(0, 200)}`);
   }
 
@@ -98,7 +134,25 @@ const r = await fetch(u.toString(), {
   const lat = optNumber(coords?.[1]);
   if (lat == null || lon == null) return null;
 
-  const conf = 0.6;
+  // ✅ Heurystyczna confidence na podstawie tego, co Photon zwrócił
+  const p = f?.properties ?? {};
+  const hasHouse = typeof p.housenumber === "string" && p.housenumber.trim();
+  const hasStreet = typeof p.street === "string" && p.street.trim();
+  const hasCity = typeof p.city === "string" && p.city.trim();
+  const hasState = typeof p.state === "string" && p.state.trim();
+
+  let conf = 0.15;
+  if (hasState) conf += 0.05;
+  if (hasCity) conf += 0.10;
+  if (hasStreet) conf += 0.20;
+  if (hasHouse) conf += 0.40;
+
+  // cap
+  if (conf > 0.95) conf = 0.95;
+
+  // ✅ próg jakości – poniżej traktujemy jak fail (żeby nie kłaść pinezek w centroidzie)
+  if (conf < 0.20) return null;
+
   return { lat, lng: lon, confidence: conf };
 }
 
@@ -154,7 +208,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const { rows } = await pool.query<Row>(
       `
-      SELECT id, office_id, location_text, street, city, voivodeship
+      SELECT id, office_id, location_text, street, city, district, voivodeship
       FROM external_listings
       WHERE office_id = $1
         AND (lat IS NULL OR lng IS NULL)
@@ -162,8 +216,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             geocoded_at IS NULL
             OR (geocode_confidence = 0 AND geocoded_at < now() - interval '7 days')
             )
-        AND (city IS NOT NULL OR location_text IS NOT NULL)
-      ORDER BY enriched_at DESC NULLS LAST, updated_at DESC, id DESC
+        AND (city IS NOT NULL OR (location_text IS NOT NULL AND btrim(location_text) <> ''))
+        ORDER BY
+        (street IS NOT NULL AND btrim(street) <> '') DESC,
+        (city IS NOT NULL AND btrim(city) <> '') DESC,
+        enriched_at DESC NULLS LAST,
+        updated_at DESC,
+        id DESC
       LIMIT $2
       `,
       [officeId, limit]
@@ -197,7 +256,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await pool.query(
         `UPDATE external_listings
         SET geocoded_at = now(),
-            geocode_source = 'photon',
+            SET geocode_source = 'photon_low_conf',
             geocode_confidence = 0,
             updated_at = now()
         WHERE office_id = $1 AND id = $2`,
