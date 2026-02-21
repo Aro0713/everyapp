@@ -156,7 +156,6 @@ function extractBestTransaction(payload: any) {
 function extractBestTransactionFromXml(xml: string) {
   if (!xml || typeof xml !== "string") return null;
 
-  // szybki test: czy są jakiekolwiek features
   const hasFeatures =
     xml.includes("featureMember") ||
     xml.includes("featureMembers") ||
@@ -166,52 +165,76 @@ function extractBestTransactionFromXml(xml: string) {
 
   if (!hasFeatures) return null;
 
-  const norm = xml.replace(/\s+/g, " "); // ułatwia regex
+  const s = xml.replace(/\r?\n/g, " ");
 
-  // helper: łap tagi z opcjonalnym prefixem ns: (np. ms:cena_transakcyjna)
-  const pickFirstByTagNames = (tagNames: string[]) => {
-    for (const key of tagNames) {
-      const k = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); // escape
-      // <ms:cena_transakcyjna>123</ms:cena_transakcyjna> albo <cena_transakcyjna>123</cena_transakcyjna>
-      const re = new RegExp(`<(?:(\\w+):)?${k}\\b[^>]*>([^<]+)</(?:(\\w+):)?${k}>`, "i");
-      const m = norm.match(re);
-      if (m?.[2]) return { key, value: m[2].trim() };
+  // liściowe tagi: <ns:TAG>value</ns:TAG>
+  const leafRe =
+    /<([a-zA-Z0-9_]+:)?([a-zA-Z0-9_]+)\b[^>]*>([^<]{1,120})<\/\1?\2>/g;
+
+  let bestPrice: { value: number; key: string; score: number } | null = null;
+  let bestDate: { iso: string; key: string } | null = null;
+
+  for (const m of s.matchAll(leafRe)) {
+    const prefix = m[1] ?? "";
+    const tag = m[2] ?? "";
+    const key = `${prefix}${tag}`; // np. "ms:cena_transakcyjna"
+    const raw = (m[3] ?? "").trim();
+    if (!raw) continue;
+
+    const tagLower = key.toLowerCase();
+
+    // 1) data
+    if (!bestDate) {
+      const iso = raw.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1] ?? null;
+      if (iso) bestDate = { iso, key };
+      else {
+        const dm = raw.match(/\b(\d{2})\.(\d{2})\.(\d{4})\b/);
+        if (dm) bestDate = { iso: `${dm[3]}-${dm[2]}-${dm[1]}`, key };
+      }
     }
-    return null;
-  };
 
-  const priceHit = pickFirstByTagNames(PRICE_KEYS);
-  const dateHit = pickFirstByTagNames(DATE_KEYS);
+    // 2) liczby -> kandydat na cenę
+    const num = Number(
+      raw.replace(/\s/g, "").replace(",", ".").replace(/[^\d.]/g, "")
+    );
+    if (!Number.isFinite(num)) continue;
 
-  const price = priceHit?.value
-    ? Number(String(priceHit.value).replace(/\s/g, "").replace(",", ".").replace(/[^\d.]/g, ""))
-    : null;
+    if (num < 1000) continue;
+    if (num > 50_000_000) continue;
 
-  const dateISO = (() => {
-    const v = dateHit?.value ? String(dateHit.value).trim() : "";
-    if (!v) return null;
+    const looksPriceKey =
+      tagLower.includes("cena") ||
+      tagLower.includes("wart") ||
+      tagLower.includes("kwot") ||
+      tagLower.includes("price") ||
+      tagLower.includes("value");
 
-    // najczęściej ISO yyyy-mm-dd
-    const m1 = v.match(/\b(\d{4}-\d{2}-\d{2})\b/);
-    if (m1?.[1]) return m1[1];
+    const score: number = (looksPriceKey ? 2 : 0) + (num >= 10_000 ? 1 : 0);
 
-    // czasem dd.mm.yyyy
-    const m2 = v.match(/\b(\d{2})\.(\d{2})\.(\d{4})\b/);
-    if (m2) return `${m2[3]}-${m2[2]}-${m2[1]}`;
+    if (!bestPrice) {
+      bestPrice = { value: num, key, score };
+    } else {
+      if (
+        score > bestPrice.score ||
+        (score === bestPrice.score && num > bestPrice.value)
+      ) {
+        bestPrice = { value: num, key, score };
+      }
+    }
+  }
 
-    // fallback: Date parser
-    const d = parseDateLoose(v);
-    return d ? d.toISOString().slice(0, 10) : null;
-  })();
-
-  if ((price == null || !Number.isFinite(price)) && !dateISO) return null;
+  if (!bestPrice && !bestDate) return null;
 
   return {
-    price: Number.isFinite(price as any) ? price : null,
-    dateISO,
-    detected: { priceKey: priceHit?.key ?? null, dateKey: dateHit?.key ?? null },
+    price: bestPrice?.value ?? null,
+    dateISO: bestDate?.iso ?? null,
+    detected: {
+      priceKey: bestPrice ? `${bestPrice.key} (score:${bestPrice.score})` : null,
+      dateKey: bestDate?.key ?? null,
+    },
   };
 }
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     const isCron = req.headers["x-cron-internal"] === "1";
