@@ -125,7 +125,34 @@ function buildGeoportalLink(lat: number, lng: number) {
   u.searchParams.set("scale", "5000");
   return u.toString();
 }
+function extractBestTransaction(payload: any) {
+  if (!payload) return null;
 
+  // Jeśli to JSON/GeoJSON
+  if (typeof payload === "object") {
+    const features = Array.isArray(payload.features) ? payload.features : [];
+    for (const f of features) {
+      const props = f?.properties ?? {};
+      const priceKey = pickKeyCaseInsensitive(props, PRICE_KEYS);
+      const dateKey = pickKeyCaseInsensitive(props, DATE_KEYS);
+
+      const price = priceKey ? optNumber(props[priceKey]) : null;
+      const d = dateKey ? parseDateLoose(props[dateKey]) : null;
+
+      if (price != null || d != null) {
+        return {
+          price: price ?? null,
+          dateISO: d ? d.toISOString().slice(0, 10) : null,
+          detected: { priceKey, dateKey },
+        };
+      }
+    }
+    return null;
+  }
+
+  // Fallback XML
+  return extractBestTransactionFromXml(String(payload));
+}
 function extractBestTransactionFromXml(xml: string) {
   if (!xml || typeof xml !== "string") return null;
 
@@ -241,7 +268,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const xml = await wfsGetFeatureGeoJson(layer, bbox);
           if (!xml) continue;
 
-          const pick = extractBestTransactionFromXml(String(xml));
+          const pick = extractBestTransaction(xml);
           if (pick && (pick.price != null || pick.dateISO != null)) {
             best = pick;
             break;
