@@ -183,14 +183,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     } else {
       // MVP: wybierz biuro z największą liczbą rekordów (żeby nie brać losowego)
       const r = await pool.query<{ office_id: string }>(
-        `
-        SELECT office_id
-        FROM external_listings
-        GROUP BY office_id
-        ORDER BY COUNT(*) DESC
-        LIMIT 1
-        `
-      );
+            `
+            SELECT office_id
+            FROM external_listings
+            WHERE lat IS NOT NULL AND lng IS NOT NULL
+                AND (
+                rcn_enriched_at IS NULL
+                rcn_enriched_at < now() - interval '7 days'
+                )
+            GROUP BY office_id
+            ORDER BY COUNT(*) DESC
+            LIMIT 1
+            `
+            );
       officeId = r.rows?.[0]?.office_id ?? null;
       if (!officeId) return res.status(400).json({ error: "MISSING_OFFICE_ID" });
     }
@@ -210,7 +215,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           rcn_enriched_at IS NULL
           OR rcn_enriched_at < now() - interval '30 days'
         )
-      ORDER BY rcn_enriched_at NULLS FIRST, updated_at DESC
+      ORDER BY rcn_enriched_at NULLS FIRST, updated_at DESC, id DESC
       LIMIT $2
       `,
       [officeId, limit]
@@ -241,20 +246,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         await pool.query(
           `
           UPDATE external_listings
-          SET
+            SET
             rcn_last_price = $1,
-            rcn_last_date = $2,
+            rcn_last_date = $2::date,
             rcn_link = $3,
             rcn_enriched_at = now(),
             updated_at = now()
-          WHERE office_id = $4 AND id = $5
+            WHERE office_id = $4 AND id = $5
           `,
           [best?.price ?? null, best?.dateISO ?? null, link, officeId, r0.id]
         );
 
         processed += 1;
 
-        debug.push({ id: r0.id, ...best?.detected });
+        debug.push({ id: r0.id, ...(best?.detected ?? {}) });
 
         await sleep(250);
       } catch (e: any) {

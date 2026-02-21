@@ -7,6 +7,14 @@
     {
       "path": "/api/everybot/verify-run",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/everybot/geocode-cron",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/everybot/rcn-cron",
+      "schedule": "0 */6 * * *"
     }
   ]
 }

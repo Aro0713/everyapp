@@ -134,6 +134,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         `
         SELECT office_id
         FROM external_listings
+        WHERE (lat IS NULL OR lng IS NULL)
+        AND (city IS NOT NULL OR location_text IS NOT NULL)
         GROUP BY office_id
         ORDER BY COUNT(*) DESC
         LIMIT 1
@@ -152,9 +154,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       FROM external_listings
       WHERE office_id = $1
         AND (lat IS NULL OR lng IS NULL)
-        AND (geocoded_at IS NULL OR (geocode_confidence = 0 AND geocoded_at < now() - interval '30 days'))
+        AND (
+            geocoded_at IS NULL
+            OR (geocode_confidence = 0 AND geocoded_at < now() - interval '7 days')
+            )
         AND (city IS NOT NULL OR location_text IS NOT NULL)
-      ORDER BY enriched_at DESC NULLS LAST, updated_at DESC
+      ORDER BY enriched_at DESC NULLS LAST, updated_at DESC, id DESC
       LIMIT $2
       `,
       [officeId, limit]

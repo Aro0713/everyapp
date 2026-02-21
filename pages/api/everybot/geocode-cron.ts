@@ -2,8 +2,8 @@ import type { NextApiRequest, NextApiResponse } from "next";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
-    if (req.method !== "POST") {
-      res.setHeader("Allow", "POST");
+    if (req.method !== "POST" && req.method !== "GET") {
+      res.setHeader("Allow", "GET, POST");
       return res.status(405).json({ error: "Method not allowed" });
     }
 
@@ -17,6 +17,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       headers: {
         "Content-Type": "application/json",
         "x-cron-internal": "1",
+        "x-cron-secret": String(process.env.CRON_SECRET ?? ""),
       },
       body: JSON.stringify({ limit: 50 }),
     });
