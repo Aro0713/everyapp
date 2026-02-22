@@ -42,7 +42,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       headers: {
         "Content-Type": "application/json",
         "x-cron-internal": "1",
-        "x-cron-secret": String(process.env.CRON_SECRET ?? ""),
+        "x-cron-secret": secret,
       },
       body: JSON.stringify({ limit: 50, radiusMeters: 250 }),
     });
