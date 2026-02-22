@@ -166,59 +166,97 @@ function buildGeoportalLink(lat: number, lng: number) {
 function extractBestTransactionFromXml(xml: string, typeName: string) {
   if (!xml || typeof xml !== "string") return null;
 
+  // szybka normalizacja whitespace, żeby regexy działały stabilnie
   const s = xml.replace(/\s+/g, " ");
 
+  // 1) ✅ wykryj OWS ExceptionReport nawet jeśli HTTP=200
+  if (/<\s*ows:ExceptionReport\b/i.test(s) || /<\s*ExceptionReport\b/i.test(s)) {
+    // log tylko mały fragment, żeby nie zalać
+    console.log("RCN_WFS_EXCEPTION_XML", { typeName, sample: s.slice(0, 220) });
+    return null;
+  }
+
+  // helper: czytaj <prefix:tag>VALUE</prefix:tag> oraz <tag>VALUE</tag>
   const findTag = (tag: string): string | null => {
-    const re = new RegExp(`<(?:(\\w+):)?${tag}\\b[^>]*>([^<]+)</(?:(\\w+):)?${tag}>`, "i");
+    const re = new RegExp(
+      `<(?:(\\w+):)?${tag}\\b[^>]*>([^<]+)</(?:(\\w+):)?${tag}>`,
+      "i"
+    );
     const m = s.match(re);
     return m?.[2]?.trim() ?? null;
   };
 
-  let priceRaw: string | null = null;
+  // helper: czytaj <prefix:tag .../> lub <tag .../> (np. nil/empty) -> zwraca null
+  const isNilTag = (tag: string): boolean => {
+    const re = new RegExp(`<(?:(\\w+):)?${tag}\\b[^>]*xsi:nil\\s*=\\s*["']true["'][^>]*/?>`, "i");
+    return re.test(s);
+  };
 
- if (typeName === "dzialki") {
-  priceRaw =
-    findTag("dzi_cena_brutto") ??
-    findTag("nier_cena_brutto");
-} else if (typeName === "lokale") {
-  priceRaw =
-    findTag("tran_cena_brutto") ??
-    findTag("nier_cena_brutto") ??
-    findTag("lok_cena_brutto");
-} else if (typeName === "budynki") {
-  priceRaw =
-    findTag("nier_cena_brutto") ??
-    findTag("tran_cena_brutto");
-}
+  // 2) ✅ cena: zamiast “na sztywno”, przeleć po PRICE_KEYS
+  let price: number | null = null;
+  for (const k of PRICE_KEYS) {
+    if (isNilTag(k)) continue;
 
-const price =
-  priceRaw != null
-    ? Number(
-        priceRaw
-          .replace(/\s/g, "")
-          .replace(",", ".")
-          .replace(/[^\d.]/g, "")
-      )
-    : null;
+    const v = findTag(k);
+    if (!v) continue;
 
-const dateRaw = findTag("dok_data");
+    const n = Number(
+      v
+        .replace(/\u00A0/g, " ")     // NBSP
+        .replace(/\s/g, "")         // spacje tysięcy
+        .replace(",", ".")          // przecinek dziesiętny
+        .replace(/[^\d.]/g, "")     // tylko cyfry i kropka
+    );
 
-  const dateISO = (() => {
-    if (!dateRaw) return null;
+    if (Number.isFinite(n) && n > 0) {
+      price = n;
+      break;
+    }
+  }
 
-    const iso = dateRaw.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1];
-    if (iso) return iso;
+  // 3) ✅ data: przeleć po DATE_KEYS
+  let dateISO: string | null = null;
+  for (const k of DATE_KEYS) {
+    if (isNilTag(k)) continue;
 
-    const dm = dateRaw.match(/\b(\d{2})\.(\d{2})\.(\d{4})\b/);
-    if (dm) return `${dm[3]}-${dm[2]}-${dm[1]}`;
+    const v = findTag(k);
+    if (!v) continue;
 
+    // ISO yyyy-mm-dd
+    const iso = v.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1];
+    if (iso) {
+      dateISO = iso;
+      break;
+    }
+
+    // dd.mm.yyyy
+    const dm = v.match(/\b(\d{2})\.(\d{2})\.(\d{4})\b/);
+    if (dm) {
+      dateISO = `${dm[3]}-${dm[2]}-${dm[1]}`;
+      break;
+    }
+
+    // fallback: Date()
+    const d = parseDateLoose(v);
+    if (d) {
+      dateISO = d.toISOString().slice(0, 10);
+      break;
+    }
+  }
+
+  if (price == null && dateISO == null) {
+    // debug 1-liner: czy w ogóle mamy jakiekolwiek “cena” w XML?
+    // (bez dumpowania całości)
+    const hasAnyPriceLike =
+      /cena/i.test(s) || /price/i.test(s) || /warto/i.test(s);
+    if (hasAnyPriceLike) {
+      console.log("RCN_XML_NO_PICK", { typeName, hint: "has_price_like_words", sample: s.slice(0, 220) });
+    }
     return null;
-  })();
-
-  if (!price && !dateISO) return null;
+  }
 
   return {
-    price: Number.isFinite(price as any) ? price : null,
+    price,
     dateISO,
     sourceId: null as string | null,
     detected: { typeName, mode: "xml" },
