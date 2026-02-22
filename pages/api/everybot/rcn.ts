@@ -153,85 +153,67 @@ function extractBestTransaction(payload: any) {
   // Fallback XML
   return extractBestTransactionFromXml(String(payload));
 }
-function extractBestTransactionFromXml(xml: string) {
+function extractBestTransactionFromXml(xml: string, typeName?: string) {
   if (!xml || typeof xml !== "string") return null;
 
-  const hasFeatures =
-    xml.includes("featureMember") ||
-    xml.includes("featureMembers") ||
-    xml.includes(":lokale") ||
-    xml.includes(":dzialki") ||
-    xml.includes(":budynki");
+  const s = xml.replace(/\s+/g, " ");
 
-  if (!hasFeatures) return null;
+  // Helper do czytania <ms:tag>value</ms:tag>
+  const findTag = (tag: string): string | null => {
+    const re = new RegExp(`<(?:(\\w+):)?${tag}\\b[^>]*>([^<]+)</(?:(\\w+):)?${tag}>`, "i");
+    const m = s.match(re);
+    return m?.[2]?.trim() ?? null;
+  };
 
-  const s = xml.replace(/\r?\n/g, " ");
+  let priceRaw: string | null = null;
 
-  // liściowe tagi: <ns:TAG>value</ns:TAG>
-  const leafRe =
-    /<([a-zA-Z0-9_]+:)?([a-zA-Z0-9_]+)\b[^>]*>([^<]{1,120})<\/\1?\2>/g;
-
-  let bestPrice: { value: number; key: string; score: number } | null = null;
-  let bestDate: { iso: string; key: string } | null = null;
-
-  for (const m of s.matchAll(leafRe)) {
-    const prefix = m[1] ?? "";
-    const tag = m[2] ?? "";
-    const key = `${prefix}${tag}`; // np. "ms:cena_transakcyjna"
-    const raw = (m[3] ?? "").trim();
-    if (!raw) continue;
-
-    const tagLower = key.toLowerCase();
-
-    // 1) data
-    if (!bestDate) {
-      const iso = raw.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1] ?? null;
-      if (iso) bestDate = { iso, key };
-      else {
-        const dm = raw.match(/\b(\d{2})\.(\d{2})\.(\d{4})\b/);
-        if (dm) bestDate = { iso: `${dm[3]}-${dm[2]}-${dm[1]}`, key };
-      }
-    }
-
-    // 2) liczby -> kandydat na cenę
-    const num = Number(
-      raw.replace(/\s/g, "").replace(",", ".").replace(/[^\d.]/g, "")
-    );
-    if (!Number.isFinite(num)) continue;
-
-    if (num < 1000) continue;
-    if (num > 50_000_000) continue;
-
-    const looksPriceKey =
-      tagLower.includes("cena") ||
-      tagLower.includes("wart") ||
-      tagLower.includes("kwot") ||
-      tagLower.includes("price") ||
-      tagLower.includes("value");
-
-    const score: number = (looksPriceKey ? 2 : 0) + (num >= 10_000 ? 1 : 0);
-
-    if (!bestPrice) {
-      bestPrice = { value: num, key, score };
-    } else {
-      if (
-        score > bestPrice.score ||
-        (score === bestPrice.score && num > bestPrice.value)
-      ) {
-        bestPrice = { value: num, key, score };
-      }
-    }
+  // DZIAŁKI
+  if (typeName === "ms:dzialki") {
+    priceRaw =
+      findTag("dzi_cena_brutto") ??
+      findTag("nier_cena_brutto");
   }
 
-  if (!bestPrice && !bestDate) return null;
+  // LOKALE
+  else if (typeName === "ms:lokale") {
+    priceRaw =
+      findTag("lok_cena_brutto") ??
+      findTag("nier_cena_brutto") ??
+      findTag("tran_cena_brutto");
+  }
+
+  // BUDYNKI (na wszelki wypadek)
+  else if (typeName === "ms:budynki") {
+    priceRaw =
+      findTag("nier_cena_brutto") ??
+      findTag("tran_cena_brutto");
+  }
+
+  const price =
+    priceRaw != null
+      ? Number(priceRaw.replace(/\s/g, "").replace(",", ".").replace(/[^\d.]/g, ""))
+      : null;
+
+  const dateRaw = findTag("dok_data");
+
+  const dateISO = (() => {
+    if (!dateRaw) return null;
+
+    const iso = dateRaw.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1];
+    if (iso) return iso;
+
+    const dm = dateRaw.match(/\b(\d{2})\.(\d{2})\.(\d{4})\b/);
+    if (dm) return `${dm[3]}-${dm[2]}-${dm[1]}`;
+
+    return null;
+  })();
+
+  if (!price && !dateISO) return null;
 
   return {
-    price: bestPrice?.value ?? null,
-    dateISO: bestDate?.iso ?? null,
-    detected: {
-      priceKey: bestPrice ? `${bestPrice.key} (score:${bestPrice.score})` : null,
-      dateKey: bestDate?.key ?? null,
-    },
+    price: Number.isFinite(price as any) ? price : null,
+    dateISO,
+    detected: { typeName }
   };
 }
 
@@ -323,7 +305,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const xml = await wfsGetFeatureGeoJson(layer, bbox);
           if (!xml) continue;
 
-          const pick = extractBestTransaction(xml);
+          const pick = extractBestTransactionFromXml(String(xml), layer);
           if (pick && (pick.price != null || pick.dateISO != null)) {
             best = pick;
             break;
