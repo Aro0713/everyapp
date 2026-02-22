@@ -123,6 +123,14 @@ async function wfsGetFeatureGeoJson(
   });
 
   const txt = await r.text().catch(() => "");
+  const numReturned =
+  txt.match(/numberReturned="(\d+)"/i)?.[1] ??
+  txt.match(/numberReturned='(\d+)'/i)?.[1] ??
+  null;
+
+if (numReturned !== null) {
+  console.log("RCN_WFS_COUNT", { typeName, numberReturned: Number(numReturned) });
+}
 
   // ❗️Zamiast throw na 400, zwracamy null (żeby pętla mogła zapisać chociaż link i rcn_enriched_at)
   if (!r.ok) {
@@ -172,7 +180,7 @@ function extractBestTransactionFromXml(xml: string, typeName?: string) {
   }
 
   // LOKALE
-    else if (typeName === "ms:lokale") {
+   else if (typeName === "ms:lokale") {
     priceRaw =
         findTag("tran_cena_brutto") ??
         findTag("nier_cena_brutto") ??
