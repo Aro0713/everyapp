@@ -144,7 +144,7 @@ if (numReturned !== null) {
     return JSON.parse(txt);
   } catch {
     // serwer może zwrócić XML mimo OUTPUTFORMAT
-    console.log("RCN_WFS_NON_JSON", { typeName, body: txt.slice(0, 200) });
+   // XML jest normalny dla WFS – nie logujmy tego w kółko
     return txt;
   }
 }
@@ -158,7 +158,7 @@ function buildGeoportalLink(lat: number, lng: number) {
   return u.toString();
 }
 
-function extractBestTransactionFromXml(xml: string, typeName?: string) {
+function extractBestTransactionFromXml(xml: string, typeName: string) {
   if (!xml || typeof xml !== "string") return null;
 
   const s = xml.replace(/\s+/g, " ");
@@ -221,7 +221,48 @@ function extractBestTransactionFromXml(xml: string, typeName?: string) {
     detected: { typeName }
   };
 }
+function extractBestTransactionFromPayload(payload: any, typeName: string) {
+  if (!payload) return null;
 
+  // ✅ JSON/GeoJSON
+  if (typeof payload === "object") {
+    const features = Array.isArray(payload.features) ? payload.features : [];
+
+    // bierzemy pierwszy feature, który ma cokolwiek sensownego
+    for (const f of features) {
+      const props = f?.properties ?? {};
+
+      // cena: próbuj po kolei
+      let price: number | null = null;
+      for (const k of PRICE_KEYS) {
+        const hit = pickKeyCaseInsensitive(props, [k]);
+        if (hit) {
+          const n = optNumber(props[hit]);
+          if (n != null) { price = n; break; }
+        }
+      }
+
+      // data
+      let dateISO: string | null = null;
+      for (const k of DATE_KEYS) {
+        const hit = pickKeyCaseInsensitive(props, [k]);
+        if (hit) {
+          const d = parseDateLoose(props[hit]);
+          if (d) { dateISO = d.toISOString().slice(0, 10); break; }
+        }
+      }
+
+      if (price != null || dateISO != null) {
+        return { price, dateISO, detected: { typeName, mode: "json" } };
+      }
+    }
+
+    return null;
+  }
+
+  // ✅ XML string
+  return extractBestTransactionFromXml(String(payload), typeName);
+}
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     const isCron = req.headers["x-cron-internal"] === "1";
@@ -308,9 +349,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         for (const layer of LAYERS) {
           const payload = await wfsGetFeatureGeoJson(layer, bbox);
+          
             if (!payload) continue;
 
-            const pick = extractBestTransactionFromXml(String(payload), layer);
+            const pick = extractBestTransactionFromPayload(payload, layer);
           if (pick && (pick.price != null || pick.dateISO != null)) {
             best = pick;
             break;
