@@ -97,7 +97,7 @@ async function wfsGetFeatureGeoJson(
 
   u.searchParams.set("SERVICE", "WFS");
   u.searchParams.set("REQUEST", "GetFeature");
-  u.searchParams.set("VERSION", "2.0.0");
+  u.searchParams.set("VERSION", "1.1.0");
   u.searchParams.set("TYPENAMES", typeName);
 
   // ✅ CRS84 (lon,lat)
