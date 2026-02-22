@@ -101,11 +101,11 @@ async function wfsGetFeatureGeoJson(
   u.searchParams.set("TYPENAMES", typeName);
 
   // ✅ CRS84 (lon,lat)
-  u.searchParams.set("SRSNAME", "urn:ogc:def:crs:OGC:1.3:CRS84");
-  u.searchParams.set(
+  u.searchParams.set("SRSNAME", "EPSG:4326");
+    u.searchParams.set(
     "BBOX",
-    `${bbox.minx},${bbox.miny},${bbox.maxx},${bbox.maxy},urn:ogc:def:crs:OGC:1.3:CRS84`
-  );
+    `${bbox.minx},${bbox.miny},${bbox.maxx},${bbox.maxy},EPSG:4326`
+    );
 
   // ✅ spróbuj JSON
   u.searchParams.set("OUTPUTFORMAT", "application/json");
