@@ -252,35 +252,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         continue;
       }
 
-      if (!geo) {
-      await pool.query(
-        `UPDATE external_listings
-        SET geocoded_at = now(),
-            SET geocode_source = 'photon_low_conf',
-            geocode_confidence = 0,
-            updated_at = now()
-        WHERE office_id = $1 AND id = $2`,
-        [officeId, r0.id]
+        if (!geo) {
+        await pool.query(
+            `UPDATE external_listings
+            SET geocoded_at = now(),
+                geocode_source = 'photon_low_conf',
+                geocode_confidence = 0,
+                updated_at = now()
+            WHERE office_id = $1 AND id = $2`,
+            [officeId, r0.id]
         );
+
         processed += 1;
         await sleep(250);
         continue;
-      }
+        }
 
-      await pool.query(
+        await pool.query(
         `UPDATE external_listings
-         SET lat = $1,
-             lng = $2,
-             geocoded_at = now(),
-             geocode_source = 'photon',
-             geocode_confidence = $3,
-             updated_at = now()
-         WHERE office_id = $4 AND id = $5`,
+        SET lat = $1,
+            lng = $2,
+            geocoded_at = now(),
+            geocode_source = 'photon',
+            geocode_confidence = $3,
+            updated_at = now()
+        WHERE office_id = $4 AND id = $5`,
         [geo.lat, geo.lng, geo.confidence, officeId, r0.id]
-      );
+        );
 
-      processed += 1;
-      await sleep(250);
+        processed += 1;
+        await sleep(250);
     }
 
     return res.status(200).json({
