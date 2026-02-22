@@ -36,28 +36,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(500).json({ error: "MISSING_CRON_SECRET" });
     }
 
-    const ua = String(req.headers["user-agent"] || "").toLowerCase();
-    const tokenHeader = String(req.headers["x-cron-token"] || "");
-    const tokenQuery = typeof req.query.token === "string" ? req.query.token : "";
+const tokenQuery = typeof req.query.token === "string" ? req.query.token : "";
+const okToken = !!tokenQuery && tokenQuery === secret;
 
-    const okCronUa = ua.startsWith("vercel-cron");
-    const okToken =
-      (!!tokenHeader && tokenHeader === secret) ||
-      (!!tokenQuery && tokenQuery === secret);
-
-    if (!okCronUa && !okToken) {
-      return res.status(401).json({
-        error: "UNAUTHORIZED_CRON",
-        debug: {
-          ua,
-          hasTokenHeader: !!tokenHeader,
-          hasTokenQuery: !!tokenQuery,
-          // nie wyświetlamy sekretu, ale pokazujemy czy env jest ustawione
-          hasSecretEnv: !!secret,
-        },
-      });
-    }
-
+if (!okToken) {
+  return res.status(401).json({
+    error: "UNAUTHORIZED_CRON",
+    debug: {
+      hasTokenQuery: !!tokenQuery,
+      hasSecretEnv: !!secret,
+    },
+  });
+}
     const base = getStableBaseUrl(req);
 
     const r = await fetch(`${base}/api/everybot/geocode`, {
