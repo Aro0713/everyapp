@@ -1,4 +1,4 @@
-// pages/api/everybot/geocode.ts
+// pages/api/everybot/geocode.ts 
 import type { NextApiRequest, NextApiResponse } from "next";
 import { pool } from "../../../lib/neonDb";
 import { getUserIdFromRequest } from "../../../lib/session";
@@ -27,25 +27,20 @@ function sleep(ms: number) {
 }
 
 function buildQuery(r: Row): string | null {
-  // ✅ Zawsze próbujemy z pól strukturalnych (najlepsza skuteczność)
   const street = (r.street ?? "").trim();
   const district = (r.district ?? "").trim();
   const city = (r.city ?? "").trim();
   const voiv = (r.voivodeship ?? "").trim();
 
-  // 1) street + city (+ voiv) + Poland
   const q1 = joinParts([street || null, district || null, city || null, voiv || null, "Poland"]);
   if (street && city && q1) return q1;
 
-  // 2) district + city (+ voiv) + Poland
   const q2 = joinParts([district || null, city || null, voiv || null, "Poland"]);
   if (city && q2) return q2;
 
-  // 3) city + voiv + Poland
   const q3 = joinParts([city || null, voiv || null, "Poland"]);
   if (city && q3) return q3;
 
-  // 4) ostatni fallback: oczyszczony location_text + (voiv/city) + Poland
   const ltRaw = (r.location_text ?? "").trim();
   const lt = ltRaw ? cleanLooseLocationText(ltRaw) : "";
   const q4 = joinParts([lt || null, city || null, voiv || null, "Poland"]);
@@ -53,21 +48,22 @@ function buildQuery(r: Row): string | null {
 
   return null;
 }
+
 function cleanLooseLocationText(s: string): string {
-  // OLX często: "Warszawa - Dzisiaj 12:30", "Warszawa · dzisiaj", "Warszawa, 2 dni temu"
   let out = (s ?? "").trim();
 
-  // usuń część po "·" (często data)
   out = out.split("·")[0]?.trim() ?? out;
 
-  // usuń część po " - " jeśli wygląda na datę/czas/relatywne
-  out = out.replace(/\s+-\s+(dzisiaj|wczoraj|jutro|[0-9]{1,2}\s+\w+|[0-9]{1,2}:[0-9]{2}|[0-9]+\s+dni?\s+temu).*/i, "").trim();
+  out = out
+    .replace(
+      /\s+-\s+(dzisiaj|wczoraj|jutro|[0-9]{1,2}\s+\w+|[0-9]{1,2}:[0-9]{2}|[0-9]+\s+dni?\s+temu).*/i,
+      ""
+    )
+    .trim();
 
-  // usuń końcówki typu "2 dni temu", "dzisiaj", "wczoraj"
   out = out.replace(/\b(dzisiaj|wczoraj|jutro|przedwczoraj)\b/gi, "").trim();
   out = out.replace(/\b\d+\s*(dni|dzień|godz|godzin|min|minut)\s*temu\b/gi, "").trim();
 
-  // usuń podwójne separatory
   out = out.replace(/\s+/g, " ").trim();
   return out;
 }
@@ -80,30 +76,27 @@ function joinParts(parts: Array<string | null | undefined>): string | null {
   if (!xs.length) return null;
   return xs.join(", ");
 }
+
 function sanitizeGeocodeQuery(q: string): string {
   const s0 = (q ?? "").trim();
   if (!s0) return "";
 
-  // usuń relatywne daty/czas
   let s = s0
     .replace(/\b(dzisiaj|wczoraj|jutro|przedwczoraj)\b/gi, " ")
     .replace(/\b\d+\s*(dni|dzień|godz|godzin|min|minut)\s*temu\b/gi, " ")
     .replace(/\b\d{1,2}:\d{2}\b/g, " ");
 
-  // usuń kontrolne/dziwne znaki
   s = s
     .replace(/[^\p{L}\p{N}\s,.\-\/]/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
 
-  // Photon: krócej = lepiej
   return s.slice(0, 120);
 }
 
 async function geocodePhoton(q: string): Promise<{ lat: number; lng: number; confidence: number } | null> {
   const qq = sanitizeGeocodeQuery(q);
 
-  // twarda bramka – nie wysyłamy śmieci
   if (!qq || qq.length < 3) return null;
 
   const u = new URL("https://photon.komoot.io/api/");
@@ -134,7 +127,6 @@ async function geocodePhoton(q: string): Promise<{ lat: number; lng: number; con
   const lat = optNumber(coords?.[1]);
   if (lat == null || lon == null) return null;
 
-  // ✅ Heurystyczna confidence na podstawie tego, co Photon zwrócił
   const p = f?.properties ?? {};
   const hasHouse = typeof p.housenumber === "string" && p.housenumber.trim();
   const hasStreet = typeof p.street === "string" && p.street.trim();
@@ -147,10 +139,8 @@ async function geocodePhoton(q: string): Promise<{ lat: number; lng: number; con
   if (hasStreet) conf += 0.20;
   if (hasHouse) conf += 0.40;
 
-  // cap
   if (conf > 0.95) conf = 0.95;
 
-  // ✅ próg jakości – poniżej traktujemy jak fail (żeby nie kłaść pinezek w centroidzie)
   if (conf < 0.20) return null;
 
   return { lat, lng: lon, confidence: conf };
@@ -165,15 +155,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(405).json({ error: "Method not allowed" });
     }
 
-    // ✅ CRON auth (bez sesji)
+    // ✅ CRON auth (bez sesji) – naprawa: header może być string[]
     if (isCron) {
-      const cronSecret = req.headers["x-cron-secret"];
-      if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
+      const cronSecretRaw = req.headers["x-cron-secret"];
+      const cronSecret = Array.isArray(cronSecretRaw) ? cronSecretRaw[0] : cronSecretRaw;
+
+      const expected = String(process.env.CRON_SECRET || "");
+
+      if (!cronSecret || String(cronSecret) !== expected) {
+        console.log("GEOCODE_CRON_UNAUTHORIZED", {
+          hasCronInternal: req.headers["x-cron-internal"] === "1",
+          hasCronSecret: !!cronSecret,
+          expectedSet: !!expected,
+        });
         return res.status(401).json({ error: "UNAUTHORIZED_CRON" });
       }
     }
 
-    // ✅ officeId zależnie od trybu
     let officeId: string | null = null;
 
     if (!isCron) {
@@ -183,18 +181,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       officeId = await getOfficeIdForUserId(userId);
       if (!officeId) return res.status(400).json({ error: "MISSING_OFFICE_ID" });
     } else {
-      // MVP: wybierz biuro z największą liczbą rekordów (żeby nie brać losowego)
       const r = await pool.query<{ office_id: string }>(
         `
         SELECT office_id
         FROM external_listings
         WHERE office_id IS NOT NULL
-        AND (lat IS NULL OR lng IS NULL)
-        AND (city IS NOT NULL OR location_text IS NOT NULL)
-        AND (
+          AND (lat IS NULL OR lng IS NULL)
+          AND (city IS NOT NULL OR location_text IS NOT NULL)
+          AND (
             geocoded_at IS NULL
             OR geocode_confidence = 0
-        )
+          )
         GROUP BY office_id
         ORDER BY COUNT(*) DESC
         LIMIT 1
@@ -212,13 +209,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       SELECT id, office_id, location_text, street, city, district, voivodeship
       FROM external_listings
       WHERE office_id = $1
-            AND (lat IS NULL OR lng IS NULL)
-            AND (
-                geocoded_at IS NULL
-                OR geocode_confidence = 0
-            )
+        AND (lat IS NULL OR lng IS NULL)
+        AND (
+          geocoded_at IS NULL
+          OR geocode_confidence = 0
+        )
         AND (city IS NOT NULL OR (location_text IS NOT NULL AND btrim(location_text) <> ''))
-        ORDER BY
+      ORDER BY
         (street IS NOT NULL AND btrim(street) <> '') DESC,
         (city IS NOT NULL AND btrim(city) <> '') DESC,
         enriched_at DESC NULLS LAST,
@@ -244,7 +241,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const msg = e?.message ?? "geocode failed";
         errors.push({ id: r0.id, q, error: msg });
 
-        // ✅ log tylko pierwszy raz, żeby nie zalać Vercel
         if (errors.length === 1) {
           console.log("PHOTON_FAIL_SAMPLE", { id: r0.id, q, msg });
         }
@@ -253,36 +249,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         continue;
       }
 
-        if (!geo) {
+      if (!geo) {
         await pool.query(
-            `UPDATE external_listings
-            SET geocoded_at = now(),
-                geocode_source = 'photon_low_conf',
-                geocode_confidence = 0,
-                updated_at = now()
-            WHERE office_id = $1 AND id = $2`,
-            [officeId, r0.id]
+          `UPDATE external_listings
+           SET geocoded_at = now(),
+               geocode_source = 'photon_low_conf',
+               geocode_confidence = 0,
+               updated_at = now()
+           WHERE office_id = $1 AND id = $2`,
+          [officeId, r0.id]
         );
 
         processed += 1;
         await sleep(250);
         continue;
-        }
+      }
 
-        await pool.query(
+      await pool.query(
         `UPDATE external_listings
-        SET lat = $1,
-            lng = $2,
-            geocoded_at = now(),
-            geocode_source = 'photon',
-            geocode_confidence = $3,
-            updated_at = now()
-        WHERE office_id = $4 AND id = $5`,
+         SET lat = $1,
+             lng = $2,
+             geocoded_at = now(),
+             geocode_source = 'photon',
+             geocode_confidence = $3,
+             updated_at = now()
+         WHERE office_id = $4 AND id = $5`,
         [geo.lat, geo.lng, geo.confidence, officeId, r0.id]
-        );
+      );
 
-        processed += 1;
-        await sleep(250);
+      processed += 1;
+      await sleep(250);
     }
 
     return res.status(200).json({
