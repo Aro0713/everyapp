@@ -17,15 +17,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(405).json({ error: "Method not allowed" });
     }
 
-    const ua = String(req.headers["user-agent"] || "");
-    const token = String(req.headers["x-cron-token"] || "");
+        const token = String(req.headers["x-cron-token"] || "");
+        const ok = !!token && token === String(process.env.CRON_SECRET || "");
 
-    const okCronUa = ua.startsWith("vercel-cron");
-    const okBearer = !!token && token === String(process.env.CRON_SECRET || "");
-
-    if (!okCronUa && !okBearer) {
-      return res.status(401).json({ error: "UNAUTHORIZED_CRON" });
-    }
+        if (!ok) {
+        return res.status(401).json({ error: "UNAUTHORIZED_CRON" });
+        }
 
     const base = getBaseUrl(req);
 
