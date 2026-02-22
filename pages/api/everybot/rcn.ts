@@ -24,14 +24,14 @@ const WFS_BASE = "https://mapy.geoportal.gov.pl/wss/service/rcn";
 const LAYERS = ["ms:lokale", "ms:budynki", "ms:dzialki"] as const;
 
 const PRICE_KEYS = [
-  // ✅ RCN WFS (lokale/dzialki/budynki) – zgodnie z XSD i realnym przykładem
+  // ✅ RCN WFS (lokale/dzialki/budynki)
   "tran_cena_brutto",
   "nier_cena_brutto",
   "lok_cena_brutto",
   "dzi_cena_brutto",
   "bud_cena_brutto",
 
-  // fallback stare/ogólne
+  // fallback
   "cena",
   "cena_brutto",
   "cena_transakcyjna",
@@ -45,7 +45,7 @@ const DATE_KEYS = [
   // ✅ RCN WFS
   "dok_data",
 
-  // fallback stare/ogólne
+  // fallback
   "data",
   "data_transakcji",
   "dataTransakcji",
@@ -73,7 +73,6 @@ function parseDateLoose(v: any): Date | null {
     return Number.isNaN(d.getTime()) ? null : d;
   }
   if (typeof v === "string" && v.trim()) {
-    // ISO / yyyy-mm-dd / yyyy-mm-ddThh...
     const d = new Date(v);
     return Number.isNaN(d.getTime()) ? null : d;
   }
@@ -81,7 +80,6 @@ function parseDateLoose(v: any): Date | null {
 }
 
 function bboxFromPoint(lat: number, lng: number, meters: number) {
-  // przybliżenie: 1 deg lat ~ 111_320 m
   const dLat = meters / 111_320;
   const dLng = meters / (111_320 * Math.cos((lat * Math.PI) / 180));
   const minx = lng - dLng;
@@ -95,62 +93,69 @@ async function wfsGetFeatureGeoJson(
   typeName: string,
   bbox: { minx: number; miny: number; maxx: number; maxy: number }
 ) {
-  // Geoportal jest kapryśny na format CRS w BBOX.
-  // Najstabilniej: SRSNAME=EPSG:4326 i BBOX z EPSG:4326 (bez URN).
   const u = new URL(WFS_BASE);
 
-  // ✅ UPPERCASE param names (większa kompatybilność z serwerami WMS/WFS)
   u.searchParams.set("SERVICE", "WFS");
   u.searchParams.set("REQUEST", "GetFeature");
   u.searchParams.set("VERSION", "2.0.0");
   u.searchParams.set("TYPENAMES", typeName);
 
-  // ✅ jawny CRS
-  u.searchParams.set("SRSNAME", "EPSG:4326");
+  // ✅ CRS84 (lon,lat)
+  u.searchParams.set("SRSNAME", "urn:ogc:def:crs:OGC:1.3:CRS84");
+  u.searchParams.set(
+    "BBOX",
+    `${bbox.minx},${bbox.miny},${bbox.maxx},${bbox.maxy},urn:ogc:def:crs:OGC:1.3:CRS84`
+  );
 
-  // ✅ BBOX: minx,miny,maxx,maxy,EPSG:4326 (bez urn:ogc:def:crs...)
-  u.searchParams.set("BBOX", `${bbox.minx},${bbox.miny},${bbox.maxx},${bbox.maxy},EPSG:4326`);
-
+  // ✅ spróbuj JSON
+  u.searchParams.set("OUTPUTFORMAT", "application/json");
   u.searchParams.set("COUNT", "50");
 
   const url = u.toString();
 
   const r = await fetch(url, {
     headers: {
-      accept: "text/xml, application/xml;q=0.9, */*;q=0.8",
+      accept: "application/json, text/xml;q=0.9, application/xml;q=0.8, */*;q=0.7",
       "user-agent": "EveryAPP/EveryBOT RCN client",
     },
   });
 
   const txt = await r.text().catch(() => "");
-  const numReturned =
-  txt.match(/numberReturned="(\d+)"/i)?.[1] ??
-  txt.match(/numberReturned='(\d+)'/i)?.[1] ??
-  null;
+  const contentType = r.headers.get("content-type") ?? "";
+  console.log("RCN_WFS_RESP", { typeName, status: r.status, contentType });
 
-if (numReturned !== null) {
-  console.log("RCN_WFS_COUNT", { typeName, numberReturned: Number(numReturned) });
-}
-
-  // ❗️Zamiast throw na 400, zwracamy null (żeby pętla mogła zapisać chociaż link i rcn_enriched_at)
   if (!r.ok) {
-    // log tylko pierwsze 200 znaków (żeby nie zalać logów)
-    console.log("RCN_WFS_FAIL", { status: r.status, typeName, url: url.slice(0, 300), body: txt.slice(0, 200) });
+    console.log("RCN_WFS_FAIL", {
+      status: r.status,
+      typeName,
+      url: url.slice(0, 300),
+      body: txt.slice(0, 200),
+    });
     return null;
   }
 
-  // GeoJSON
+  // JSON first
   try {
-    return JSON.parse(txt);
+    const json = JSON.parse(txt);
+    const n = Array.isArray(json?.features) ? json.features.length : null;
+    if (n != null) console.log("RCN_WFS_FEATURES", { typeName, features: n });
+    return json;
   } catch {
-    // serwer może zwrócić XML mimo OUTPUTFORMAT
-   // XML jest normalny dla WFS – nie logujmy tego w kółko
+    // XML fallback
+    const numReturned =
+      txt.match(/numberReturned="(\d+)"/i)?.[1] ??
+      txt.match(/numberReturned='(\d+)'/i)?.[1] ??
+      null;
+
+    if (numReturned !== null) {
+      console.log("RCN_WFS_COUNT", { typeName, numberReturned: Number(numReturned) });
+    }
+
     return txt;
   }
 }
 
 function buildGeoportalLink(lat: number, lng: number) {
-  // najpewniejszy link: otwórz mapę w okolicy punktu (center)
   const u = new URL("https://mapy.geoportal.gov.pl/imapnext/imap/");
   u.searchParams.set("map", "mapa");
   u.searchParams.set("center", `${lng},${lat}`);
@@ -163,7 +168,6 @@ function extractBestTransactionFromXml(xml: string, typeName: string) {
 
   const s = xml.replace(/\s+/g, " ");
 
-  // Helper do czytania <ms:tag>value</ms:tag>
   const findTag = (tag: string): string | null => {
     const re = new RegExp(`<(?:(\\w+):)?${tag}\\b[^>]*>([^<]+)</(?:(\\w+):)?${tag}>`, "i");
     const m = s.match(re);
@@ -172,32 +176,16 @@ function extractBestTransactionFromXml(xml: string, typeName: string) {
 
   let priceRaw: string | null = null;
 
-  // DZIAŁKI
   if (typeName === "ms:dzialki") {
-    priceRaw =
-      findTag("dzi_cena_brutto") ??
-      findTag("nier_cena_brutto");
-  }
-
-  // LOKALE
-   else if (typeName === "ms:lokale") {
-    priceRaw =
-        findTag("tran_cena_brutto") ??
-        findTag("nier_cena_brutto") ??
-        findTag("lok_cena_brutto");
-    }
-
-  // BUDYNKI (na wszelki wypadek)
-  else if (typeName === "ms:budynki") {
-    priceRaw =
-      findTag("nier_cena_brutto") ??
-      findTag("tran_cena_brutto");
+    priceRaw = findTag("dzi_cena_brutto") ?? findTag("nier_cena_brutto");
+  } else if (typeName === "ms:lokale") {
+    priceRaw = findTag("tran_cena_brutto") ?? findTag("nier_cena_brutto") ?? findTag("lok_cena_brutto");
+  } else if (typeName === "ms:budynki") {
+    priceRaw = findTag("nier_cena_brutto") ?? findTag("tran_cena_brutto");
   }
 
   const price =
-    priceRaw != null
-      ? Number(priceRaw.replace(/\s/g, "").replace(",", ".").replace(/[^\d.]/g, ""))
-      : null;
+    priceRaw != null ? Number(priceRaw.replace(/\s/g, "").replace(",", ".").replace(/[^\d.]/g, "")) : null;
 
   const dateRaw = findTag("dok_data");
 
@@ -218,51 +206,59 @@ function extractBestTransactionFromXml(xml: string, typeName: string) {
   return {
     price: Number.isFinite(price as any) ? price : null,
     dateISO,
-    detected: { typeName }
+    sourceId: null as string | null,
+    detected: { typeName, mode: "xml" },
   };
 }
+
 function extractBestTransactionFromPayload(payload: any, typeName: string) {
   if (!payload) return null;
 
-  // ✅ JSON/GeoJSON
+  // JSON/GeoJSON
   if (typeof payload === "object") {
     const features = Array.isArray(payload.features) ? payload.features : [];
 
-    // bierzemy pierwszy feature, który ma cokolwiek sensownego
     for (const f of features) {
       const props = f?.properties ?? {};
 
-      // cena: próbuj po kolei
       let price: number | null = null;
       for (const k of PRICE_KEYS) {
         const hit = pickKeyCaseInsensitive(props, [k]);
         if (hit) {
           const n = optNumber(props[hit]);
-          if (n != null) { price = n; break; }
+          if (n != null) {
+            price = n;
+            break;
+          }
         }
       }
 
-      // data
       let dateISO: string | null = null;
       for (const k of DATE_KEYS) {
         const hit = pickKeyCaseInsensitive(props, [k]);
         if (hit) {
           const d = parseDateLoose(props[hit]);
-          if (d) { dateISO = d.toISOString().slice(0, 10); break; }
+          if (d) {
+            dateISO = d.toISOString().slice(0, 10);
+            break;
+          }
         }
       }
 
+      const sourceId = typeof f?.id === "string" && f.id.trim() ? f.id.trim() : null;
+
       if (price != null || dateISO != null) {
-        return { price, dateISO, detected: { typeName, mode: "json" } };
+        return { price, dateISO, sourceId, detected: { typeName, mode: "json" } };
       }
     }
 
     return null;
   }
 
-  // ✅ XML string
+  // XML string
   return extractBestTransactionFromXml(String(payload), typeName);
 }
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     const isCron = req.headers["x-cron-internal"] === "1";
@@ -272,7 +268,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(405).json({ error: "Method not allowed" });
     }
 
-    // ✅ CRON auth (bez sesji)
     if (isCron) {
       const cronSecret = req.headers["x-cron-secret"];
       if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
@@ -280,15 +275,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    // ✅ parametry requestu (wspólne)
     const limitRaw = optNumber((req.body ?? {}).limit) ?? 50;
     const limit = Math.min(Math.max(limitRaw, 1), 200);
 
     const radiusMeters = optNumber((req.body ?? {}).radiusMeters) ?? 250;
-    const retryHours = optNumber((req.body ?? {}).retryHours) ?? 6; // ✅ domyślnie 6h
-    const force = String((req.body ?? {}).force ?? "") === "1"; // ✅ force=1 => ignoruj rcn_enriched_at
+    const retryHours = optNumber((req.body ?? {}).retryHours) ?? 6;
+    const force = String((req.body ?? {}).force ?? "") === "1";
 
-    // ✅ officeId zależnie od trybu
     let officeId: string | null = null;
 
     if (!isCron) {
@@ -298,7 +291,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       officeId = await getOfficeIdForUserId(userId);
       if (!officeId) return res.status(400).json({ error: "MISSING_OFFICE_ID" });
     } else {
-      // MVP: wybierz biuro z największą liczbą rekordów (żeby nie brać losowego)
       const r = await pool.query<{ office_id: string }>(
         `
         SELECT office_id
@@ -345,16 +337,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       try {
         const bbox = bboxFromPoint(r0.lat, r0.lng, radiusMeters);
 
-        let best: { price: number | null; dateISO: string | null; detected: any } | null = null;
+        let best:
+          | { price: number | null; dateISO: string | null; sourceId: string | null; detected: any }
+          | null = null;
 
         for (const layer of LAYERS) {
           const payload = await wfsGetFeatureGeoJson(layer, bbox);
-          
-            if (!payload) continue;
+          if (!payload) continue;
 
-            const pick = extractBestTransactionFromPayload(payload, layer);
+          const pick = extractBestTransactionFromPayload(payload, layer);
           if (pick && (pick.price != null || pick.dateISO != null)) {
-            best = pick;
+            best = pick as any;
             break;
           }
         }
@@ -365,18 +358,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           `
           UPDATE external_listings
           SET
-            rcn_last_price = $1,
-            rcn_last_date = $2::date,
+            rcn_last_price = COALESCE($1, rcn_last_price),
+            rcn_last_date = COALESCE($2::date, rcn_last_date),
+            rcn_last_source_id = COALESCE($6, rcn_last_source_id),
             rcn_link = $3,
             rcn_enriched_at = now(),
             updated_at = now()
           WHERE office_id = $4 AND id = $5
           `,
-          [best?.price ?? null, best?.dateISO ?? null, link, officeId, r0.id]
+          [best?.price ?? null, best?.dateISO ?? null, link, officeId, r0.id, best?.sourceId ?? null]
         );
 
         processed += 1;
-        debug.push({ id: r0.id, ...(best?.detected ?? {}) });
+        debug.push({ id: r0.id, ...(best?.detected ?? {}), price: best?.price ?? null, dateISO: best?.dateISO ?? null });
 
         await sleep(250);
       } catch (e: any) {
