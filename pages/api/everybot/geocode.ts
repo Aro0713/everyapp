@@ -188,7 +188,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         `
         SELECT office_id
         FROM external_listings
-        WHERE (lat IS NULL OR lng IS NULL)
+        WHERE office_id IS NOT NULL
+        AND (lat IS NULL OR lng IS NULL)
         AND (city IS NOT NULL OR location_text IS NOT NULL)
         AND (
             geocoded_at IS NULL
