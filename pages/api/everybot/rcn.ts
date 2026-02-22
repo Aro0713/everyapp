@@ -191,27 +191,27 @@ function extractBestTransactionFromXml(xml: string, typeName: string) {
     return re.test(s);
   };
 
-  // 2) ✅ cena: zamiast “na sztywno”, przeleć po PRICE_KEYS
-  let price: number | null = null;
-  for (const k of PRICE_KEYS) {
-    if (isNilTag(k)) continue;
 
-    const v = findTag(k);
-    if (!v) continue;
+// zamiast warunków zależnych od typeName
+let price: number | null = null;
 
-    const n = Number(
-      v
-        .replace(/\u00A0/g, " ")     // NBSP
-        .replace(/\s/g, "")         // spacje tysięcy
-        .replace(",", ".")          // przecinek dziesiętny
-        .replace(/[^\d.]/g, "")     // tylko cyfry i kropka
-    );
+for (const k of PRICE_KEYS) {
+  const v = findTag(k);
+  if (!v) continue;
 
-    if (Number.isFinite(n) && n > 0) {
-      price = n;
-      break;
-    }
+  const n = Number(
+    v
+      .replace(/\u00A0/g, " ")
+      .replace(/\s/g, "")
+      .replace(",", ".")
+      .replace(/[^\d.]/g, "")
+  );
+
+  if (Number.isFinite(n) && n > 0) {
+    price = n;
+    break;
   }
+}
 
   // 3) ✅ data: przeleć po DATE_KEYS
   let dateISO: string | null = null;
