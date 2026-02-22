@@ -100,16 +100,15 @@ async function wfsGetFeatureGeoJson(
   u.searchParams.set("VERSION", "1.1.0");
   u.searchParams.set("TYPENAMES", typeName);
 
-  // ✅ CRS84 (lon,lat)
+  // ✅ WFS 1.1.0: SRSNAME=EPSG:4326, a BBOX bez CRS na końcu
   u.searchParams.set("SRSNAME", "EPSG:4326");
-    u.searchParams.set(
-    "BBOX",
-    `${bbox.minx},${bbox.miny},${bbox.maxx},${bbox.maxy},EPSG:4326`
-    );
+  u.searchParams.set("BBOX", `${bbox.minx},${bbox.miny},${bbox.maxx},${bbox.maxy}`);
 
-  // ✅ spróbuj JSON
-  u.searchParams.set("OUTPUTFORMAT", "application/json");
-  u.searchParams.set("COUNT", "50");
+  // ✅ Najstabilniej dla Geoportalu: nie wymuszać JSON (serwer i tak często zwraca XML/GML)
+  // u.searchParams.set("OUTPUTFORMAT", "application/json");
+
+  u.searchParams.set("MAXFEATURES", "50"); // WFS 1.1.0 częściej używa MAXFEATURES niż COUNT
+  // (COUNT zostaw jeśli chcesz, ale MAXFEATURES jest bardziej kompatybilne)
 
   const url = u.toString();
 
@@ -134,7 +133,7 @@ async function wfsGetFeatureGeoJson(
     return null;
   }
 
-  // JSON first
+  // JSON first (jeśli kiedyś serwer faktycznie odda JSON)
   try {
     const json = JSON.parse(txt);
     const n = Array.isArray(json?.features) ? json.features.length : null;
