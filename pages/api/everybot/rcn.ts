@@ -23,12 +23,36 @@ function sleep(ms: number) {
 const WFS_BASE = "https://mapy.geoportal.gov.pl/wss/service/rcn";
 const LAYERS = ["ms:lokale", "ms:budynki", "ms:dzialki"] as const;
 
-// heurystyka pól: Geoportal potrafi mieć różne nazwy atrybutów w properties
 const PRICE_KEYS = [
-  "cena", "cena_brutto", "cena_transakcyjna", "cenaTransakcyjna", "wartosc", "wartość", "price",
+  // ✅ RCN WFS (lokale/dzialki/budynki) – zgodnie z XSD i realnym przykładem
+  "tran_cena_brutto",
+  "nier_cena_brutto",
+  "lok_cena_brutto",
+  "dzi_cena_brutto",
+  "bud_cena_brutto",
+
+  // fallback stare/ogólne
+  "cena",
+  "cena_brutto",
+  "cena_transakcyjna",
+  "cenaTransakcyjna",
+  "wartosc",
+  "wartość",
+  "price",
 ];
+
 const DATE_KEYS = [
-  "data", "data_transakcji", "dataTransakcji", "data_zawarcia", "dataAktu", "transaction_date", "date",
+  // ✅ RCN WFS
+  "dok_data",
+
+  // fallback stare/ogólne
+  "data",
+  "data_transakcji",
+  "dataTransakcji",
+  "data_zawarcia",
+  "dataAktu",
+  "transaction_date",
+  "date",
 ];
 
 function pickKeyCaseInsensitive(obj: Record<string, any>, keys: string[]): string | null {
@@ -125,34 +149,7 @@ function buildGeoportalLink(lat: number, lng: number) {
   u.searchParams.set("scale", "5000");
   return u.toString();
 }
-function extractBestTransaction(payload: any) {
-  if (!payload) return null;
 
-  // Jeśli to JSON/GeoJSON
-  if (typeof payload === "object") {
-    const features = Array.isArray(payload.features) ? payload.features : [];
-    for (const f of features) {
-      const props = f?.properties ?? {};
-      const priceKey = pickKeyCaseInsensitive(props, PRICE_KEYS);
-      const dateKey = pickKeyCaseInsensitive(props, DATE_KEYS);
-
-      const price = priceKey ? optNumber(props[priceKey]) : null;
-      const d = dateKey ? parseDateLoose(props[dateKey]) : null;
-
-      if (price != null || d != null) {
-        return {
-          price: price ?? null,
-          dateISO: d ? d.toISOString().slice(0, 10) : null,
-          detected: { priceKey, dateKey },
-        };
-      }
-    }
-    return null;
-  }
-
-  // Fallback XML
-  return extractBestTransactionFromXml(String(payload));
-}
 function extractBestTransactionFromXml(xml: string, typeName?: string) {
   if (!xml || typeof xml !== "string") return null;
 
@@ -175,12 +172,12 @@ function extractBestTransactionFromXml(xml: string, typeName?: string) {
   }
 
   // LOKALE
-  else if (typeName === "ms:lokale") {
+    else if (typeName === "ms:lokale") {
     priceRaw =
-      findTag("lok_cena_brutto") ??
-      findTag("nier_cena_brutto") ??
-      findTag("tran_cena_brutto");
-  }
+        findTag("tran_cena_brutto") ??
+        findTag("nier_cena_brutto") ??
+        findTag("lok_cena_brutto");
+    }
 
   // BUDYNKI (na wszelki wypadek)
   else if (typeName === "ms:budynki") {
@@ -302,10 +299,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         let best: { price: number | null; dateISO: string | null; detected: any } | null = null;
 
         for (const layer of LAYERS) {
-          const xml = await wfsGetFeatureGeoJson(layer, bbox);
-          if (!xml) continue;
+          const payload = await wfsGetFeatureGeoJson(layer, bbox);
+            if (!payload) continue;
 
-          const pick = extractBestTransactionFromXml(String(xml), layer);
+            const pick = extractBestTransactionFromXml(String(payload), layer);
           if (pick && (pick.price != null || pick.dateISO != null)) {
             best = pick;
             break;
