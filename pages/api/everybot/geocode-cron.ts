@@ -17,12 +17,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(405).json({ error: "Method not allowed" });
     }
 
-        const token = String(req.headers["x-cron-token"] || "");
-        const ok = !!token && token === String(process.env.CRON_SECRET || "");
+    const ua = String(req.headers["user-agent"] || "").toLowerCase();
+    const tokenHeader = String(req.headers["x-cron-token"] || "");
+    const tokenQuery = typeof req.query.token === "string" ? req.query.token : "";
 
-        if (!ok) {
-        return res.status(401).json({ error: "UNAUTHORIZED_CRON" });
-        }
+    const secret = String(process.env.CRON_SECRET || "");
+
+    const okCronUa = ua.startsWith("vercel-cron");
+    const okToken =
+      (!!tokenHeader && tokenHeader === secret) ||
+      (!!tokenQuery && tokenQuery === secret);
+
+    if (!okCronUa && !okToken) {
+      return res.status(401).json({
+        error: "UNAUTHORIZED_CRON",
+        debug: { ua, hasTokenHeader: !!tokenHeader, hasTokenQuery: !!tokenQuery },
+      });
+    }
 
     const base = getBaseUrl(req);
 
@@ -31,7 +42,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       headers: {
         "Content-Type": "application/json",
         "x-cron-internal": "1",
-        "x-cron-secret": String(process.env.CRON_SECRET ?? ""),
+        "x-cron-secret": secret,
       },
       body: JSON.stringify({ limit: 50 }),
     });
