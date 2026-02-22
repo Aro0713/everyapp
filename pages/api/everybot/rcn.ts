@@ -21,7 +21,7 @@ function sleep(ms: number) {
 }
 
 const WFS_BASE = "https://mapy.geoportal.gov.pl/wss/service/rcn";
-const LAYERS = ["ms:lokale", "ms:budynki", "ms:dzialki"] as const;
+const LAYERS = ["lokale", "budynki", "dzialki"] as const;
 
 const PRICE_KEYS = [
   // ✅ RCN WFS (lokale/dzialki/budynki)
@@ -176,18 +176,32 @@ function extractBestTransactionFromXml(xml: string, typeName: string) {
 
   let priceRaw: string | null = null;
 
-  if (typeName === "ms:dzialki") {
-    priceRaw = findTag("dzi_cena_brutto") ?? findTag("nier_cena_brutto");
-  } else if (typeName === "ms:lokale") {
-    priceRaw = findTag("tran_cena_brutto") ?? findTag("nier_cena_brutto") ?? findTag("lok_cena_brutto");
-  } else if (typeName === "ms:budynki") {
-    priceRaw = findTag("nier_cena_brutto") ?? findTag("tran_cena_brutto");
-  }
+ if (typeName === "dzialki") {
+  priceRaw =
+    findTag("dzi_cena_brutto") ??
+    findTag("nier_cena_brutto");
+} else if (typeName === "lokale") {
+  priceRaw =
+    findTag("tran_cena_brutto") ??
+    findTag("nier_cena_brutto") ??
+    findTag("lok_cena_brutto");
+} else if (typeName === "budynki") {
+  priceRaw =
+    findTag("nier_cena_brutto") ??
+    findTag("tran_cena_brutto");
+}
 
-  const price =
-    priceRaw != null ? Number(priceRaw.replace(/\s/g, "").replace(",", ".").replace(/[^\d.]/g, "")) : null;
+const price =
+  priceRaw != null
+    ? Number(
+        priceRaw
+          .replace(/\s/g, "")
+          .replace(",", ".")
+          .replace(/[^\d.]/g, "")
+      )
+    : null;
 
-  const dateRaw = findTag("dok_data");
+const dateRaw = findTag("dok_data");
 
   const dateISO = (() => {
     if (!dateRaw) return null;
