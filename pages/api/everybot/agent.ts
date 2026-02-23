@@ -163,7 +163,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                         type: { type: "string", const: "run_live" },
                         runTs: { type: "string" },
                     },
-                    required: ["type"],
+                    required: ["type", "runTs"],
                     },
                     {
                     type: "object",
@@ -171,7 +171,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     properties: {
                         type: { type: "string", const: "load_neon" },
                     },
-                    required: ["type"],
+                    required: ["type", "runTs"],
                     },
                     {
                     type: "object",
@@ -179,7 +179,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     properties: {
                         type: { type: "string", const: "refresh_map" },
                     },
-                    required: ["type"],
+                    required: ["type", "runTs"],
                     },
                     {
                     type: "object",
