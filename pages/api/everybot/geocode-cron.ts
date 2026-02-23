@@ -32,27 +32,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(500).json({ error: "MISSING_CRON_SECRET" });
     }
 
-    // ✅ Przywrócone zachowanie: Vercel Cron przechodzi po UA (bez tokena)
+    // ✅ Vercel Cron przechodzi po UA (bez tokena)
     const ua = String(req.headers["user-agent"] || "").toLowerCase();
-    const okCronUa = ua.startsWith("vercel-cron");
+    const okCronUa = ua.includes("vercel-cron") || ua.includes("vercel cron");
 
-    // ✅ Token nadal działa jako fallback (np. ręczne odpalenie)
+    // ✅ Token działa jako fallback
     const tokenHeaderRaw = req.headers["x-cron-token"];
-    const tokenHeader = Array.isArray(tokenHeaderRaw) ? tokenHeaderRaw[0] : String(tokenHeaderRaw || "");
-    const tokenQuery = typeof req.query.token === "string" ? req.query.token : "";
+    const tokenHeader = (Array.isArray(tokenHeaderRaw) ? tokenHeaderRaw[0] : String(tokenHeaderRaw || "")).trim();
+    const tokenQuery = (typeof req.query.token === "string" ? req.query.token : "").trim();
 
     const okToken =
       (!!tokenHeader && tokenHeader === secret) ||
       (!!tokenQuery && tokenQuery === secret);
 
-    // ✅ Nie wymagamy tokena jeśli to Vercel Cron (tak ma działać)
-    if (!okCronUa && !okToken) {
+    // ✅ Secret header (spójne z innymi cronami)
+    const cronSecretRaw = req.headers["x-cron-secret"];
+    const cronSecret = (Array.isArray(cronSecretRaw) ? cronSecretRaw[0] : String(cronSecretRaw || "")).trim();
+    const okSecretHeader = !!cronSecret && cronSecret === secret;
+
+    if (!okCronUa && !okToken && !okSecretHeader) {
       return res.status(401).json({
         error: "UNAUTHORIZED_CRON",
         debug: {
           ua,
           hasTokenHeader: !!tokenHeader,
           hasTokenQuery: !!tokenQuery,
+          hasSecretHeader: !!cronSecret,
           hasSecretEnv: !!secret,
         },
       });

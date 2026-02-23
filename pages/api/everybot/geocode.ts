@@ -160,12 +160,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const cronSecretRaw = req.headers["x-cron-secret"];
       const cronSecret = Array.isArray(cronSecretRaw) ? cronSecretRaw[0] : cronSecretRaw;
 
-      const expected = String(process.env.CRON_SECRET || "");
+      const expected = String(process.env.CRON_SECRET || "").trim();
+      const got = String(cronSecret || "").trim();
 
-      if (!cronSecret || String(cronSecret) !== expected) {
+      if (!got || got !== expected) {
         console.log("GEOCODE_CRON_UNAUTHORIZED", {
           hasCronInternal: req.headers["x-cron-internal"] === "1",
-          hasCronSecret: !!cronSecret,
+          hasCronSecret: !!got,
           expectedSet: !!expected,
         });
         return res.status(401).json({ error: "UNAUTHORIZED_CRON" });
