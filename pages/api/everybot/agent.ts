@@ -101,6 +101,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       sizeHint: typeof a?.dataBase64 === "string" ? a.dataBase64.length : 0,
     }));
 
+    const filtersSchema = {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        q: { type: "string" },
+        source: { type: "string" },
+        transactionType: { type: "string" },
+        propertyType: { type: "string" },
+        locationText: { type: "string" },
+        voivodeship: { type: "string" },
+        city: { type: "string" },
+        district: { type: "string" },
+        minPrice: { type: "string" },
+        maxPrice: { type: "string" },
+        minArea: { type: "string" },
+        maxArea: { type: "string" },
+        rooms: { type: "string" },
+      },
+      required: [
+        "q",
+        "source",
+        "transactionType",
+        "propertyType",
+        "locationText",
+        "voivodeship",
+        "city",
+        "district",
+        "minPrice",
+        "maxPrice",
+        "minArea",
+        "maxArea",
+        "rooms",
+      ],
+    } as const;
+
     const schema = {
       type: "object",
       additionalProperties: false,
@@ -110,52 +145,57 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           type: "array",
           maxItems: 6,
           items: {
-            type: "object",
-            additionalProperties: false,
-            properties: {
-              type: {
-                type: "string",
-                enum: ["set_filters", "run_live", "load_neon", "refresh_map", "geocode", "open_listing"],
+            // ✅ anyOf zwykle mniej konfliktowe niż oneOf
+            anyOf: [
+              {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  type: { const: "set_filters" },
+                  filters: filtersSchema,
+                },
+                required: ["type", "filters"],
               },
-            filters: {
-                        type: "object",
-                        additionalProperties: false,
-                        properties: {
-                            q: { type: "string" },
-                            source: { type: "string" },
-                            transactionType: { type: "string" },
-                            propertyType: { type: "string" },
-                            locationText: { type: "string" },
-                            voivodeship: { type: "string" },
-                            city: { type: "string" },
-                            district: { type: "string" },
-                            minPrice: { type: "string" },
-                            maxPrice: { type: "string" },
-                            minArea: { type: "string" },
-                            maxArea: { type: "string" },
-                            rooms: { type: "string" },
-                        },
-                        required: [
-                            "q",
-                            "source",
-                            "transactionType",
-                            "propertyType",
-                            "locationText",
-                            "voivodeship",
-                            "city",
-                            "district",
-                            "minPrice",
-                            "maxPrice",
-                            "minArea",
-                            "maxArea",
-                            "rooms",
-                        ],
-                        },
-              runTs: { type: "string" },
-              limit: { type: "number" },
-              url: { type: "string" },
-            },
-            required: ["type"],
+              {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  type: { const: "run_live" },
+                  runTs: { type: "string" },
+                },
+                required: ["type"],
+              },
+              {
+                type: "object",
+                additionalProperties: false,
+                properties: { type: { const: "load_neon" } },
+                required: ["type"],
+              },
+              {
+                type: "object",
+                additionalProperties: false,
+                properties: { type: { const: "refresh_map" } },
+                required: ["type"],
+              },
+              {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  type: { const: "geocode" },
+                  limit: { type: "number" },
+                },
+                required: ["type", "limit"],
+              },
+              {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  type: { const: "open_listing" },
+                  url: { type: "string" },
+                },
+                required: ["type", "url"],
+              },
+            ],
           },
         },
       },
@@ -187,14 +227,8 @@ Zasady:
     const r = await openai.responses.create({
       model,
       input: [
-        {
-          role: "system",
-          content: `${prompt}\nofficeId=${officeId}`,
-        },
-        {
-          role: "user",
-          content: userText,
-        },
+        { role: "system", content: `${prompt}\nofficeId=${officeId}` },
+        { role: "user", content: userText },
       ],
       text: {
         format: {
@@ -224,7 +258,6 @@ Zasady:
 
     const actions = sanitizeActions(parsed.actions);
 
-    // domyślny runTs jeśli agent chce run_live
     for (const a of actions) {
       if (a.type === "run_live" && !a.runTs) (a as any).runTs = nowIso();
     }
