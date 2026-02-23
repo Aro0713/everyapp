@@ -47,7 +47,7 @@ async function fetchWithRetry(
   throw lastErr;
 }
 const WFS_BASE = "https://mapy.geoportal.gov.pl/wss/service/rcn";
-const LAYERS = ["lokale", "budynki", "dzialki"] as const;
+const LAYERS = ["dzialki", "budynki", "lokale"] as const;
 
 proj4.defs(
   "EPSG:2180",
@@ -146,9 +146,11 @@ async function wfsGetFeatureGeoJson(
   u.searchParams.set("VERSION", "1.1.0");
   u.searchParams.set("TYPENAMES", typeName);
 
-  // ✅ WFS 1.1.0: SRSNAME=EPSG:4326, a BBOX bez CRS na końcu
-  u.searchParams.set("SRSNAME", "EPSG:4326");
-  u.searchParams.set("BBOX", `${bbox.minx},${bbox.miny},${bbox.maxx},${bbox.maxy}`);
+  // ✅ WFS: EPSG:2180 (bez problemów axis-order)
+  u.searchParams.set("SRSNAME", "EPSG:2180");
+
+  // ✅ dopisz CRS na końcu (często bardziej kompatybilne)
+  u.searchParams.set("BBOX", `${bbox.minx},${bbox.miny},${bbox.maxx},${bbox.maxy},EPSG:2180`);
 
   // ✅ Najstabilniej dla Geoportalu: nie wymuszać JSON (serwer i tak często zwraca XML/GML)
   // u.searchParams.set("OUTPUTFORMAT", "application/json");
@@ -235,13 +237,19 @@ async function wmsGetFeatureInfoHtml2180(
   u.searchParams.set("CRS", "EPSG:2180");
   u.searchParams.set("BBOX", `${bbox.minx},${bbox.miny},${bbox.maxx},${bbox.maxy}`);
 
-    const W = 1;
-    const H = 1;
+    // ✅ symulujemy realny "klik" jak w UI Geoportalu
+    const W = 101;
+    const H = 101;
 
     u.searchParams.set("WIDTH", String(W));
     u.searchParams.set("HEIGHT", String(H));
-    u.searchParams.set("I", "0");
-    u.searchParams.set("J", "0");
+
+    // klik w środek obrazu
+    u.searchParams.set("I", String(Math.floor(W / 2)));
+    u.searchParams.set("J", String(Math.floor(H / 2)));
+
+    // pozwól zwrócić kilka wyników
+    u.searchParams.set("FEATURE_COUNT", "5");
 
   u.searchParams.set("INFO_FORMAT", "text/html");
   u.searchParams.set("FORMAT", "image/png");
@@ -309,11 +317,15 @@ function parseRcnHtml(html: string, typeNameHint: string) {
   const price = parseMoneyPL(getFirstValueAfterLabel("Cena brutto"));
 
   // data dokumentu
-  const dateRaw = getFirstValueAfterLabel("Data");
+   const dateRaw = getFirstValueAfterLabel("Data");
   const dateISO = (() => {
     if (!dateRaw) return null;
+
     const iso = dateRaw.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1];
-    return iso ?? null;
+    if (iso) return iso;
+
+    const d = parseDateLoose(dateRaw);
+    return d ? d.toISOString().slice(0, 10) : null;
   })();
 
   // source id: Lokalny ID IIP (najlepszy identyfikator)
@@ -557,34 +569,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     for (const r0 of rows) {
       try {
-        const bbox = bboxFromPoint(r0.lat, r0.lng, radiusMeters);
+                // ✅ WFS: EPSG:2180 bbox
+        const bbox2180 = bbox2180FromPoint(r0.lat, r0.lng, radiusMeters);
 
         let best:
           | { price: number | null; dateISO: string | null; sourceId: string | null; detected: any }
           | null = null;
 
         for (const layer of LAYERS) {
-        const payload = await wfsGetFeatureGeoJson(layer, bbox);
-        if (!payload) continue;
+          const payload = await wfsGetFeatureGeoJson(layer, bbox2180);
+          if (!payload) continue;
 
-        const pick = extractBestTransactionFromPayload(payload, layer);
-        if (pick && (pick.price != null || pick.dateISO != null)) {
+          const pick = extractBestTransactionFromPayload(payload, layer);
+          if (pick && (pick.price != null || pick.dateISO != null)) {
             best = pick as any;
             break;
-        }
+          }
         }
 
         // ✅ Fallback: WMS GetFeatureInfo (HTML) – działa realnie jak w Geoportalu UI
         if (!best) {
-        const bbox2180 = bbox2180FromPoint(r0.lat, r0.lng, radiusMeters);
-        const html = await wmsGetFeatureInfoHtml2180(bbox2180);
-        if (html) {
-            // hint: nie wiemy która warstwa trafiła, ale to nie szkodzi
+          const html = await wmsGetFeatureInfoHtml2180(bbox2180);
+          if (html) {
             const pickHtml = parseRcnHtml(html, "mixed");
             if (pickHtml && (pickHtml.price != null || pickHtml.dateISO != null || pickHtml.sourceId != null)) {
-            best = pickHtml as any;
+              best = pickHtml as any;
             }
-        }
+          }
         }
 
         const link = buildGeoportalLink(r0.lat, r0.lng);
