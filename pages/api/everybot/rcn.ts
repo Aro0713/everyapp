@@ -235,12 +235,13 @@ async function wmsGetFeatureInfoHtml2180(
   u.searchParams.set("CRS", "EPSG:2180");
   u.searchParams.set("BBOX", `${bbox.minx},${bbox.miny},${bbox.maxx},${bbox.maxy}`);
 
-  const W = 101;
-  const H = 101;
-  u.searchParams.set("WIDTH", String(W));
-  u.searchParams.set("HEIGHT", String(H));
-  u.searchParams.set("I", String(Math.floor(W / 2)));
-  u.searchParams.set("J", String(Math.floor(H / 2)));
+    const W = 1;
+    const H = 1;
+
+    u.searchParams.set("WIDTH", String(W));
+    u.searchParams.set("HEIGHT", String(H));
+    u.searchParams.set("I", "0");
+    u.searchParams.set("J", "0");
 
   u.searchParams.set("INFO_FORMAT", "text/html");
   u.searchParams.set("FORMAT", "image/png");
