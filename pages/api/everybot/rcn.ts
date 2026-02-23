@@ -290,21 +290,10 @@ async function wmsGetFeatureInfoHtml2180(
 function parseRcnHtml(html: string, typeNameHint: string) {
   if (!html) return null;
 
-  // Uwaga: w HTML są wielokrotne "Cena brutto". Bierzemy pierwszą sensowną.
-  const getFirstValueAfterLabel = (label: string): string | null => {
-    const re = new RegExp(
-      `<span\\s+class="list-item-value">\\s*${label}\\s*:<\\/span>\\s*([^<]+)<`,
-      "i"
-    );
-    const m = html.match(re);
-    return m?.[1]?.trim() ?? null;
-  };
-
   const parseMoneyPL = (v: string | null): number | null => {
     if (!v) return null;
     const s = v.replace(/\u00A0/g, " ").trim();
 
-    // obsługa: 244 470 / 244.470,00 / 244470,00 / 244470
     const normalized = s.includes(",")
       ? s.replace(/\./g, "").replace(/\s/g, "").replace(",", ".").replace(/[^\d.]/g, "")
       : s.replace(/\s/g, "").replace(/[^\d]/g, "");
@@ -313,33 +302,71 @@ function parseRcnHtml(html: string, typeNameHint: string) {
     return Number.isFinite(n) && n > 0 ? n : null;
   };
 
-  // cena: preferuj "Dane transakcji" (ale w HTML nie mamy sekcji — label jest ten sam)
-  const price = parseMoneyPL(getFirstValueAfterLabel("Cena brutto"));
+  const pickLabelValueFromChunk = (chunk: string, label: string): string | null => {
+    const re = new RegExp(
+      `<span\\s+class="list-item-value">\\s*${label}\\s*:<\\/span>\\s*([^<]+)<`,
+      "i"
+    );
+    const m = chunk.match(re);
+    return m?.[1]?.trim() ?? null;
+  };
 
-  // data dokumentu
-   const dateRaw = getFirstValueAfterLabel("Data");
-  const dateISO = (() => {
-    if (!dateRaw) return null;
+  // ✅ wytnij wszystkie akordeony (każda transakcja osobno)
+  const contents =
+    html.match(/<div class="accordion-content">[\s\S]*?<\/div>\s*<\/div>/gi) ??
+    html.match(/<div class="accordion-content">[\s\S]*?<\/div>/gi) ??
+    [];
 
-    const iso = dateRaw.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1];
-    if (iso) return iso;
+  const parseOneAccordion = (chunk: string) => {
+    // ✅ Najpierw ogranicz się do sekcji "Dane transakcji"
+    const daneTx =
+      chunk.match(/<h3>\s*Dane transakcji\s*<\/h3>[\s\S]*?(?=<h3>|$)/i)?.[0] ?? null;
 
-    const d = parseDateLoose(dateRaw);
-    return d ? d.toISOString().slice(0, 10) : null;
-  })();
+    const price =
+      parseMoneyPL(pickLabelValueFromChunk(daneTx ?? chunk, "Cena brutto")) ??
+      null;
 
-  // source id: Lokalny ID IIP (najlepszy identyfikator)
-  const sourceId =
-    getFirstValueAfterLabel("Lokalny ID IIP") ??
-    getFirstValueAfterLabel("Oznaczenie transakcji") ??
-    null;
+    const dateRaw = pickLabelValueFromChunk(chunk, "Data");
+    const dateISO = (() => {
+      if (!dateRaw) return null;
+      const iso = dateRaw.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1];
+      if (iso) return iso;
+      const d = parseDateLoose(dateRaw);
+      return d ? d.toISOString().slice(0, 10) : null;
+    })();
 
-  if (price == null && dateISO == null && !sourceId) return null;
+    const sourceId =
+      pickLabelValueFromChunk(chunk, "Lokalny ID IIP") ??
+      pickLabelValueFromChunk(chunk, "Oznaczenie transakcji") ??
+      null;
+
+    if (price == null && dateISO == null && !sourceId) return null;
+
+    return { price, dateISO, sourceId };
+  };
+
+  // jeśli nie ma akordeonów, parsuj całość jak 1 rekord
+  const candidates = (contents.length ? contents : [html])
+    .map(parseOneAccordion)
+    .filter(Boolean) as Array<{ price: number | null; dateISO: string | null; sourceId: string | null }>;
+
+  if (!candidates.length) return null;
+
+  // ✅ wybierz najlepszy: preferuj cenę; jeśli kilka z ceną, bierz najwyższą cenę
+  const withPrice = candidates.filter((c) => c.price != null) as Array<{
+    price: number;
+    dateISO: string | null;
+    sourceId: string | null;
+  }>;
+
+  const best = withPrice.length
+    ? withPrice.sort((a, b) => b.price - a.price)[0]
+    : candidates[0];
 
   return {
-    price,
-    dateISO,
-    sourceId,
+    price: best.price ?? null,
+    dateISO: best.dateISO ?? null,
+    sourceId: best.sourceId ?? null,
     detected: { typeName: typeNameHint, mode: "wms_html" },
   };
 }
