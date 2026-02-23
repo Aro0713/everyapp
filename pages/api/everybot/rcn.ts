@@ -346,89 +346,112 @@ function parseRcnHtml(html: string, typeNameHint: string) {
 function extractBestTransactionFromXml(xml: string, typeName: string) {
   if (!xml || typeof xml !== "string") return null;
 
-  // szybka normalizacja whitespace, żeby regexy działały stabilnie
   const s = xml.replace(/\s+/g, " ");
 
-  // 1) ✅ wykryj OWS ExceptionReport nawet jeśli HTTP=200
+  // ✅ ExceptionReport nawet przy HTTP=200
   if (/<\s*ows:ExceptionReport\b/i.test(s) || /<\s*ExceptionReport\b/i.test(s)) {
-    // log tylko mały fragment, żeby nie zalać
     console.log("RCN_WFS_EXCEPTION_XML", { typeName, sample: s.slice(0, 220) });
     return null;
   }
 
-  // helper: czytaj <prefix:tag>VALUE</prefix:tag> oraz <tag>VALUE</tag>
-  const findTag = (tag: string): string | null => {
-    const re = new RegExp(
-      `<(?:(\\w+):)?${tag}\\b[^>]*>([^<]+)</(?:(\\w+):)?${tag}>`,
-      "i"
-    );
-    const m = s.match(re);
-    return m?.[2]?.trim() ?? null;
+  // ✅ podziel na featureMember (różne namespace'y występują w praktyce)
+  const members =
+    s.match(/<\s*(?:\w+:)?featureMember\b[^>]*>[\s\S]*?<\s*\/\s*(?:\w+:)?featureMember\s*>/gi) ??
+    s.match(/<\s*(?:\w+:)?member\b[^>]*>[\s\S]*?<\s*\/\s*(?:\w+:)?member\s*>/gi) ??
+    [s];
+
+  const parseOne = (chunk: string) => {
+    const findTag = (tag: string): string | null => {
+      const re = new RegExp(
+        `<(?:(\\w+):)?${tag}\\b[^>]*>([^<]+)</(?:(\\w+):)?${tag}>`,
+        "i"
+      );
+      const m = chunk.match(re);
+      return m?.[2]?.trim() ?? null;
+    };
+
+    const isNilTag = (tag: string): boolean => {
+      const re = new RegExp(
+        `<(?:(\\w+):)?${tag}\\b[^>]*xsi:nil\\s*=\\s*["']true["'][^>]*/?>`,
+        "i"
+      );
+      return re.test(chunk);
+    };
+
+    // price
+    let price: number | null = null;
+    for (const k of PRICE_KEYS) {
+      if (isNilTag(k)) continue;
+      const v = findTag(k);
+      if (!v) continue;
+
+      const n = Number(
+        v
+          .replace(/\u00A0/g, " ")
+          .replace(/\s/g, "")
+          .replace(",", ".")
+          .replace(/[^\d.]/g, "")
+      );
+
+      if (Number.isFinite(n) && n > 0) {
+        price = n;
+        break;
+      }
+    }
+
+    // date
+    let dateISO: string | null = null;
+    for (const k of DATE_KEYS) {
+      if (isNilTag(k)) continue;
+      const v = findTag(k);
+      if (!v) continue;
+
+      const iso = v.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1];
+      if (iso) {
+        dateISO = iso;
+        break;
+      }
+
+      const dm = v.match(/\b(\d{2})\.(\d{2})\.(\d{4})\b/);
+      if (dm) {
+        dateISO = `${dm[3]}-${dm[2]}-${dm[1]}`;
+        break;
+      }
+
+      const d = parseDateLoose(v);
+      if (d) {
+        dateISO = d.toISOString().slice(0, 10);
+        break;
+      }
+    }
+
+    if (price == null && dateISO == null) return null;
+    return { price, dateISO };
   };
 
-  // helper: czytaj <prefix:tag .../> lub <tag .../> (np. nil/empty) -> zwraca null
-  const isNilTag = (tag: string): boolean => {
-    const re = new RegExp(`<(?:(\\w+):)?${tag}\\b[^>]*xsi:nil\\s*=\\s*["']true["'][^>]*/?>`, "i");
-    return re.test(s);
-  };
+  // ✅ wybierz najlepszy member: preferuj cenę, potem datę
+  let best: { price: number | null; dateISO: string | null } | null = null;
 
+  for (const m of members) {
+    const picked = parseOne(m);
+    if (!picked) continue;
 
-// zamiast warunków zależnych od typeName
-let price: number | null = null;
-
-for (const k of PRICE_KEYS) {
-  const v = findTag(k);
-  if (!v) continue;
-
-  const n = Number(
-    v
-      .replace(/\u00A0/g, " ")
-      .replace(/\s/g, "")
-      .replace(",", ".")
-      .replace(/[^\d.]/g, "")
-  );
-
-  if (Number.isFinite(n) && n > 0) {
-    price = n;
-    break;
-  }
-}
-
-  // 3) ✅ data: przeleć po DATE_KEYS
-  let dateISO: string | null = null;
-  for (const k of DATE_KEYS) {
-    if (isNilTag(k)) continue;
-
-    const v = findTag(k);
-    if (!v) continue;
-
-    // ISO yyyy-mm-dd
-    const iso = v.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1];
-    if (iso) {
-      dateISO = iso;
-      break;
+    if (!best) {
+      best = picked;
+      continue;
     }
 
-    // dd.mm.yyyy
-    const dm = v.match(/\b(\d{2})\.(\d{2})\.(\d{4})\b/);
-    if (dm) {
-      dateISO = `${dm[3]}-${dm[2]}-${dm[1]}`;
-      break;
-    }
+    const score = (x: { price: number | null; dateISO: string | null }) =>
+      (x.price != null ? 10 : 0) + (x.dateISO != null ? 1 : 0);
 
-    // fallback: Date()
-    const d = parseDateLoose(v);
-    if (d) {
-      dateISO = d.toISOString().slice(0, 10);
-      break;
-    }
+    if (score(picked) > score(best)) best = picked;
+
+    // jak mamy cenę + datę, to idealnie — kończ
+    if (best.price != null && best.dateISO != null) break;
   }
 
-  if (price == null && dateISO == null) {
-    // debug 1-liner: czy w ogóle mamy jakiekolwiek “cena” w XML?
-    // (bez dumpowania całości)
-    const hasAnyPriceLike =
-      /cena/i.test(s) || /price/i.test(s) || /warto/i.test(s);
+  if (!best) {
+    const hasAnyPriceLike = /cena/i.test(s) || /price/i.test(s) || /warto/i.test(s);
     if (hasAnyPriceLike) {
       console.log("RCN_XML_NO_PICK", { typeName, hint: "has_price_like_words", sample: s.slice(0, 220) });
     }
@@ -436,12 +459,13 @@ for (const k of PRICE_KEYS) {
   }
 
   return {
-    price,
-    dateISO,
+    price: best.price,
+    dateISO: best.dateISO,
     sourceId: null as string | null,
     detected: { typeName, mode: "xml" },
   };
 }
+
 
 function extractBestTransactionFromPayload(payload: any, typeName: string) {
   if (!payload) return null;
@@ -587,13 +611,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           }
         }
 
-        // ✅ Fallback: WMS GetFeatureInfo (HTML) – działa realnie jak w Geoportalu UI
-        if (!best) {
+              // ✅ Fallback: WMS GetFeatureInfo (HTML) – uruchamiaj też gdy WFS dał datę, ale brak ceny
+        if (!best || best.price == null) {
           const html = await wmsGetFeatureInfoHtml2180(bbox2180);
           if (html) {
             const pickHtml = parseRcnHtml(html, "mixed");
             if (pickHtml && (pickHtml.price != null || pickHtml.dateISO != null || pickHtml.sourceId != null)) {
-              best = pickHtml as any;
+              // preferuj HTML, jeśli wnosi cenę
+              if (best == null || (best.price == null && pickHtml.price != null)) {
+                best = pickHtml as any;
+              }
             }
           }
         }
