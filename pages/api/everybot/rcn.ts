@@ -19,7 +19,33 @@ function optNumber(v: unknown): number | null {
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
+async function fetchWithRetry(
+  url: string,
+  init: RequestInit,
+  tries = 3,
+  timeoutMs = 12000
+): Promise<Response> {
+  let lastErr: any = null;
 
+  for (let i = 1; i <= tries; i++) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+
+    try {
+      const r = await fetch(url, { ...init, signal: ctrl.signal });
+      clearTimeout(t);
+      return r;
+    } catch (e: any) {
+      clearTimeout(t);
+      lastErr = e;
+
+      // backoff 250ms, 500ms, 750ms...
+      await sleep(250 * i);
+    }
+  }
+
+  throw lastErr;
+}
 const WFS_BASE = "https://mapy.geoportal.gov.pl/wss/service/rcn";
 const LAYERS = ["lokale", "budynki", "dzialki"] as const;
 
@@ -112,12 +138,23 @@ async function wfsGetFeatureGeoJson(
 
   const url = u.toString();
 
-  const r = await fetch(url, {
-    headers: {
-      accept: "application/json, text/xml;q=0.9, application/xml;q=0.8, */*;q=0.7",
-      "user-agent": "EveryAPP/EveryBOT RCN client",
-    },
-  });
+ let r: Response;
+    try {
+    r = await fetchWithRetry(
+        url,
+        {
+        headers: {
+            accept: "text/xml, application/xml;q=0.9, */*;q=0.8",
+            "user-agent": "EveryAPP/EveryBOT RCN client",
+        },
+        },
+        3,
+        12000
+    );
+    } catch (e: any) {
+    console.log("RCN_WFS_FETCH_FAILED", { typeName, msg: String(e?.message ?? e).slice(0, 160) });
+    return null;
+    }
 
   const txt = await r.text().catch(() => "");
   const contentType = r.headers.get("content-type") ?? "";
@@ -190,12 +227,23 @@ async function wmsGetFeatureInfoHtml(typeNames: string[], bbox: { minx: number; 
 
   const url = u.toString();
 
-  const r = await fetch(url, {
-    headers: {
-      accept: "text/html, application/xhtml+xml;q=0.9, */*;q=0.8",
-      "user-agent": "EveryAPP/EveryBOT RCN client",
-    },
-  });
+    let r: Response;
+    try {
+    r = await fetchWithRetry(
+        url,
+        {
+        headers: {
+            accept: "text/html, application/xhtml+xml;q=0.9, */*;q=0.8",
+            "user-agent": "EveryAPP/EveryBOT RCN client",
+        },
+        },
+        3,
+        12000
+    );
+    } catch (e: any) {
+    console.log("RCN_WMS_FETCH_FAILED", { msg: String(e?.message ?? e).slice(0, 160) });
+    return null;
+    }
 
   const html = await r.text().catch(() => "");
   const contentType = r.headers.get("content-type") ?? "";
@@ -425,11 +473,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(405).json({ error: "Method not allowed" });
     }
 
-    if (isCron) {
-      const cronSecret = req.headers["x-cron-secret"];
-      if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
+   if (isCron) {
+    const cronSecretRaw = req.headers["x-cron-secret"];
+    const cronSecret = Array.isArray(cronSecretRaw) ? cronSecretRaw[0] : cronSecretRaw;
+
+    if (!cronSecret || String(cronSecret) !== String(process.env.CRON_SECRET || "")) {
         return res.status(401).json({ error: "UNAUTHORIZED_CRON" });
-      }
+    }
     }
 
     const limitRaw = optNumber((req.body ?? {}).limit) ?? 50;
@@ -541,7 +591,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         processed += 1;
         debug.push({ id: r0.id, ...(best?.detected ?? {}), price: best?.price ?? null, dateISO: best?.dateISO ?? null });
 
-        await sleep(250);
+        await sleep(450);
       } catch (e: any) {
         errors.push({ id: r0.id, error: e?.message ?? "rcn failed" });
       }
