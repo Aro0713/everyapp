@@ -11,15 +11,12 @@ function getBaseUrl(req: NextApiRequest) {
 }
 
 function getStableBaseUrl(req: NextApiRequest) {
-  // 1) manual override (najlepsze)
   const appBase = String(process.env.APP_BASE_URL || "").trim();
   if (appBase) return appBase.replace(/\/+$/, "");
 
-  // 2) Vercel runtime host
-  const vercelUrl = String(process.env.VERCEL_URL || "").trim(); // bez protokołu
+  const vercelUrl = String(process.env.VERCEL_URL || "").trim();
   if (vercelUrl) return `https://${vercelUrl}`;
 
-  // 3) fallback z requestu
   return getBaseUrl(req);
 }
 
@@ -32,22 +29,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const secret = String(process.env.CRON_SECRET || "").trim();
     if (!secret) {
-      // to ma od razu krzyczeć, bo inaczej będziesz mieć "zielone crony" i nic nie działa
       return res.status(500).json({ error: "MISSING_CRON_SECRET" });
     }
 
-const tokenQuery = typeof req.query.token === "string" ? req.query.token : "";
-const okToken = !!tokenQuery && tokenQuery === secret;
+    // ✅ Przywrócone zachowanie: Vercel Cron przechodzi po UA (bez tokena)
+    const ua = String(req.headers["user-agent"] || "").toLowerCase();
+    const okCronUa = ua.startsWith("vercel-cron");
 
-if (!okToken) {
-  return res.status(401).json({
-    error: "UNAUTHORIZED_CRON",
-    debug: {
-      hasTokenQuery: !!tokenQuery,
-      hasSecretEnv: !!secret,
-    },
-  });
-}
+    // ✅ Token nadal działa jako fallback (np. ręczne odpalenie)
+    const tokenHeaderRaw = req.headers["x-cron-token"];
+    const tokenHeader = Array.isArray(tokenHeaderRaw) ? tokenHeaderRaw[0] : String(tokenHeaderRaw || "");
+    const tokenQuery = typeof req.query.token === "string" ? req.query.token : "";
+
+    const okToken =
+      (!!tokenHeader && tokenHeader === secret) ||
+      (!!tokenQuery && tokenQuery === secret);
+
+    // ✅ Nie wymagamy tokena jeśli to Vercel Cron (tak ma działać)
+    if (!okCronUa && !okToken) {
+      return res.status(401).json({
+        error: "UNAUTHORIZED_CRON",
+        debug: {
+          ua,
+          hasTokenHeader: !!tokenHeader,
+          hasTokenQuery: !!tokenQuery,
+          hasSecretEnv: !!secret,
+        },
+      });
+    }
+
     const base = getStableBaseUrl(req);
 
     const r = await fetch(`${base}/api/everybot/geocode`, {
@@ -60,9 +70,15 @@ if (!okToken) {
       body: JSON.stringify({ limit: 50 }),
     });
 
-    const j = await r.json().catch(() => null);
+    const text = await r.text().catch(() => "");
+    const j = (() => {
+      try {
+        return text ? JSON.parse(text) : null;
+      } catch {
+        return { raw: text.slice(0, 500) };
+      }
+    })();
 
-    // ✅ NIE maskuj statusu
     return res.status(r.status).json({
       ok: r.ok,
       forwarded: true,
