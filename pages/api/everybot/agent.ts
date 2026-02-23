@@ -147,61 +147,61 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 items: {
                 // ✅ anyOf zwykle mniej konfliktowe niż oneOf
                 anyOf: [
-                    {
-                    type: "object",
-                    additionalProperties: false,
-                    properties: {
-                        type: { type: "string", const: "set_filters" },
-                        filters: filtersSchema,
+                        {
+                            type: "object",
+                            additionalProperties: false,
+                            properties: {
+                            type: { type: "string", const: "set_filters" },
+                            filters: filtersSchema,
+                            },
+                            required: ["type", "filters"],
+                        },
+                        {
+                            type: "object",
+                            additionalProperties: false,
+                            properties: {
+                            type: { type: "string", const: "run_live" },
+                            runTs: { type: "string" },
+                            },
+                            required: ["type", "runTs"],
+                        },
+                        {
+                            type: "object",
+                            additionalProperties: false,
+                            properties: {
+                            type: { type: "string", const: "load_neon" },
+                            },
+                            required: ["type"],
+                        },
+                        {
+                            type: "object",
+                            additionalProperties: false,
+                            properties: {
+                            type: { type: "string", const: "refresh_map" },
+                            },
+                            required: ["type"],
+                        },
+                        {
+                            type: "object",
+                            additionalProperties: false,
+                            properties: {
+                            type: { type: "string", const: "geocode" },
+                            limit: { type: "number" },
+                            },
+                            required: ["type", "limit"],
+                        },
+                        {
+                            type: "object",
+                            additionalProperties: false,
+                            properties: {
+                            type: { type: "string", const: "open_listing" },
+                            url: { type: "string" },
+                            },
+                            required: ["type", "url"],
+                        },
+                        ],
                     },
-                    required: ["type", "filters"],
-                    },
-                    {
-                    type: "object",
-                    additionalProperties: false,
-                    properties: {
-                        type: { type: "string", const: "run_live" },
-                        runTs: { type: "string" },
-                    },
-                    required: ["type", "runTs"],
-                    },
-                    {
-                    type: "object",
-                    additionalProperties: false,
-                    properties: {
-                        type: { type: "string", const: "load_neon" },
-                    },
-                    required: ["type", "runTs"],
-                    },
-                    {
-                    type: "object",
-                    additionalProperties: false,
-                    properties: {
-                        type: { type: "string", const: "refresh_map" },
-                    },
-                    required: ["type", "runTs"],
-                    },
-                    {
-                    type: "object",
-                    additionalProperties: false,
-                    properties: {
-                        type: { type: "string", const: "geocode" },
-                        limit: { type: "number" },
-                    },
-                    required: ["type", "limit"],
-                    },
-                    {
-                    type: "object",
-                    additionalProperties: false,
-                    properties: {
-                        type: { type: "string", const: "open_listing" },
-                        url: { type: "string" },
-                    },
-                    required: ["type", "url"],
-                    },
-                ],
-                },
-             },
+                 },
            },
       required: ["reply", "actions"],
     } as const;
