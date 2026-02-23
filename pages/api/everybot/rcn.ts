@@ -3,7 +3,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { pool } from "../../../lib/neonDb";
 import { getUserIdFromRequest } from "../../../lib/session";
 import { getOfficeIdForUserId } from "../../../lib/office";
-
+import proj4 from "proj4";
 type Row = {
   id: string;
   office_id: string;
@@ -48,6 +48,26 @@ async function fetchWithRetry(
 }
 const WFS_BASE = "https://mapy.geoportal.gov.pl/wss/service/rcn";
 const LAYERS = ["lokale", "budynki", "dzialki"] as const;
+
+proj4.defs(
+  "EPSG:2180",
+  "+proj=tmerc +lat_0=0 +lon_0=19 +k=0.9993 +x_0=500000 +y_0=-5300000 +ellps=GRS80 +units=m +no_defs"
+);
+
+function wgs84To2180(lat: number, lng: number) {
+  const [x, y] = proj4("EPSG:4326", "EPSG:2180", [lng, lat]);
+  return { x, y };
+}
+
+function bbox2180FromPoint(lat: number, lng: number, meters: number) {
+  const { x, y } = wgs84To2180(lat, lng);
+  return {
+    minx: x - meters,
+    miny: y - meters,
+    maxx: x + meters,
+    maxy: y + meters,
+  };
+}
 
 const PRICE_KEYS = [
   // ✅ RCN WFS (lokale/dzialki/budynki)
@@ -198,22 +218,23 @@ function buildGeoportalLink(lat: number, lng: number) {
   u.searchParams.set("scale", "5000");
   return u.toString();
 }
-async function wmsGetFeatureInfoHtml(typeNames: string[], bbox: { minx: number; miny: number; maxx: number; maxy: number }) {
-  // WMS 1.3.0 + CRS:84 => axis order: lon,lat (stabilne)
+async function wmsGetFeatureInfoHtml2180(
+  bbox: { minx: number; miny: number; maxx: number; maxy: number }
+) {
   const u = new URL(WFS_BASE);
 
   u.searchParams.set("SERVICE", "WMS");
   u.searchParams.set("REQUEST", "GetFeatureInfo");
   u.searchParams.set("VERSION", "1.3.0");
 
-  const layers = typeNames.join(",");
+  // dokładnie jak w Twoim działającym URL
+  const layers = "budynki,lokale,dzialki,powiaty";
   u.searchParams.set("LAYERS", layers);
   u.searchParams.set("QUERY_LAYERS", layers);
 
-  u.searchParams.set("CRS", "CRS:84");
+  u.searchParams.set("CRS", "EPSG:2180");
   u.searchParams.set("BBOX", `${bbox.minx},${bbox.miny},${bbox.maxx},${bbox.maxy}`);
 
-  // mała siatka, punkt w środku
   const W = 101;
   const H = 101;
   u.searchParams.set("WIDTH", String(W));
@@ -227,37 +248,30 @@ async function wmsGetFeatureInfoHtml(typeNames: string[], bbox: { minx: number; 
 
   const url = u.toString();
 
-    let r: Response;
-    try {
+  let r: Response;
+  try {
     r = await fetchWithRetry(
-        url,
-        {
+      url,
+      {
         headers: {
-            accept: "text/html, application/xhtml+xml;q=0.9, */*;q=0.8",
-            "user-agent": "EveryAPP/EveryBOT RCN client",
+          accept: "text/html, application/xhtml+xml;q=0.9, */*;q=0.8",
+          "user-agent": "EveryAPP/EveryBOT RCN client",
         },
-        },
-        3,
-        12000
+      },
+      3,
+      12000
     );
-    } catch (e: any) {
-    console.log("RCN_WMS_FETCH_FAILED", { msg: String(e?.message ?? e).slice(0, 160) });
-    return null;
-    }
-
-  const html = await r.text().catch(() => "");
-  const contentType = r.headers.get("content-type") ?? "";
-  console.log("RCN_WMS_RESP", { status: r.status, contentType });
-
-  if (!r.ok) {
-    console.log("RCN_WMS_FAIL", { status: r.status, url: url.slice(0, 400), body: html.slice(0, 200) });
+  } catch (e: any) {
+    console.log("RCN_WMS2180_FETCH_FAILED", { msg: String(e?.message ?? e).slice(0, 160) });
     return null;
   }
 
-  // jeśli to nie wygląda na HTML z RCN – traktuj jako brak danych
-  const head = html.slice(0, 200).toLowerCase();
-  if (!head.includes("<html") && !head.includes("<body")) {
-    console.log("RCN_WMS_NOT_HTML", { sample: html.slice(0, 200) });
+  const html = await r.text().catch(() => "");
+  const contentType = r.headers.get("content-type") ?? "";
+  console.log("RCN_WMS2180_RESP", { status: r.status, contentType });
+
+  if (!r.ok) {
+    console.log("RCN_WMS2180_FAIL", { status: r.status, body: html.slice(0, 200) });
     return null;
   }
 
@@ -561,7 +575,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         // ✅ Fallback: WMS GetFeatureInfo (HTML) – działa realnie jak w Geoportalu UI
         if (!best) {
-        const html = await wmsGetFeatureInfoHtml([...LAYERS], bbox);
+        const bbox2180 = bbox2180FromPoint(r0.lat, r0.lng, radiusMeters);
+        const html = await wmsGetFeatureInfoHtml2180(bbox2180);
         if (html) {
             // hint: nie wiemy która warstwa trafiła, ale to nie szkodzi
             const pickHtml = parseRcnHtml(html, "mixed");
