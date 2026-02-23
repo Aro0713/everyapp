@@ -23,8 +23,12 @@ function fmtPrice(v: Pin["price_amount"], currency?: string | null) {
 
 export default function EverybotMap({
   pins,
+  onSelectId,
+  onViewport,
 }: {
   pins: Pin[];
+  onSelectId?: (id: string) => void;
+  onViewport?: (v: { minLat: number; minLng: number; maxLat: number; maxLng: number; zoom: number }) => void;
 }) {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -69,10 +73,22 @@ export default function EverybotMap({
     });
 
     m.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
-
+ 
     const onMove = () => {
-      setZoom(m.getZoom());
-      setBounds(m.getBounds());
+    const z = m.getZoom();
+    const b = m.getBounds();
+    setZoom(z);
+    setBounds(b);
+
+    if (onViewport) {
+        onViewport({
+        minLat: b.getSouth(),
+        minLng: b.getWest(),
+        maxLat: b.getNorth(),
+        maxLng: b.getEast(),
+        zoom: z,
+        });
+    }
     };
 
     m.on("load", onMove);
@@ -117,6 +133,7 @@ export default function EverybotMap({
         const p = f.properties as any as Pin;
         el.textContent = "●";
         el.onclick = () => {
+        if (onSelectId) onSelectId(p.id);
           const title = (p.title ?? "Ogłoszenie").slice(0, 80);
           const price = fmtPrice(p.price_amount, p.currency);
           const html =

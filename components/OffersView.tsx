@@ -134,6 +134,18 @@ const [botFilters, setBotFilters] = useState<EverybotFilters>({
   const [botRows, setBotRows] = useState<ExternalRow[]>([]);
   const [mapPins, setMapPins] = useState<any[]>([]);
   const [botMatchedSince, setBotMatchedSince] = useState<string | null>(null);
+  const [selectedExternalId, setSelectedExternalId] = useState<string | null>(null);
+  const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
+
+  const [mapViewport, setMapViewport] = useState<{
+    minLat: number;
+    minLng: number;
+    maxLat: number;
+    maxLng: number;
+    zoom: number;
+  } | null>(null);
+
+const mapFetchTimerRef = useRef<number | null>(null);
   const [botCursor, setBotCursor] = useState<{
   updated_at: string;
   id: string;
@@ -260,6 +272,7 @@ async function loadEverybot(opts?: {
       (j?.nextCursor ?? null) as { updated_at: string; id: string } | null;
 
     setBotRows((prev) => (append ? [...prev, ...newRows] : newRows));
+    if (!append) setSelectedExternalId(null);
     setBotCursor(nextCursor);
     setBotHasMore(Boolean(nextCursor) && newRows.length > 0);
         return { rows: newRows, nextCursor };
@@ -336,16 +349,45 @@ async function loadEverybot(opts?: {
     console.warn("everybot refresh failed:", e?.message ?? e);
   }
 }
-  async function loadMapPins() {
-    try {
-      const r = await fetch("/api/external_listings/map?limit=5000");
-      const j = await r.json().catch(() => null);
-      if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
-      setMapPins(Array.isArray(j?.pins) ? j.pins : []);
-    } catch (e) {
-      console.warn("map load failed");
+async function loadMapPins() {
+  try {
+    const qs = new URLSearchParams();
+    qs.set("limit", "5000");
+
+    const f = botFilters;
+
+    if (f.voivodeship?.trim()) qs.set("voivodeship", f.voivodeship.trim());
+    if (f.city?.trim()) qs.set("city", f.city.trim());
+    if (f.district?.trim()) qs.set("district", f.district.trim());
+    if (f.transactionType?.trim()) qs.set("transactionType", f.transactionType.trim());
+    if (mapViewport && mapViewport.zoom >= 8) {
+    qs.set("minLat", String(mapViewport.minLat));
+    qs.set("minLng", String(mapViewport.minLng));
+    qs.set("maxLat", String(mapViewport.maxLat));
+    qs.set("maxLng", String(mapViewport.maxLng));
     }
+    const r = await fetch(`/api/external_listings/map?${qs.toString()}`);
+    const j = await r.json().catch(() => null);
+
+    if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
+
+    setMapPins(Array.isArray(j?.pins) ? j.pins : []);
+  } catch (e) {
+    console.warn("map load failed");
   }
+}
+function scheduleMapPinsReload() {
+  if (mapFetchTimerRef.current) window.clearTimeout(mapFetchTimerRef.current);
+  mapFetchTimerRef.current = window.setTimeout(() => {
+    loadMapPins().catch(() => null);
+  }, 350);
+}
+
+useEffect(() => {
+  return () => {
+    if (mapFetchTimerRef.current) window.clearTimeout(mapFetchTimerRef.current);
+  };
+}, []);
 
   async function importLink() {
     const url = importUrl.trim();
@@ -827,10 +869,80 @@ async function runRcnBatch() {
       {/* ===== MAPA + AGENT (2/3 + 1/3) ===== */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2">
-          <EverybotMap pins={mapPins} />
+          <EverybotMap
+              pins={mapPins}
+              onSelectId={(id) => {
+                setSelectedExternalId(id);
+
+                requestAnimationFrame(() => {
+                  const el = rowRefs.current[id];
+                  if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+                });
+              }}
+              onViewport={(v) => {
+                setMapViewport(v);
+                scheduleMapPinsReload();
+              }}
+            />
         </div>
         <div className="lg:col-span-1">
-          <EverybotAgentPanel />
+          <EverybotAgentPanel
+          onAgentResult={async ({ actions }) => {
+            // wykonuj akcje po kolei
+            for (const a of actions ?? []) {
+              if (a?.type === "set_filters" && a.filters && typeof a.filters === "object") {
+                const next = { ...botFilters, ...a.filters };
+                setBotFilters(next);
+
+                // od razu odśwież listę z Neon (bazowe)
+                setBotMatchedSince(null);
+                setBotSearching(false);
+                setBotSearchSeconds(0);
+
+                await loadEverybot({ filters: next, cursor: null, append: false, matchedSince: null });
+                await loadMapPins().catch(() => null);
+                continue;
+              }
+
+              if (a?.type === "run_live") {
+                const runTs = typeof a.runTs === "string" ? a.runTs : new Date().toISOString();
+                await runLiveHunter(botFilters, runTs);
+                await loadEverybot({ filters: botFilters, cursor: null, append: false, matchedSince: runTs });
+                await loadMapPins().catch(() => null);
+                continue;
+              }
+
+              if (a?.type === "load_neon") {
+                setBotMatchedSince(null);
+                await loadEverybot({ filters: botFilters, cursor: null, append: false, matchedSince: null });
+                await loadMapPins().catch(() => null);
+                continue;
+              }
+
+              if (a?.type === "refresh_map") {
+                await loadMapPins().catch(() => null);
+                continue;
+              }
+
+              if (a?.type === "geocode") {
+                const limit = Number(a.limit ?? 50);
+                await fetch("/api/everybot/geocode", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ limit: Number.isFinite(limit) ? limit : 50 }),
+                });
+                await refreshEverybotList();
+                await loadMapPins().catch(() => null);
+                continue;
+              }
+
+              if (a?.type === "open_listing" && typeof a.url === "string") {
+                window.open(a.url, "_blank", "noopener,noreferrer");
+                continue;
+              }
+            }
+          }}
+        />
         </div>
       </div>
 
@@ -953,7 +1065,16 @@ async function runRcnBatch() {
                   </thead>
                   <tbody>
                     {botRows.map((r) => (
-                      <tr key={r.id} className="border-t border-gray-100">
+                         <tr
+                            key={r.id}
+                            ref={(el) => {
+                              rowRefs.current[r.id] = el;
+                            }}
+                            className={clsx(
+                              "border-t border-gray-100",
+                              selectedExternalId === r.id && "bg-ew-accent/10 ring-1 ring-ew-accent"
+                            )}
+                          >
                         <td className="px-4 py-3 w-20">
                           {r.thumb_url ? (
                             <img

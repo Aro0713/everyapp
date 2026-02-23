@@ -12,7 +12,11 @@ async function fileToBase64(file: File): Promise<string> {
   return btoa(binary);
 }
 
-export default function EverybotAgentPanel() {
+export default function EverybotAgentPanel({
+  onAgentResult,
+}: {
+  onAgentResult?: (r: { reply: string; actions: any[] }) => void;
+}) {
   const [messages, setMessages] = useState<Msg[]>([
     { role: "assistant", text: "Napisz, co mam znaleźć. Możesz też dodać plik lub nagrać głosówkę." },
   ]);
@@ -40,8 +44,17 @@ export default function EverybotAgentPanel() {
       });
       const j = await r.json().catch(() => null);
       if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
+      if (j?.reply && onAgentResult) {
+        onAgentResult({ reply: String(j.reply), actions: Array.isArray(j.actions) ? j.actions : [] });
+        }
 
       setMessages((prev) => [...prev, { role: "assistant", text: String(j?.reply ?? "OK") }]);
+      if (j?.reply && onAgentResult) {
+        onAgentResult({
+            reply: String(j.reply),
+            actions: Array.isArray(j.actions) ? j.actions : [],
+        });
+        }
       setAttachments([]);
     } catch (e: any) {
       setMessages((prev) => [

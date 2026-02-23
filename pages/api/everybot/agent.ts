@@ -1,20 +1,72 @@
 import type { NextApiRequest, NextApiResponse } from "next";
+import OpenAI from "openai";
 import { getUserIdFromRequest } from "../../../lib/session";
 import { getOfficeIdForUserId } from "../../../lib/office";
 
-// TODO: podepnij swój klient OpenAI / agent runtime (u Ciebie gdzieś już jest)
-async function callEverybotAgent(input: {
-  officeId: string;
-  message: string;
-  attachments: Array<{ name: string; mime: string; dataBase64: string }>;
-}) {
-  // MVP: echo + prosta heurystyka
-  return {
-    reply:
-      `OK. Widzę wiadomość i ${input.attachments.length} załącznik(ów). ` +
-      `Następny krok: zamienię to na filtry i odświeżę mapę/listę.`,
-    suggestedFilters: null as any,
-  };
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+type AgentAction =
+  | { type: "set_filters"; filters: Record<string, any> }
+  | { type: "run_live"; runTs?: string }
+  | { type: "load_neon" }
+  | { type: "refresh_map" }
+  | { type: "geocode"; limit: number }
+  | { type: "open_listing"; url: string };
+
+type AgentResult = {
+  reply: string;
+  actions: AgentAction[];
+};
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+// Minimalna walidacja, żeby model nie wysłał śmieci
+function sanitizeActions(actions: any[]): AgentAction[] {
+  if (!Array.isArray(actions)) return [];
+  const out: AgentAction[] = [];
+
+  for (const a of actions) {
+    const t = a?.type;
+
+    if (t === "set_filters" && a?.filters && typeof a.filters === "object") {
+      out.push({ type: "set_filters", filters: a.filters });
+      continue;
+    }
+
+    if (t === "run_live") {
+      out.push({
+        type: "run_live",
+        runTs: typeof a?.runTs === "string" && a.runTs.trim() ? a.runTs.trim() : undefined,
+      });
+      continue;
+    }
+
+    if (t === "load_neon") {
+      out.push({ type: "load_neon" });
+      continue;
+    }
+
+    if (t === "refresh_map") {
+      out.push({ type: "refresh_map" });
+      continue;
+    }
+
+    if (t === "geocode") {
+      const limit = Number(a?.limit);
+      if (Number.isFinite(limit) && limit > 0 && limit <= 200) out.push({ type: "geocode", limit });
+      continue;
+    }
+
+    if (t === "open_listing") {
+      const url = String(a?.url ?? "").trim();
+      if (/^https?:\/\//i.test(url)) out.push({ type: "open_listing", url });
+      continue;
+    }
+  }
+
+  return out.slice(0, 6);
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -22,6 +74,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (req.method !== "POST") {
       res.setHeader("Allow", "POST");
       return res.status(405).json({ error: "Method not allowed" });
+    }
+
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({ error: "MISSING_OPENAI_API_KEY" });
     }
 
     const userId = getUserIdFromRequest(req);
@@ -38,20 +94,112 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: "EMPTY" });
     }
 
-    // limit bezpieczeństwa
-    const safeAttachments = attachments.slice(0, 5).map((a: any) => ({
-      name: String(a.name ?? "file"),
-      mime: String(a.mime ?? "application/octet-stream"),
-      dataBase64: String(a.dataBase64 ?? ""),
+    // MVP: nie “czytamy” jeszcze plików, tylko informujemy że są (meta).
+    const attachmentMeta = attachments.slice(0, 5).map((a: any) => ({
+      name: String(a?.name ?? "file"),
+      mime: String(a?.mime ?? "application/octet-stream"),
+      sizeHint: typeof a?.dataBase64 === "string" ? a.dataBase64.length : 0,
     }));
 
-    const out = await callEverybotAgent({
-      officeId,
-      message,
-      attachments: safeAttachments,
+    const schema = {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        reply: { type: "string" },
+        actions: {
+          type: "array",
+          maxItems: 6,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              type: {
+                type: "string",
+                enum: ["set_filters", "run_live", "load_neon", "refresh_map", "geocode", "open_listing"],
+              },
+              filters: { type: "object" },
+              runTs: { type: "string" },
+              limit: { type: "number" },
+              url: { type: "string" },
+            },
+            required: ["type"],
+          },
+        },
+      },
+      required: ["reply", "actions"],
+    } as const;
+
+    const model = String(process.env.OPENAI_MODEL || "gpt-4.1-mini");
+
+    const prompt = `
+Jesteś agentem sterującym EveryBOT w aplikacji CRM nieruchomości.
+Twoim zadaniem jest zamienić wiadomość użytkownika na plan akcji dla UI.
+
+Zasady:
+- Jeśli użytkownik mówi "szukaj"/"pokaż"/"znajdź" -> ustaw filtry (set_filters) i uruchom run_live.
+- Jeśli użytkownik mówi "odśwież" -> load_neon + refresh_map.
+- Jeśli użytkownik mówi "brak pinezek"/"brak punktów" -> geocode limit=50 + refresh_map.
+- Jeśli użytkownik podaje link do ogłoszenia -> open_listing(url).
+- Filtry ustawiaj możliwie precyzyjnie (city/district/voivodeship/minPrice/maxPrice/minArea/maxArea/rooms/propertyType/transactionType).
+- Nie zgaduj: jeśli brakuje lokalizacji albo typu, zapytaj w reply, ale nadal możesz ustawić to co pewne.
+`.trim();
+
+    const userText =
+      (message ? message : "(brak tekstu — tylko załączniki)") +
+      (attachmentMeta.length
+        ? `\n\nZałączniki(meta): ${JSON.stringify(attachmentMeta).slice(0, 1500)}`
+        : "");
+
+    const r = await openai.responses.create({
+      model,
+      input: [
+        {
+          role: "system",
+          content: `${prompt}\nofficeId=${officeId}`,
+        },
+        {
+          role: "user",
+          content: userText,
+        },
+      ],
+      text: {
+        format: {
+          type: "json_schema",
+          name: "EverybotAgentResult",
+          schema,
+        },
+      },
     });
 
-    return res.status(200).json({ ok: true, ...out });
+    const rawText = r.output_text ?? "";
+    let parsed: AgentResult | null = null;
+
+    try {
+      parsed = rawText ? (JSON.parse(rawText) as AgentResult) : null;
+    } catch {
+      parsed = null;
+    }
+
+    if (!parsed || typeof parsed.reply !== "string") {
+      const fallback: AgentResult = {
+        reply: "Nie mogę jeszcze wygenerować planu akcji. Napisz: miasto + typ (dom/mieszkanie/działka) + budżet.",
+        actions: [],
+      };
+      return res.status(200).json({ ok: true, ...fallback });
+    }
+
+    const actions = sanitizeActions(parsed.actions);
+
+    // domyślny runTs jeśli agent chce run_live
+    for (const a of actions) {
+      if (a.type === "run_live" && !a.runTs) (a as any).runTs = nowIso();
+    }
+
+    return res.status(200).json({
+      ok: true,
+      reply: parsed.reply,
+      actions,
+    });
   } catch (e: any) {
     console.error("EVERYBOT_AGENT_ERROR", e);
     return res.status(400).json({ error: e?.message ?? "Bad request" });
