@@ -261,10 +261,15 @@ Zasady:
     }
 
     const actions = sanitizeActions(parsed.actions);
-
+       
     for (const a of actions) {
-      if (a.type === "run_live" && !a.runTs) (a as any).runTs = nowIso();
-    }
+        if (
+            a.type === "run_live" &&
+            (!a.runTs || isNaN(Date.parse(a.runTs)))
+        ) {
+            (a as any).runTs = nowIso();
+        }
+        }
 
     return res.status(200).json({
       ok: true,
