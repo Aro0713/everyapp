@@ -161,7 +161,113 @@ function buildGeoportalLink(lat: number, lng: number) {
   u.searchParams.set("scale", "5000");
   return u.toString();
 }
+async function wmsGetFeatureInfoHtml(typeNames: string[], bbox: { minx: number; miny: number; maxx: number; maxy: number }) {
+  // WMS 1.3.0 + CRS:84 => axis order: lon,lat (stabilne)
+  const u = new URL(WFS_BASE);
 
+  u.searchParams.set("SERVICE", "WMS");
+  u.searchParams.set("REQUEST", "GetFeatureInfo");
+  u.searchParams.set("VERSION", "1.3.0");
+
+  const layers = typeNames.join(",");
+  u.searchParams.set("LAYERS", layers);
+  u.searchParams.set("QUERY_LAYERS", layers);
+
+  u.searchParams.set("CRS", "CRS:84");
+  u.searchParams.set("BBOX", `${bbox.minx},${bbox.miny},${bbox.maxx},${bbox.maxy}`);
+
+  // mała siatka, punkt w środku
+  const W = 101;
+  const H = 101;
+  u.searchParams.set("WIDTH", String(W));
+  u.searchParams.set("HEIGHT", String(H));
+  u.searchParams.set("I", String(Math.floor(W / 2)));
+  u.searchParams.set("J", String(Math.floor(H / 2)));
+
+  u.searchParams.set("INFO_FORMAT", "text/html");
+  u.searchParams.set("FORMAT", "image/png");
+  u.searchParams.set("STYLES", "");
+
+  const url = u.toString();
+
+  const r = await fetch(url, {
+    headers: {
+      accept: "text/html, application/xhtml+xml;q=0.9, */*;q=0.8",
+      "user-agent": "EveryAPP/EveryBOT RCN client",
+    },
+  });
+
+  const html = await r.text().catch(() => "");
+  const contentType = r.headers.get("content-type") ?? "";
+  console.log("RCN_WMS_RESP", { status: r.status, contentType });
+
+  if (!r.ok) {
+    console.log("RCN_WMS_FAIL", { status: r.status, url: url.slice(0, 400), body: html.slice(0, 200) });
+    return null;
+  }
+
+  // jeśli to nie wygląda na HTML z RCN – traktuj jako brak danych
+  const head = html.slice(0, 200).toLowerCase();
+  if (!head.includes("<html") && !head.includes("<body")) {
+    console.log("RCN_WMS_NOT_HTML", { sample: html.slice(0, 200) });
+    return null;
+  }
+
+  return html;
+}
+
+function parseRcnHtml(html: string, typeNameHint: string) {
+  if (!html) return null;
+
+  // Uwaga: w HTML są wielokrotne "Cena brutto". Bierzemy pierwszą sensowną.
+  const getFirstValueAfterLabel = (label: string): string | null => {
+    const re = new RegExp(
+      `<span\\s+class="list-item-value">\\s*${label}\\s*:<\\/span>\\s*([^<]+)<`,
+      "i"
+    );
+    const m = html.match(re);
+    return m?.[1]?.trim() ?? null;
+  };
+
+  const parseMoneyPL = (v: string | null): number | null => {
+    if (!v) return null;
+    const s = v.replace(/\u00A0/g, " ").trim();
+
+    // obsługa: 244 470 / 244.470,00 / 244470,00 / 244470
+    const normalized = s.includes(",")
+      ? s.replace(/\./g, "").replace(/\s/g, "").replace(",", ".").replace(/[^\d.]/g, "")
+      : s.replace(/\s/g, "").replace(/[^\d]/g, "");
+
+    const n = Number(normalized);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+
+  // cena: preferuj "Dane transakcji" (ale w HTML nie mamy sekcji — label jest ten sam)
+  const price = parseMoneyPL(getFirstValueAfterLabel("Cena brutto"));
+
+  // data dokumentu
+  const dateRaw = getFirstValueAfterLabel("Data");
+  const dateISO = (() => {
+    if (!dateRaw) return null;
+    const iso = dateRaw.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1];
+    return iso ?? null;
+  })();
+
+  // source id: Lokalny ID IIP (najlepszy identyfikator)
+  const sourceId =
+    getFirstValueAfterLabel("Lokalny ID IIP") ??
+    getFirstValueAfterLabel("Oznaczenie transakcji") ??
+    null;
+
+  if (price == null && dateISO == null && !sourceId) return null;
+
+  return {
+    price,
+    dateISO,
+    sourceId,
+    detected: { typeName: typeNameHint, mode: "wms_html" },
+  };
+}
 function extractBestTransactionFromXml(xml: string, typeName: string) {
   if (!xml || typeof xml !== "string") return null;
 
@@ -393,14 +499,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           | null = null;
 
         for (const layer of LAYERS) {
-          const payload = await wfsGetFeatureGeoJson(layer, bbox);
-          if (!payload) continue;
+        const payload = await wfsGetFeatureGeoJson(layer, bbox);
+        if (!payload) continue;
 
-          const pick = extractBestTransactionFromPayload(payload, layer);
-          if (pick && (pick.price != null || pick.dateISO != null)) {
+        const pick = extractBestTransactionFromPayload(payload, layer);
+        if (pick && (pick.price != null || pick.dateISO != null)) {
             best = pick as any;
             break;
-          }
+        }
+        }
+
+        // ✅ Fallback: WMS GetFeatureInfo (HTML) – działa realnie jak w Geoportalu UI
+        if (!best) {
+        const html = await wmsGetFeatureInfoHtml([...LAYERS], bbox);
+        if (html) {
+            // hint: nie wiemy która warstwa trafiła, ale to nie szkodzi
+            const pickHtml = parseRcnHtml(html, "mixed");
+            if (pickHtml && (pickHtml.price != null || pickHtml.dateISO != null || pickHtml.sourceId != null)) {
+            best = pickHtml as any;
+            }
+        }
         }
 
         const link = buildGeoportalLink(r0.lat, r0.lng);
