@@ -117,14 +117,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 type: "string",
                 enum: ["set_filters", "run_live", "load_neon", "refresh_map", "geocode", "open_listing"],
               },
-              filters: {
+            filters: {
                         type: "object",
                         additionalProperties: false,
                         properties: {
                             q: { type: "string" },
-                            source: { type: "string" }, // "all" | "otodom" | ...
-                            transactionType: { type: "string" }, // "" | "sale" | "rent"
-                            propertyType: { type: "string" }, // "house" | "apartment" | "plot" | "commercial" | ""
+                            source: { type: "string" },
+                            transactionType: { type: "string" },
+                            propertyType: { type: "string" },
                             locationText: { type: "string" },
                             voivodeship: { type: "string" },
                             city: { type: "string" },
@@ -135,6 +135,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                             maxArea: { type: "string" },
                             rooms: { type: "string" },
                         },
+                        required: [
+                            "q",
+                            "source",
+                            "transactionType",
+                            "propertyType",
+                            "locationText",
+                            "voivodeship",
+                            "city",
+                            "district",
+                            "minPrice",
+                            "maxPrice",
+                            "minArea",
+                            "maxArea",
+                            "rooms",
+                        ],
                         },
               runTs: { type: "string" },
               limit: { type: "number" },
@@ -160,6 +175,7 @@ Zasady:
 - Jeśli użytkownik podaje link do ogłoszenia -> open_listing(url).
 - Filtry ustawiaj możliwie precyzyjnie (city/district/voivodeship/minPrice/maxPrice/minArea/maxArea/rooms/propertyType/transactionType).
 - Nie zgaduj: jeśli brakuje lokalizacji albo typu, zapytaj w reply, ale nadal możesz ustawić to co pewne.
+- Gdy zwracasz set_filters, MUSISZ zwrócić wszystkie pola filtrów jako stringi (puste jeśli nieznane).
 `.trim();
 
     const userText =
