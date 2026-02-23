@@ -67,9 +67,9 @@ export default function EverybotMap({
 
     const m = new maplibregl.Map({
       container: containerRef.current,
-      style: "https://demotiles.maplibre.org/style.json",
-      center: [19.0, 52.1], // PL
-      zoom: 6,
+      style: `https://api.maptiler.com/maps/basic-v2/style.json?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY}`,
+      center: [19.0, 52.0],
+      zoom: 6.3,
     });
 
     m.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");

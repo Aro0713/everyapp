@@ -117,7 +117,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 type: "string",
                 enum: ["set_filters", "run_live", "load_neon", "refresh_map", "geocode", "open_listing"],
               },
-              filters: { type: "object" },
+              filters: {
+                        type: "object",
+                        additionalProperties: false,
+                        properties: {
+                            q: { type: "string" },
+                            source: { type: "string" }, // "all" | "otodom" | ...
+                            transactionType: { type: "string" }, // "" | "sale" | "rent"
+                            propertyType: { type: "string" }, // "house" | "apartment" | "plot" | "commercial" | ""
+                            locationText: { type: "string" },
+                            voivodeship: { type: "string" },
+                            city: { type: "string" },
+                            district: { type: "string" },
+                            minPrice: { type: "string" },
+                            maxPrice: { type: "string" },
+                            minArea: { type: "string" },
+                            maxArea: { type: "string" },
+                            rooms: { type: "string" },
+                        },
+                        },
               runTs: { type: "string" },
               limit: { type: "number" },
               url: { type: "string" },
