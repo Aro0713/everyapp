@@ -1143,65 +1143,90 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 50, 1), 200);
 
     const body = req.method === "POST" ? (req.body ?? {}) : {};
-    const runTsFromBody = req.method === "POST" ? optString((req.body ?? {}).runTs) : optString(req.query.runTs);
-    const runTsFromFilters = req.method === "POST" ? optString(((req.body ?? {}) as any)?.filters?.runTs) : null;
+
+    const filters = (req.method === "POST"
+      ? (body as any).filters
+      : (req.query as any)
+    ) as any | null;
+
+    const runTsFromBody =
+      req.method === "POST"
+        ? optString((req.body ?? {}).runTs)
+        : optString(req.query.runTs);
+
+    const runTsFromFilters =
+      req.method === "POST"
+        ? optString(((req.body ?? {}) as any)?.filters?.runTs)
+        : optString((req.query as any)?.runTs);
+
     const runTs = runTsFromFilters ?? runTsFromBody ?? new Date().toISOString();
-    const filters = (req.method === "POST" ? (body as any).filters : null) as any | null;
+
     const urlFromGet = req.method === "GET" ? optString(req.query.url) : null;
-    const urlFromPost = req.method === "POST" ? optString(body.url) : null;
+    const urlFromPost = req.method === "POST" ? optString((body as any).url) : null;
+
     const q =
-    req.method === "POST"
-      ? (optString(filters?.q) ?? optString(body.q))
-      : null;
+      req.method === "POST"
+        ? (optString(filters?.q) ?? optString((body as any).q))
+        : optString((req.query as any)?.q);
 
- const sourceParam =
-  req.method === "POST"
-    ? (optString(filters?.source) ?? optString(body.source) ?? "otodom")
-    : "otodom";
+    const sourceParam =
+      req.method === "POST"
+        ? (optString(filters?.source) ?? optString((body as any).source) ?? "otodom")
+        : (optString((req.query as any)?.source) ?? "otodom");
 
-const sourceWanted = String(sourceParam).toLowerCase(); // "otodom" | "olx" | "all"
+    const sourceWanted = String(sourceParam).toLowerCase(); // "otodom" | "olx" | "all"
 
-// ✅ obsługujemy też "all" (UI ma everybotSourceAll)
-if (sourceWanted !== "otodom" && sourceWanted !== "olx" && sourceWanted !== "all") {
-  return res.status(400).json({ error: `UNSUPPORTED_SOURCE ${sourceWanted}` });
-}
+    // ✅ obsługujemy też "all" (UI ma everybotSourceAll)
+    if (sourceWanted !== "otodom" && sourceWanted !== "olx" && sourceWanted !== "all") {
+      return res.status(400).json({ error: `UNSUPPORTED_SOURCE ${sourceWanted}` });
+    }
 
-// ✅ lista źródeł do harvestowania w tym wywołaniu
-const harvestSources: Array<"otodom" | "olx"> =
-  sourceWanted === "all" ? ["otodom","olx"] : [sourceWanted];
+    // ✅ lista źródeł do harvestowania w tym wywołaniu
+    const harvestSources: Array<"otodom" | "olx"> =
+      sourceWanted === "all" ? ["otodom","olx"] : [sourceWanted];
 
-  const cursor =
-  req.method === "POST" ? optString(body.cursor) : optString(req.query.cursor);
+      const cursor =
+      req.method === "POST" ? optString(body.cursor) : optString(req.query.cursor);
 
-const cityForPortal =
-  req.method === "POST" ? (optString(filters?.city) ?? null) : null;
 
-// ✅ baseUrl budujemy PER-ŹRÓDŁO w pętli po harvestSources
-function buildBaseUrlForSource(src: "otodom" | "olx") {
-  return (
-    urlFromPost ||
-    urlFromGet ||
-    (q
-      ? (src === "olx"
-          ? buildOlxSearchUrl(q, optString(filters?.city) ?? null, optString(filters?.district) ?? null)
+    // ✅ baseUrl budujemy PER-ŹRÓDŁO w pętli po harvestSources
+    function buildBaseUrlForSource(src: "otodom" | "olx") {
+      return (
+        urlFromPost ||
+        urlFromGet ||
+        (q
+          ? (src === "olx"
+              ? buildOlxSearchUrl(q, optString(filters?.city) ?? null, optString(filters?.district) ?? null)
+            : buildOtodomSearchUrl(
+              q,
+              optString(filters?.voivodeship) ?? null,
+              (optString(filters?.transactionType) as any) ?? null,
+              optString(filters?.propertyType) ?? null,
+              optNumber(filters?.minPrice),
+              optNumber(filters?.maxPrice),
+              optNumber(filters?.minArea),
+              optNumber(filters?.maxArea),
+              optNumber(filters?.rooms)
+            )
+
+            )
+          : (src === "olx"
+        ? buildOlxSearchUrl("", optString(filters?.city) ?? null, optString(filters?.district) ?? null)
         : buildOtodomSearchUrl(
-          q,
-          optString(filters?.voivodeship) ?? null,
-          (optString(filters?.transactionType) as any) ?? null,
-          optString(filters?.propertyType) ?? null,
-          optNumber(filters?.minPrice),
-          optNumber(filters?.maxPrice),
-          optNumber(filters?.minArea),
-          optNumber(filters?.maxArea),
-          optNumber(filters?.rooms)
-        )
-
-        )
-      : (src === "olx"
-          ? buildOlxSearchUrl("")
-          : buildOtodomSearchUrl("", cityForPortal)))
-  );
-}
+            // ✅ jeśli q puste, użyj miasta/dzielnicy jako frazy
+            [optString(filters?.city), optString(filters?.district)].filter(Boolean).join(" ").trim(),
+            optString(filters?.voivodeship) ?? null,
+            (optString(filters?.transactionType) as any) ?? null,
+            optString(filters?.propertyType) ?? null,
+            optNumber(filters?.minPrice),
+            optNumber(filters?.maxPrice),
+            optNumber(filters?.minArea),
+            optNumber(filters?.maxArea),
+            optNumber(filters?.rooms)
+          )
+      )
+      ));
+    }
 
 // NOTE: Nie logujemy i nie wykrywamy source przed pętlą.
 // Robimy to wyłącznie w pętli, żeby nie dublować logów dla page=1.

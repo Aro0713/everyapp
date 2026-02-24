@@ -49,6 +49,7 @@ type IncomingFilters = {
   transactionType?: unknown;
   propertyType?: unknown;
   locationText?: unknown;
+  voivodeship?: unknown; // ✅ DODAJ
   city?: unknown;
   district?: unknown;
   minPrice?: unknown;
