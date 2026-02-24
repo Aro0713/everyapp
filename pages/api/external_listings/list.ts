@@ -122,6 +122,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const includeInactive = optString(req.query.includeInactive) === "1";
     const onlyEnriched = optString(req.query.onlyEnriched) === "1";
     const includePreview = optString(req.query.includePreview) !== "0"; // domyślnie TAK
+    const strict = optString(req.query.strict) === "1";
     const matchedSince = optTimestamptz(req.query.matchedSince);
 
     const where: string[] = [`1=1`];
@@ -226,97 +227,173 @@ if (q && !hasStructuredFilters) {
   }
 }
 
-// 1) TRANSACTION TYPE (STRICT: tylko transaction_type)
+// 1) TRANSACTION TYPE
 if (transactionType) {
   const v = transactionType.toLowerCase().trim();
-  where.push(`(
-    transaction_type IS NULL
-    OR transaction_type = ''
-    OR LOWER(transaction_type) = $${p}
-  )`);
-  params.push(v);
+
+  // UI może wysyłać "kupno" → mapujemy na sale
+  const mapped =
+    v === "kupno" ? "sale" :
+    v === "wynajem" ? "rent" :
+    v;
+
+  where.push(
+    strict
+      ? `(LOWER(COALESCE(transaction_type,'')) = $${p})`
+      : `(
+          transaction_type IS NULL
+          OR transaction_type = ''
+          OR LOWER(transaction_type) = $${p}
+        )`
+  );
+  params.push(mapped);
   p++;
 }
 
-// 2) PROPERTY TYPE (STRICT: tylko property_type)
+// 2) PROPERTY TYPE
 if (propertyType) {
   const v = propertyType.toLowerCase().trim();
-  where.push(`(
-    property_type IS NULL
-    OR property_type = ''
-    OR LOWER(property_type) LIKE $${p}
-  )`);
+  where.push(
+    strict
+      ? `(LOWER(COALESCE(property_type,'')) LIKE $${p})`
+      : `(
+          property_type IS NULL
+          OR property_type = ''
+          OR LOWER(property_type) LIKE $${p}
+        )`
+  );
   params.push(`%${v}%`);
   p++;
 }
 
-// 3) LOCATION TEXT (STRICT: tylko location_text)
+// 3) LOCATION TEXT
 if (locationText) {
   const v = locationText.toLowerCase().trim();
-  where.push(`(
-    location_text IS NULL
-    OR location_text = ''
-    OR LOWER(location_text) LIKE $${p}
-  )`);
+  where.push(
+    strict
+      ? `(LOWER(COALESCE(location_text,'')) LIKE $${p})`
+      : `(
+          location_text IS NULL
+          OR location_text = ''
+          OR LOWER(location_text) LIKE $${p}
+        )`
+  );
   params.push(`%${v}%`);
   p++;
 }
 
-// 4) CITY (STRICT: tylko city)
+// 4) CITY
 if (city) {
   const v = city.toLowerCase().trim();
-  where.push(`(
-    city IS NULL
-    OR city = ''
-    OR LOWER(city) LIKE $${p}
-  )`);
+  where.push(
+    strict
+      ? `(LOWER(COALESCE(city,'')) LIKE $${p})`
+      : `(
+          city IS NULL
+          OR city = ''
+          OR LOWER(city) LIKE $${p}
+        )`
+  );
   params.push(`%${v}%`);
   p++;
 }
 
-// 5) DISTRICT (STRICT: tylko district)
+// 5) DISTRICT
 if (district) {
   const v = district.toLowerCase().trim();
-  where.push(`(
-    district IS NULL
-    OR district = ''
-    OR LOWER(district) LIKE $${p}
-  )`);
+  where.push(
+    strict
+      ? `(LOWER(COALESCE(district,'')) LIKE $${p})`
+      : `(
+          district IS NULL
+          OR district = ''
+          OR LOWER(district) LIKE $${p}
+        )`
+  );
   params.push(`%${v}%`);
   p++;
 }
 
-// 6) STREET (STRICT: tylko street)
+// 6) STREET
 if (street) {
   const v = street.toLowerCase().trim();
-  where.push(`(
-    street IS NULL
-    OR street = ''
-    OR LOWER(street) LIKE $${p}
-  )`);
+  where.push(
+    strict
+      ? `(LOWER(COALESCE(street,'')) LIKE $${p})`
+      : `(
+          street IS NULL
+          OR street = ''
+          OR LOWER(street) LIKE $${p}
+        )`
+  );
   params.push(`%${v}%`);
   p++;
 }
 
-// 7) VOIVODESHIP (STRICT: tylko voivodeship)
+// 7) VOIVODESHIP
 if (voivodeship) {
   const v = voivodeship.toLowerCase().trim();
-  where.push(`(
-    voivodeship IS NULL
-    OR voivodeship = ''
-    OR LOWER(voivodeship) LIKE $${p}
-  )`);
+  where.push(
+    strict
+      ? `(LOWER(COALESCE(voivodeship,'')) LIKE $${p})`
+      : `(
+          voivodeship IS NULL
+          OR voivodeship = ''
+          OR LOWER(voivodeship) LIKE $${p}
+        )`
+  );
   params.push(`%${v}%`);
   p++;
 }
 
-// 8) NUMERIC FILTERS (NULL-pass-through, szybkie)
+// 8) NUMERIC FILTERS
 if (minPrice != null) {
-  where.push(`(
-    price_amount IS NULL
-    OR price_amount >= $${p}
-  )`);
+  where.push(
+    strict
+      ? `(price_amount >= $${p})`
+      : `(price_amount IS NULL OR price_amount >= $${p})`
+  );
   params.push(minPrice);
+  p++;
+}
+
+if (maxPrice != null) {
+  where.push(
+    strict
+      ? `(price_amount <= $${p})`
+      : `(price_amount IS NULL OR price_amount <= $${p})`
+  );
+  params.push(maxPrice);
+  p++;
+}
+
+if (minArea != null) {
+  where.push(
+    strict
+      ? `(area_m2 >= $${p})`
+      : `(area_m2 IS NULL OR area_m2 >= $${p})`
+  );
+  params.push(minArea);
+  p++;
+}
+
+if (maxArea != null) {
+  where.push(
+    strict
+      ? `(area_m2 <= $${p})`
+      : `(area_m2 IS NULL OR area_m2 <= $${p})`
+  );
+  params.push(maxArea);
+  p++;
+}
+
+if (rooms != null) {
+  where.push(
+    strict
+      ? `(rooms = $${p})`
+      : `(rooms IS NULL OR rooms = $${p})`
+  );
+  params.push(rooms);
   p++;
 }
 

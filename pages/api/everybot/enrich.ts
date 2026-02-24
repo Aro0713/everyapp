@@ -87,23 +87,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ORDER BY updated_at DESC
           LIMIT 1
         `
-          : `
-        SELECT id, office_id, source, source_url, source_status
-        FROM external_listings
-        WHERE office_id = $1
-          AND COALESCE(source_status, 'unknown') <> 'removed'
-          AND (
-            enriched_at IS NULL
-            OR thumb_url IS NULL
-            OR transaction_type IS NULL
-            OR property_type IS NULL
-            OR area_m2 IS NULL
-            OR rooms IS NULL
-            OR city IS NULL
-          )
-        ORDER BY enriched_at NULLS FIRST, last_seen_at DESC NULLS LAST, updated_at DESC
-        LIMIT $2
-      `,
+        : `
+          SELECT id, office_id, source, source_url, source_status
+          FROM external_listings
+          WHERE office_id = $1
+            AND COALESCE(source_status, 'unknown') <> 'removed'
+            AND (
+              enriched_at IS NULL
+              OR thumb_url IS NULL
+              OR transaction_type IS NULL
+              OR property_type IS NULL
+              OR price_amount IS NULL
+              OR area_m2 IS NULL
+              OR rooms IS NULL
+              OR voivodeship IS NULL
+              OR city IS NULL
+              OR location_text IS NULL
+            )
+            AND (last_checked_at IS NULL OR last_checked_at < now() - interval '12 hours')
+          ORDER BY enriched_at NULLS FIRST, last_seen_at DESC NULLS LAST, updated_at DESC
+          LIMIT $2
+        `,
 
       onlyId || onlyUrl ? [officeId, (onlyId ?? onlyUrl)!] : [officeId, limit]
     );
@@ -143,74 +147,76 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const data = await enricher(r.source_url);
 
         // Aktualizuj tylko tym, co przyszło (COALESCE: jeśli null/undefined -> zostaw starą wartość)
-await pool.query(
-  `
-  UPDATE external_listings
-  SET
-    thumb_url        = COALESCE($1, thumb_url),
-    matched_at       = COALESCE($2, matched_at),
+    await pool.query(
+      `
+      UPDATE external_listings
+      SET
+        thumb_url        = COALESCE($1, thumb_url),
+        matched_at       = COALESCE($2, matched_at),
 
-    transaction_type = COALESCE($3, transaction_type),
-    property_type    = COALESCE($4, property_type),
+        transaction_type = COALESCE($3, transaction_type),
+        property_type    = COALESCE($4, property_type),
 
-    price_amount     = COALESCE($5, price_amount),
-    currency         = COALESCE($6, currency),
+        price_amount     = COALESCE($5, price_amount),
+        currency         = COALESCE($6, currency),
 
-    area_m2          = COALESCE($7, area_m2),
-    price_per_m2     = COALESCE($8, price_per_m2),
-    rooms            = COALESCE($9, rooms),
+        area_m2          = COALESCE($7, area_m2),
+        price_per_m2     = COALESCE($8, price_per_m2),
+        rooms            = COALESCE($9, rooms),
 
-    floor            = COALESCE($10, floor),
-    year_built       = COALESCE($11, year_built),
+        floor            = COALESCE($10, floor),
+        year_built       = COALESCE($11, year_built),
 
-    voivodeship      = COALESCE($12, voivodeship),
-    city             = COALESCE($13, city),
-    district         = COALESCE($14, district),
-    street           = COALESCE($15, street),
+        voivodeship      = COALESCE($12, voivodeship),
+        city             = COALESCE($13, city),
+        district         = COALESCE($14, district),
+        street           = COALESCE($15, street),
 
-    owner_phone      = COALESCE($16, owner_phone),
+        owner_phone      = COALESCE($16, owner_phone),
 
-    location_text    = COALESCE($17, location_text),
-    title            = COALESCE($18, title),
-    description      = COALESCE($19, description),
+        location_text    = COALESCE($17, location_text),
+        title            = COALESCE($18, title),
+        description      = COALESCE($19, description),
 
-    source_status    = COALESCE(NULLIF(source_status, ''), 'active'),
-    enriched_at      = now(),
-    updated_at       = now()
-  WHERE office_id = $20 AND id = $21
-`,
-  [
-    data.thumb_url ?? null,
-    data.matched_at ?? null,
+        source_status    = COALESCE(NULLIF($20, ''), COALESCE(NULLIF(source_status, ''), 'active')),
+        last_checked_at  = now(),
+        enriched_at      = now(),
+        updated_at       = now()
+      WHERE office_id = $21 AND id = $22
+    `,
+      [
+        data.thumb_url ?? null,
+        data.matched_at ?? null,
 
-    data.transaction_type ?? null,
-    data.property_type ?? null,
+        data.transaction_type ?? null,
+        data.property_type ?? null,
 
-    data.price_amount ?? null,
-    data.currency ?? null,
+        data.price_amount ?? null,
+        data.currency ?? null,
 
-    data.area_m2 ?? null,
-    data.price_per_m2 ?? null,
-    data.rooms ?? null,
+        data.area_m2 ?? null,
+        data.price_per_m2 ?? null,
+        data.rooms ?? null,
 
-    data.floor ?? null,
-    data.year_built ?? null,
+        data.floor ?? null,
+        data.year_built ?? null,
 
-    data.voivodeship ?? null,
-    data.city ?? null,
-    data.district ?? null,
-    data.street ?? null,
+        data.voivodeship ?? null,
+        data.city ?? null,
+        data.district ?? null,
+        data.street ?? null,
 
-    data.owner_phone ?? null,
+        data.owner_phone ?? null,
 
-    data.location_text ?? null,
-    data.title ?? null,
-    data.description ?? null,
+        data.location_text ?? null,
+        data.title ?? null,
+        data.description ?? null,
 
-    officeId,
-    r.id,
-  ]
-);
+        (data as any).source_status ?? null, // ✅ jeśli enricher zwraca
+        officeId,
+        r.id,
+      ]
+    );
 
         processed += 1;
 
