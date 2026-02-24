@@ -1009,65 +1009,83 @@ async function runRcnBatch() {
         </div>
         <div className="lg:col-span-1">
           <EverybotAgentPanel
-          onAgentResult={async ({ actions }) => {
-            // wykonuj akcje po kolei
-            for (const a of actions ?? []) {
-              if (a?.type === "set_filters" && a.filters && typeof a.filters === "object") {
-                const next = { ...botFilters, ...a.filters };
-                setBotFilters(next);
+            contextFilters={botFilters}
+            onAgentResult={async ({ actions }) => {
+              // wykonuj akcje po kolei
+              for (const a of actions ?? []) {
+                if (a?.type === "set_filters" && a.filters && typeof a.filters === "object") {
+                  const next = { ...botFilters, ...a.filters };
+                  setBotFilters(next);
 
-                // od razu odśwież listę z Neon (bazowe)
-                setBotMatchedSince(null);
-                setBotSearching(false);
-                setBotSearchSeconds(0);
+                  // od razu odśwież listę z Neon (bazowe)
+                  setBotMatchedSince(null);
+                  setBotSearching(false);
+                  setBotSearchSeconds(0);
 
-                const { rows } = await loadEverybot({ filters: next, cursor: null, append: false, matchedSince: null });
-                setHighlightFromRows(rows, 10);
-                await loadMapPins().catch(() => null);
-                continue;
+                  const { rows } = await loadEverybot({
+                    filters: next,
+                    cursor: null,
+                    append: false,
+                    matchedSince: null,
+                  });
+                  setHighlightFromRows(rows, 10);
+                  await loadMapPins().catch(() => null);
+                  continue;
+                }
+
+                if (a?.type === "run_live") {
+                  const runTs = typeof a.runTs === "string" ? a.runTs : new Date().toISOString();
+                  await runLiveHunter(botFilters, runTs);
+
+                  const { rows } = await loadEverybot({
+                    filters: botFilters,
+                    cursor: null,
+                    append: false,
+                    matchedSince: runTs,
+                  });
+                  setHighlightFromRows(rows, 10);
+                  await loadMapPins().catch(() => null);
+                  continue;
+                }
+
+                if (a?.type === "load_neon") {
+                  setBotMatchedSince(null);
+
+                  const { rows } = await loadEverybot({
+                    filters: botFilters,
+                    cursor: null,
+                    append: false,
+                    matchedSince: null,
+                  });
+                  setHighlightFromRows(rows, 10);
+                  await loadMapPins().catch(() => null);
+                  continue;
+                }
+
+                if (a?.type === "refresh_map") {
+                  await loadMapPins().catch(() => null);
+                  continue;
+                }
+
+                if (a?.type === "geocode") {
+                  const limit = Number(a.limit ?? 50);
+                  await fetch("/api/everybot/geocode", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ limit: Number.isFinite(limit) ? limit : 50 }),
+                  });
+                  await refreshEverybotList();
+                  await loadMapPins().catch(() => null);
+                  continue;
+                }
+
+                if (a?.type === "open_listing" && typeof a.url === "string") {
+                  window.open(a.url, "_blank", "noopener,noreferrer");
+                  continue;
+                }
               }
-
-              if (a?.type === "run_live") {
-                const runTs = typeof a.runTs === "string" ? a.runTs : new Date().toISOString();
-                await runLiveHunter(botFilters, runTs);
-                const { rows } = await loadEverybot({ filters: botFilters, cursor: null, append: false, matchedSince: runTs });
-                setHighlightFromRows(rows, 10);
-                await loadMapPins().catch(() => null);
-                continue;
-              }
-
-              if (a?.type === "load_neon") {
-                setBotMatchedSince(null);
-                const { rows } = await loadEverybot({ filters: botFilters, cursor: null, append: false, matchedSince: null });
-                setHighlightFromRows(rows, 10);
-                await loadMapPins().catch(() => null);
-                continue;
-              }
-
-              if (a?.type === "refresh_map") {
-                await loadMapPins().catch(() => null);
-                continue;
-              }
-
-              if (a?.type === "geocode") {
-                const limit = Number(a.limit ?? 50);
-                await fetch("/api/everybot/geocode", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ limit: Number.isFinite(limit) ? limit : 50 }),
-                });
-                await refreshEverybotList();
-                await loadMapPins().catch(() => null);
-                continue;
-              }
-
-              if (a?.type === "open_listing" && typeof a.url === "string") {
-                window.open(a.url, "_blank", "noopener,noreferrer");
-                continue;
-              }
-            }
-          }}
-        />
+            }}
+          />
         </div>
       </div>
 

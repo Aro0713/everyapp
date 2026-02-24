@@ -90,6 +90,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const message = String(body.message ?? "").trim();
     const attachments = Array.isArray(body.attachments) ? body.attachments : [];
 
+    const contextFilters =
+    body.contextFilters && typeof body.contextFilters === "object"
+        ? body.contextFilters
+        : null;
+
+    const history = Array.isArray(body.history)
+    ? body.history
+        .filter((m: any) => (m?.role === "user" || m?.role === "assistant") && typeof m?.text === "string")
+        .slice(-10)
+    : [];
+
     if (!message && attachments.length === 0) {
       return res.status(400).json({ error: "EMPTY" });
     }
@@ -218,7 +229,11 @@ Zasady:
 - Jeśli użytkownik mówi "brak pinezek"/"brak punktów" -> geocode limit=50 + refresh_map.
 - Jeśli użytkownik podaje link do ogłoszenia -> open_listing(url).
 - Filtry ustawiaj możliwie precyzyjnie (city/district/voivodeship/minPrice/maxPrice/minArea/maxArea/rooms/propertyType/transactionType).
-- Nie zgaduj: jeśli brakuje lokalizacji albo typu, zapytaj w reply, ale nadal możesz ustawić to co pewne.
+- Nie pytaj o coś, co już jest w kontekście filtrów lub w historii rozmowy.
+- Jeśli użytkownik podał miasto, nie pytaj o województwo (ustaw je automatycznie, jeśli znasz).
+- Jeśli użytkownik podał "kupno"/"wynajem", nie pytaj ponownie o transakcję.
+- Jeśli użytkownik podał "dom"/"mieszkanie", nie pytaj ponownie o typ.
+- Reply ma być krótki: albo potwierdzenie i start wyszukiwania, albo jedno brakujące pytanie (tylko jedno).
 - Gdy zwracasz set_filters, MUSISZ zwrócić wszystkie pola filtrów jako stringi (puste jeśli nieznane).
 `.trim();
 
@@ -231,9 +246,18 @@ Zasady:
     const r = await openai.responses.create({
       model,
       input: [
-        { role: "system", content: `${prompt}\nofficeId=${officeId}` },
-        { role: "user", content: userText },
-      ],
+  {
+    role: "system",
+    content: `${prompt}
+    officeId=${officeId}
+    Kontekst filtrów: ${contextFilters ? JSON.stringify(contextFilters) : "brak"}`,
+    },
+    ...history.map((m: any) => ({
+        role: m.role,
+        content: m.text,
+    })),
+    { role: "user", content: userText },
+    ],
       text: {
         format: {
           type: "json_schema",

@@ -14,8 +14,10 @@ async function fileToBase64(file: File): Promise<string> {
 
 export default function EverybotAgentPanel({
   onAgentResult,
+  contextFilters,
 }: {
   onAgentResult?: (r: { reply: string; actions: any[] }) => void;
+  contextFilters?: Record<string, any>;
 }) {
   const [messages, setMessages] = useState<Msg[]>([
     { role: "assistant", text: "Napisz, co mam znaleźć. Możesz też dodać plik lub nagrać głosówkę." },
@@ -37,11 +39,15 @@ export default function EverybotAgentPanel({
     setText("");
 
     try {
-      const r = await fetch("/api/everybot/agent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: msg, attachments }),
-      });
+    const history = messages
+    .filter((m) => m.role === "user" || m.role === "assistant")
+    .slice(-10);
+
+    const r = await fetch("/api/everybot/agent", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: msg, attachments, contextFilters, history }),
+    });
       const j = await r.json().catch(() => null);
       if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
      setMessages((prev) => [...prev, { role: "assistant", text: String(j?.reply ?? "OK") }]);
