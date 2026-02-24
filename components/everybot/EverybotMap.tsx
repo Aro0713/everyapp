@@ -132,31 +132,43 @@ export default function EverybotMap({
       } else {
         const p = f.properties as any as Pin;
         el.textContent = "●";
-        el.onclick = () => {
+        el.onclick = (ev: any) => {
+        // ✅ nie pozwól mapie “zjeść” klika i zamknąć popup od razu
+        ev?.preventDefault?.();
+        ev?.stopPropagation?.();
+
         if (onSelectId) onSelectId(p.id);
-          const title = (p.title ?? "Ogłoszenie").slice(0, 80);
-          const price = fmtPrice(p.price_amount, p.currency);
-          const html =
+
+        const title = (p.title ?? "Ogłoszenie").slice(0, 80);
+        const price = fmtPrice(p.price_amount, p.currency);
+
+        const btnId = `openListing-${p.id}`;
+        const html =
             `<div style="font-size:12px; line-height:1.2;">
-              <div style="font-weight:700; margin-bottom:6px;">${title}</div>
-              <div style="margin-bottom:8px; color:#333;">${p.source}${price ? " • " + price : ""}</div>
-              <button id="openListing" style="padding:6px 10px; border-radius:10px; border:1px solid #e5e7eb; font-weight:700; cursor:pointer;">
+            <div style="font-weight:700; margin-bottom:6px;">${title}</div>
+            <div style="margin-bottom:8px; color:#333;">${p.source}${price ? " • " + price : ""}</div>
+            <button id="${btnId}" style="padding:6px 10px; border-radius:10px; border:1px solid #e5e7eb; font-weight:700; cursor:pointer;">
                 Otwórz
-              </button>
+            </button>
             </div>`;
 
-          const popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true })
+        const popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true })
             .setLngLat([lng, lat])
             .setHTML(html)
             .addTo(m);
 
-          // delegate click
-          setTimeout(() => {
-            const btn = document.getElementById("openListing");
+        // ✅ przypnij click do buttona W TYM popupie (nie globalnie)
+        setTimeout(() => {
+            const root = popup.getElement();
+            const btn = root?.querySelector(`#${CSS.escape(btnId)}`) as HTMLButtonElement | null;
             if (btn) {
-              btn.onclick = () => window.open(p.source_url, "_blank", "noopener,noreferrer");
+            btn.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                window.open(p.source_url, "_blank", "noopener,noreferrer");
+            };
             }
-          }, 0);
+        }, 0);
         };
       }
 
