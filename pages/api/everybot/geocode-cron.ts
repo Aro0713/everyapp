@@ -20,7 +20,10 @@ function getStableBaseUrl(req: NextApiRequest) {
   return getBaseUrl(req);
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
   try {
     if (req.method !== "POST" && req.method !== "GET") {
       res.setHeader("Allow", "GET, POST");
@@ -32,32 +35,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(500).json({ error: "MISSING_CRON_SECRET" });
     }
 
-    // ✅ Vercel Cron przechodzi po UA (bez tokena)
+    // ✅ Autoryzacja przez UA (Vercel Cron)
     const ua = String(req.headers["user-agent"] || "").toLowerCase();
-    const okCronUa = ua.includes("vercel-cron") || ua.includes("vercel cron");
+    const okCronUa = ua.includes("vercel-cron");
 
-    // ✅ Token działa jako fallback
+    // ✅ Fallback token przez query lub header
     const tokenHeaderRaw = req.headers["x-cron-token"];
-    const tokenHeader = (Array.isArray(tokenHeaderRaw) ? tokenHeaderRaw[0] : String(tokenHeaderRaw || "")).trim();
-    const tokenQuery = (typeof req.query.token === "string" ? req.query.token : "").trim();
+    const tokenHeader = Array.isArray(tokenHeaderRaw)
+      ? tokenHeaderRaw[0]
+      : String(tokenHeaderRaw || "").trim();
+
+    const tokenQuery =
+      typeof req.query.token === "string"
+        ? req.query.token.trim()
+        : "";
 
     const okToken =
       (!!tokenHeader && tokenHeader === secret) ||
       (!!tokenQuery && tokenQuery === secret);
 
-    // ✅ Secret header (spójne z innymi cronami)
-    const cronSecretRaw = req.headers["x-cron-secret"];
-    const cronSecret = (Array.isArray(cronSecretRaw) ? cronSecretRaw[0] : String(cronSecretRaw || "")).trim();
-    const okSecretHeader = !!cronSecret && cronSecret === secret;
-
-    if (!okToken && !okSecretHeader) {
+    if (!okCronUa && !okToken) {
       return res.status(401).json({
         error: "UNAUTHORIZED_CRON",
         debug: {
           ua,
           hasTokenHeader: !!tokenHeader,
           hasTokenQuery: !!tokenQuery,
-          hasSecretHeader: !!cronSecret,
           hasSecretEnv: !!secret,
         },
       });
