@@ -29,11 +29,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const officeId = await getOfficeIdForUserId(userId);
+    if (!officeId) {
+      return res.status(400).json({ error: "MISSING_OFFICE_ID" });
+    }
 
-    const limit = Math.min(
-      Math.max(optNumber(req.query.limit) ?? 50, 1),
-      200
-    );
+    const limitRaw = optNumber(req.query.limit) ?? 50;
+    const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 50, 1), 200);
 
     const { rows } = await pool.query(
       `

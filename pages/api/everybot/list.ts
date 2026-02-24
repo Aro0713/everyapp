@@ -13,6 +13,23 @@ function optNumber(v: unknown): number | null {
   return null;
 }
 
+function optTimestamptz(v: unknown): string | null {
+  const s = optString(v);
+  if (!s) return null;
+
+  // ⛔️ najczęstszy syf z UI / query
+  if (s === "0" || s.toLowerCase() === "null" || s.toLowerCase() === "undefined") return null;
+
+  // ✅ akceptujemy tylko wartości parsowalne przez Date.parse
+  const ms = Date.parse(s);
+  if (!Number.isFinite(ms)) return null;
+
+  // ✅ sanity check (żeby nie filtrować po 1970)
+  if (ms < 946684800000) return null; // 2000-01-01
+
+  return new Date(ms).toISOString();
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     // ✅ POST zamiast GET → brak ETag/304 na Vercel dla list endpointu
@@ -25,12 +42,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!userId) return res.status(401).json({ error: "UNAUTHORIZED" });
 
     const officeId = await getOfficeIdForUserId(userId);
+    if (!officeId) return res.status(400).json({ error: "MISSING_OFFICE_ID" });
 
     const body = req.body ?? {};
     const q = optString(body.q);
     const source = optString(body.source);
     const status = optString(body.status);
-    const matchedSince = optString(body.matchedSince);
+
+    // ✅ najważniejsze: nie przepuszczamy "0" ani śmieci jako timestamptz
+    const matchedSince = optTimestamptz(body.matchedSince);
+
     const limitRaw = optNumber(body.limit) ?? 50;
     const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 50;
 
@@ -53,7 +74,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       `,
       [officeId, source, status, matchedSince, q, limit]
     );
-
 
     return res.status(200).json({ rows });
   } catch (e: any) {
