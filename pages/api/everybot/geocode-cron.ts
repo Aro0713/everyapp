@@ -50,7 +50,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const cronSecret = (Array.isArray(cronSecretRaw) ? cronSecretRaw[0] : String(cronSecretRaw || "")).trim();
     const okSecretHeader = !!cronSecret && cronSecret === secret;
 
-    if (!okCronUa && !okToken && !okSecretHeader) {
+    if (!okToken && !okSecretHeader) {
       return res.status(401).json({
         error: "UNAUTHORIZED_CRON",
         debug: {
