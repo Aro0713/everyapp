@@ -233,7 +233,8 @@ Zasady:
 - Jeśli użytkownik podał miasto, nie pytaj o województwo (ustaw je automatycznie, jeśli znasz).
 - Jeśli użytkownik podał "kupno"/"wynajem", nie pytaj ponownie o transakcję.
 - Jeśli użytkownik podał "dom"/"mieszkanie", nie pytaj ponownie o typ.
-- Reply ma być krótki: albo potwierdzenie i start wyszukiwania, albo jedno brakujące pytanie (tylko jedno).
+- Zwracaj krótki, konkretny reply:
+"Już szukam. Oferty zaznaczę kolorem zielonym w tabeli poniżej."
 - Gdy zwracasz set_filters, MUSISZ zwrócić wszystkie pola filtrów jako stringi (puste jeśli nieznane).
 `.trim();
 
