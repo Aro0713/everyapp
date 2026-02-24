@@ -74,6 +74,7 @@ function fmtPrice(v: ExternalRow["price_amount"], currency?: string | null) {
   if (!Number.isFinite(n)) return String(v);
   return `${n.toLocaleString()} ${currency ?? ""}`.trim();
 }
+
 function normalizeVoivodeshipInput(v?: string | null): string | null {
   const s = (v ?? "").trim();
   if (!s) return null;
@@ -135,7 +136,8 @@ const [botFilters, setBotFilters] = useState<EverybotFilters>({
   const [mapPins, setMapPins] = useState<any[]>([]);
   const [botMatchedSince, setBotMatchedSince] = useState<string | null>(null);
   const [selectedExternalId, setSelectedExternalId] = useState<string | null>(null);
-  const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
+  const [highlightIds, setHighlightIds] = useState<string[]>([]);
+  const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const [mapViewport, setMapViewport] = useState<{
     minLat: number;
@@ -195,7 +197,10 @@ const mapFetchTimerRef = useRef<number | null>(null);
       setSavingId(null);
     }
   }
-
+function setHighlightFromRows(rows: ExternalRow[], limit: number) {
+  const n = Math.min(Math.max(Number(limit) || 0, 0), 10);
+  setHighlightIds(n ? rows.slice(0, n).map((r) => r.id) : []);
+}
 async function loadEverybot(opts?: {
   filters?: typeof botFilters;
   cursor?: { updated_at: string; id: string } | null;
@@ -814,39 +819,156 @@ async function runRcnBatch() {
                     <p className="text-sm text-gray-500">{t(lang, "offersEmpty" as any)}</p>
                   </div>
                 ) : (
-                  <div
-                      ref={officeTableRef}
-                      className="w-full overflow-x-auto max-h-[70vh] overflow-y-auto"
-                    >
-                    <table className="w-full text-left text-sm">
-                      <thead className="text-xs text-gray-500">
-                        <tr>
-                          <th className="py-3 pr-4">{t(lang, "offersColType" as any)}</th>
-                          <th className="py-3 pr-4">{t(lang, "offersColTxn" as any)}</th>
-                          <th className="py-3 pr-4">{t(lang, "offersColParties" as any)}</th>
-                          <th className="py-3 pr-4">{t(lang, "offersColOwner" as any)}</th>
-                          <th className="py-3 pr-4">{t(lang, "offersColStatus" as any)}</th>
-                          <th className="py-3 pr-0">{t(lang, "offersColCreated" as any)}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rows.map((r) => (
-                          <tr key={r.listing_id} className="border-t border-gray-100">
-                            <td className="py-4 pr-4 font-semibold text-ew-primary">{r.record_type}</td>
-                            <td className="py-4 pr-4">{r.transaction_type}</td>
-                            <td className="py-4 pr-4">{r.parties_summary ?? "-"}</td>
-                            <td className="py-4 pr-4">{r.case_owner_name ?? "-"}</td>
-                            <td className="py-4 pr-4">
-                              <span className="rounded-full bg-ew-accent/15 px-3 py-1 text-xs font-semibold text-ew-accent">
-                                {r.status}
-                              </span>
-                            </td>
-                            <td className="py-4 pr-0 text-gray-500">{new Date(r.created_at).toLocaleString()}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div ref={everybotTableRef} className="w-full">
+                  <div className="divide-y divide-gray-100">
+                    {botRows.map((r) => {
+                      const selected = selectedExternalId === r.id;
+                      const highlighted = highlightIds.includes(r.id);
+
+                      const title = r.title ?? "-";
+                      const price = fmtPrice(r.price_amount, r.currency);
+
+                      const ppm2 =
+                        r.price_per_m2 != null && Number.isFinite(r.price_per_m2)
+                          ? `${Math.round(r.price_per_m2).toLocaleString()} zł/m²`
+                          : null;
+
+                      const metaLeft = [
+                        r.transaction_type ?? null,
+                        r.property_type ?? null,
+                        r.area_m2 != null ? `${r.area_m2} m²` : null,
+                        r.rooms != null ? `${r.rooms} pokoje` : null,
+                        r.floor ? `${r.floor} piętro` : null,
+                        r.year_built != null ? `${r.year_built}` : null,
+                      ].filter(Boolean) as string[];
+
+                      const locLine =
+                        [r.street, r.district, r.city, r.voivodeship].filter(Boolean).join(", ") ||
+                        (r.location_text ?? "");
+
+                      const matched =
+                        r.matched_at ? new Date(r.matched_at).toLocaleDateString() : null;
+
+                      return (
+                        <div
+                          key={r.id}
+                          ref={(el) => {
+                            rowRefs.current[r.id] = el;
+                          }}
+                          className={clsx(
+                            "p-3 md:p-4",
+                            "transition",
+                            highlighted && "bg-green-50",
+                            selected && "bg-ew-accent/10 ring-1 ring-ew-accent"
+                          )}
+                          onClick={() => setSelectedExternalId(r.id)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") setSelectedExternalId(r.id);
+                          }}
+                        >
+                          <div className="flex gap-3">
+                            {/* thumb */}
+                            <div className="shrink-0">
+                              {r.thumb_url ? (
+                                <img
+                                  src={r.thumb_url}
+                                  alt=""
+                                  className="h-16 w-24 rounded-xl object-cover ring-1 ring-gray-200"
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <div className="h-16 w-24 rounded-xl bg-gray-100 ring-1 ring-gray-200" />
+                              )}
+
+                              <div className="mt-1 flex items-center gap-2 text-[11px] text-gray-500">
+                                <span className="rounded-md bg-gray-100 px-2 py-0.5">{r.source}</span>
+                                {matched ? <span>{matched}</span> : null}
+                              </div>
+                            </div>
+
+                            {/* content */}
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="truncate text-sm font-extrabold text-ew-primary">
+                                    {title}
+                                  </div>
+                                  {locLine ? (
+                                    <div className="truncate text-xs text-gray-600">{locLine}</div>
+                                  ) : null}
+                                </div>
+
+                                <div className="text-right">
+                                  <div className="text-base font-extrabold text-ew-primary">
+                                    {price}
+                                  </div>
+                                  {ppm2 ? <div className="text-xs text-gray-500">{ppm2}</div> : null}
+                                </div>
+                              </div>
+
+                              {/* meta */}
+                              {metaLeft.length ? (
+                                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-700">
+                                  {metaLeft.map((x, i) => (
+                                    <span key={i} className="rounded-md bg-gray-50 px-2 py-1 ring-1 ring-gray-200">
+                                      {x}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : null}
+
+                              {/* bottom row */}
+                              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                                <div className="text-xs text-gray-600">
+                                  {r.owner_phone ? <span className="mr-3">📞 {r.owner_phone}</span> : null}
+
+                                  {r.rcn_last_price != null ? (
+                                    <span className="mr-3">
+                                      🧾 RCN: {Math.round(r.rcn_last_price).toLocaleString()} zł
+                                      {r.rcn_last_date
+                                        ? ` (${new Date(r.rcn_last_date).toLocaleDateString()})`
+                                        : ""}
+                                      {r.rcn_link ? (
+                                        <>
+                                          {" "}
+                                          <a
+                                            href={r.rcn_link}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-ew-accent underline"
+                                            onClick={(e) => e.stopPropagation()}
+                                          >
+                                            źródło
+                                          </a>
+                                        </>
+                                      ) : null}
+                                    </span>
+                                  ) : null}
+                                </div>
+
+                                <div className="flex items-center gap-3">
+                                  {r.source_url ? (
+                                    <a
+                                      href={r.source_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-ew-accent underline text-xs font-semibold"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      {t(lang, "everybotOpen" as any)}
+                                    </a>
+                                  ) : null}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
+                </div>
                 )}
               </div>
 
@@ -899,7 +1021,8 @@ async function runRcnBatch() {
                 setBotSearching(false);
                 setBotSearchSeconds(0);
 
-                await loadEverybot({ filters: next, cursor: null, append: false, matchedSince: null });
+                const { rows } = await loadEverybot({ filters: next, cursor: null, append: false, matchedSince: null });
+                setHighlightFromRows(rows, 10);
                 await loadMapPins().catch(() => null);
                 continue;
               }
@@ -907,14 +1030,16 @@ async function runRcnBatch() {
               if (a?.type === "run_live") {
                 const runTs = typeof a.runTs === "string" ? a.runTs : new Date().toISOString();
                 await runLiveHunter(botFilters, runTs);
-                await loadEverybot({ filters: botFilters, cursor: null, append: false, matchedSince: runTs });
+                const { rows } = await loadEverybot({ filters: botFilters, cursor: null, append: false, matchedSince: runTs });
+                setHighlightFromRows(rows, 10);
                 await loadMapPins().catch(() => null);
                 continue;
               }
 
               if (a?.type === "load_neon") {
                 setBotMatchedSince(null);
-                await loadEverybot({ filters: botFilters, cursor: null, append: false, matchedSince: null });
+                const { rows } = await loadEverybot({ filters: botFilters, cursor: null, append: false, matchedSince: null });
+                setHighlightFromRows(rows, 10);
                 await loadMapPins().catch(() => null);
                 continue;
               }
@@ -1047,102 +1172,152 @@ async function runRcnBatch() {
             </div>
           ) : (
             <>
-              <div
-                ref={everybotTableRef}
-                className="w-full overflow-x-auto touch-pan-x cursor-grab active:cursor-grabbing"
-              >
-                <table className="w-full table-fixed text-left text-sm">
-                  <thead className="text-xs text-gray-500">
-                    <tr>
-                      <th className="px-4 py-3 w-20">{t(lang, "everybotColPhoto" as any)}</th>
-                      <th className="px-4 py-3 w-28">{t(lang, "everybotColActions" as any)}</th>
-                      <th className="px-4 py-3 w-64">{t(lang, "everybotColTitle" as any)}</th>
-                      <th className="px-4 py-3 w-20">{t(lang, "everybotColPortal" as any)}</th>
-                      <th className="px-4 py-3 w-28">{t(lang, "everybotColMatchedAt" as any)}</th>
-                      <th className="px-4 py-3 w-20">{t(lang, "everybotColTransactionType" as any)}</th>
-                      <th className="px-4 py-3 w-28">{t(lang, "everybotColPrice" as any)}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {botRows.map((r) => (
-                         <tr
-                            key={r.id}
-                            ref={(el) => {
-                              rowRefs.current[r.id] = el;
-                            }}
-                            className={clsx(
-                              "border-t border-gray-100",
-                              selectedExternalId === r.id && "bg-ew-accent/10 ring-1 ring-ew-accent"
-                            )}
-                          >
-                        <td className="px-4 py-3 w-20">
+            <div ref={everybotTableRef} className="w-full">
+              <div className="divide-y divide-gray-100">
+                {botRows.map((r) => {
+                  const selected = selectedExternalId === r.id;
+                  const highlighted = highlightIds.includes(r.id);
+
+                  const title = r.title ?? "-";
+                  const price = fmtPrice(r.price_amount, r.currency);
+                  const area = r.area_m2 != null ? `${r.area_m2} m²` : null;
+                  const rooms = r.rooms != null ? `${r.rooms} pokoje` : null;
+                  const floor = r.floor ? `${r.floor} piętro` : null;
+                  const ppm2 = r.price_per_m2 != null ? `${Math.round(r.price_per_m2).toLocaleString()} zł/m²` : null;
+
+                  const locLine = [r.street, r.district, r.city, r.voivodeship].filter(Boolean).join(", ")
+                    || (r.location_text ?? "");
+
+                  return (
+                    <div
+                      key={r.id}
+                      ref={(el) => {
+                        rowRefs.current[r.id] = el;
+                      }}
+                      className={clsx(
+                        "p-3 md:p-4",
+                        highlighted && "bg-green-50",
+                        selected && "bg-ew-accent/10 ring-1 ring-ew-accent"
+                      )}
+                    >
+                      <div className="flex gap-3">
+                        {/* zdjęcie */}
+                        <div className="shrink-0">
                           {r.thumb_url ? (
                             <img
                               src={r.thumb_url}
                               alt=""
-                              className="h-10 w-14 rounded-lg object-cover ring-1 ring-gray-200"
+                              className="h-16 w-24 rounded-xl object-cover ring-1 ring-gray-200"
                               loading="lazy"
                             />
                           ) : (
-                            <div className="h-10 w-14 rounded-lg bg-gray-100 ring-1 ring-gray-200" />
+                            <div className="h-16 w-24 rounded-xl bg-gray-100 ring-1 ring-gray-200" />
                           )}
-                        </td>
+                          <div className="mt-1 text-[11px] text-gray-500">
+                            {r.source}
+                            {r.matched_at ? ` • ${new Date(r.matched_at).toLocaleDateString()}` : ""}
+                          </div>
+                        </div>
 
-                        <td className="px-4 py-3 w-28">
-                          {r.source_url && (
-                            <a
-                              href={r.source_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-ew-accent underline text-xs"
-                            >
-                              {t(lang, "everybotOpen" as any)}
-                            </a>
-                          )}
-                        </td>
+                        {/* treść */}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="truncate font-extrabold text-ew-primary">{title}</div>
+                              {locLine ? (
+                                <div className="truncate text-xs text-gray-600">{locLine}</div>
+                              ) : null}
+                            </div>
 
-                        <td className="px-4 py-3 font-semibold text-ew-primary">
-                          {r.title ?? "-"}
-                        </td>
+                            {/* cena */}
+                            <div className="text-right">
+                              <div className="text-base font-extrabold text-ew-primary">{price}</div>
+                              {ppm2 ? <div className="text-xs text-gray-500">{ppm2}</div> : null}
+                            </div>
+                          </div>
 
-                        <td className="px-4 py-3">{r.source}</td>
-                        <td className="px-4 py-3">
-                          {r.matched_at ? new Date(r.matched_at).toLocaleDateString() : "-"}
-                        </td>
-                        <td className="px-4 py-3">{r.transaction_type ?? "-"}</td>
-                        <td className="px-4 py-3">
-                          {fmtPrice(r.price_amount, r.currency)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                          {/* meta */}
+                          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-700">
+                            {r.transaction_type ? <span>{r.transaction_type}</span> : null}
+                            {r.property_type ? <span>{r.property_type}</span> : null}
+                            {area ? <span>{area}</span> : null}
+                            {rooms ? <span>{rooms}</span> : null}
+                            {floor ? <span>{floor}</span> : null}
+                            {r.year_built ? <span>{r.year_built}</span> : null}
+                          </div>
+
+                          {/* RCN + telefon + akcje */}
+                          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                            <div className="text-xs text-gray-600">
+                              {r.owner_phone ? (
+                                <span className="mr-3">📞 {r.owner_phone}</span>
+                              ) : null}
+
+                              {r.rcn_last_price != null ? (
+                                <span className="mr-3">
+                                  🧾 RCN: {Math.round(r.rcn_last_price).toLocaleString()} zł
+                                  {r.rcn_last_date ? ` (${new Date(r.rcn_last_date).toLocaleDateString()})` : ""}
+                                  {r.rcn_link ? (
+                                    <>
+                                      {" "}
+                                      <a
+                                        href={r.rcn_link}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-ew-accent underline"
+                                      >
+                                        źródło
+                                      </a>
+                                    </>
+                                  ) : null}
+                                </span>
+                              ) : null}
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                              {r.source_url ? (
+                                <a
+                                  href={r.source_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-ew-accent underline text-xs font-semibold"
+                                >
+                                  {t(lang, "everybotOpen" as any)}
+                                </a>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-
-              {botHasMore && (
-                <div className="flex justify-center border-t border-gray-100 p-4">
-                  <button
-                    type="button"
-                    disabled={botLoading}
-                    onClick={() =>
-                      loadEverybot({
-                        filters: botFilters,
-                        cursor: botCursor,
-                        append: true,
-                        matchedSince: botMatchedSince,
-                      })
-                    }
-                    className="rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
-                  >
-                    {t(lang, "everybotLoadMore" as any)}
-                  </button>
-                </div>
+            </div>
+                  {botHasMore && (
+                    <div className="flex justify-center border-t border-gray-100 p-4">
+                      <button
+                        type="button"
+                        disabled={botLoading}
+                        onClick={() =>
+                          loadEverybot({
+                            filters: botFilters,
+                            cursor: botCursor,
+                            append: true,
+                            matchedSince: botMatchedSince,
+                          })
+                        }
+                        className="rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
+                      >
+                        {t(lang, "everybotLoadMore" as any)}
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
-            </>
-          )}
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
         </>
       )}
     </div>

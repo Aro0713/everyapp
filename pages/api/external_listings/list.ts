@@ -72,8 +72,6 @@ function normalizeVoivodeshipInput(v: string | null): string | null {
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
-    
-     console.log("external_listings/list query:", req.query);
 
     if (req.method !== "GET") {
       res.setHeader("Allow", "GET");
@@ -87,6 +85,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const userId = getUserIdFromRequest(req);
     if (!userId) return res.status(401).json({ error: "UNAUTHORIZED" });
     const officeId = await getOfficeIdForUserId(userId);
+    if (!officeId) return res.status(400).json({ error: "MISSING_OFFICE_ID" });
 
     const limitRaw = optNumber(req.query.limit) ?? 50;
     const limit = Math.min(Math.max(limitRaw, 1), 200);
@@ -151,8 +150,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       params.push(status);
     }
 
-    if (onlyEnriched) {
-      where.push(`status = 'enriched'`);
+    if (!includePreview) {
+      where.push(`status <> 'preview'`);
     }
 
       // --- NEW FILTERS FROM SEARCH PANEL ---
@@ -426,7 +425,6 @@ if (rooms != null) {
     params.push(limit);
 
     const { rows } = await pool.query<Row>(sql, params);
-    console.log("external_listings/list returned:", { count: rows.length });
 
     const last = rows.length ? rows[rows.length - 1] : null;
     const nextCursor =

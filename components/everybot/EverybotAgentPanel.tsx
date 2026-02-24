@@ -44,17 +44,14 @@ export default function EverybotAgentPanel({
       });
       const j = await r.json().catch(() => null);
       if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
-      if (j?.reply && onAgentResult) {
-        onAgentResult({ reply: String(j.reply), actions: Array.isArray(j.actions) ? j.actions : [] });
-        }
+     setMessages((prev) => [...prev, { role: "assistant", text: String(j?.reply ?? "OK") }]);
 
-      setMessages((prev) => [...prev, { role: "assistant", text: String(j?.reply ?? "OK") }]);
-      if (j?.reply && onAgentResult) {
-        onAgentResult({
-            reply: String(j.reply),
-            actions: Array.isArray(j.actions) ? j.actions : [],
-        });
-        }
+    if (j?.reply && onAgentResult) {
+    onAgentResult({
+        reply: String(j.reply),
+        actions: Array.isArray(j.actions) ? j.actions : [],
+    });
+    }
       setAttachments([]);
     } catch (e: any) {
       setMessages((prev) => [
