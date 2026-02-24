@@ -58,6 +58,24 @@ function optNumber(v: unknown): number | null {
   if (typeof v === "string" && v.trim() && Number.isFinite(Number(v))) return Number(v);
   return null;
 }
+function isUuid(s: string | null): boolean {
+  return !!s && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
+}
+function optTimestamptz(v: unknown): string | null {
+  const s = optString(v);
+  if (!s) return null;
+
+  // ⛔️ najczęstszy syf z UI / query
+  if (s === "0" || s.toLowerCase() === "null" || s.toLowerCase() === "undefined") return null;
+
+  const ms = Date.parse(s);
+  if (!Number.isFinite(ms)) return null;
+
+  // ✅ sanity (żeby nie filtrować po 1970)
+  if (ms < 946684800000) return null; // 2000-01-01
+
+  return new Date(ms).toISOString();
+}
 function normalizeVoivodeshipInput(v: string | null): string | null {
   const s = (v ?? "").trim();
   if (!s) return null;
@@ -95,7 +113,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const page = pageRaw != null ? Math.min(Math.max(pageRaw, 1), 1000000) : null;
 
     // ✅ cursor (seek pagination): updated_at + id (fallback, gdy nie ma page)
-    const cursorUpdatedAt = optString(req.query.cursorUpdatedAt);
+    const cursorUpdatedAt = optTimestamptz(req.query.cursorUpdatedAt);
     const cursorId = optString(req.query.cursorId);
 
     const q = optString(req.query.q)?.toLowerCase() ?? null;
@@ -104,6 +122,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const includeInactive = optString(req.query.includeInactive) === "1";
     const onlyEnriched = optString(req.query.onlyEnriched) === "1";
     const includePreview = optString(req.query.includePreview) !== "0"; // domyślnie TAK
+    const matchedSince = optTimestamptz(req.query.matchedSince);
 
     const where: string[] = [`1=1`];
     const params: any[] = [];
@@ -116,8 +135,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!includePreview) {
       where.push(`status <> 'preview'`);
     }
-
-    const matchedSince = optString(req.query.matchedSince);
     if (matchedSince) {
       // ✅ nie wycinaj rekordów z NULL matched_at (stare cache)
       where.push(`(
@@ -389,7 +406,7 @@ if (rooms != null) {
     }
 
     // ====== TRYB 2: cursor-based (dotychczasowy) ======
-    if (cursorUpdatedAt && cursorId) {
+    if (cursorUpdatedAt && isUuid(cursorId)) {
       where.push(`(
         updated_at < $${p}::timestamptz
         OR (updated_at = $${p}::timestamptz AND id < $${p + 1}::uuid)
