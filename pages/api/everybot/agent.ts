@@ -153,8 +153,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       properties: {
         reply: { type: "string" },
         actions: {
-          type: "array",
-          maxItems: 6,
+        type: "array",
+        minItems: 1,
+        maxItems: 6,
                 items: {
                 // ✅ anyOf zwykle mniej konfliktowe niż oneOf
                 anyOf: [
@@ -286,7 +287,41 @@ Zasady:
     }
 
     const actions = sanitizeActions(parsed.actions);
-       
+
+    function isSearchIntent(text: string) {
+    const s = (text || "").toLowerCase();
+    return /(szukam|znajdź|znajdz|pokaż|pokaz|wyszukaj|ofert|domu|mieszkania|działk|dzialk)/.test(s);
+    }
+
+    function normalizeFilters(f: any): Record<string, string> {
+    const src = (f && typeof f === "object") ? f : {};
+    const pick = (k: string) => (typeof src[k] === "string" ? src[k] : (src[k] == null ? "" : String(src[k])));
+    return {
+        q: pick("q"),
+        source: pick("source"),
+        transactionType: pick("transactionType"),
+        propertyType: pick("propertyType"),
+        locationText: pick("locationText"),
+        voivodeship: pick("voivodeship"),
+        city: pick("city"),
+        district: pick("district"),
+        minPrice: pick("minPrice"),
+        maxPrice: pick("maxPrice"),
+        minArea: pick("minArea"),
+        maxArea: pick("maxArea"),
+        rooms: pick("rooms"),
+    };
+    }
+
+    // jeśli model oddał pusto, a user ewidentnie “szuka” -> wymuszamy akcje
+    if (actions.length === 0 && isSearchIntent(message)) {
+    const baseFilters = normalizeFilters(contextFilters || {});
+    actions.push(
+        { type: "set_filters", filters: baseFilters },
+        { type: "run_live", runTs: nowIso() }
+    );
+    }
+        
     for (const a of actions) {
         if (
             a.type === "run_live" &&
