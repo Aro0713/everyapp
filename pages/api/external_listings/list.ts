@@ -490,19 +490,18 @@ if (rooms != null) {
       const listParams = [...params, overfetch, offset];
       const { rows } = await pool.query<Row>(sql, listParams);
 
-      const scored = rows
-        .map((r: any) => {
-          const s = scoreRow(r, scoreFilters);
-          return { ...r, match_band: s.band, match_score: s.restScore };
-        })
-        .filter((r: any) => r.match_band !== "none")
-        .sort((a: any, b: any) => {
-          const w = (x: string) => (x === "green" ? 2 : x === "yellow" ? 1 : 0);
-          const dw = w(b.match_band) - w(a.match_band);
-          if (dw !== 0) return dw;
-          return (b.match_score ?? 0) - (a.match_score ?? 0);
-        })
-        .slice(0, limit);
+     const scored = rows
+      .map((r: any) => {
+        const s = scoreRow(r, scoreFilters);
+        return { ...r, match_band: s.band, match_score: s.restScore };
+      })
+      .sort((a: any, b: any) => {
+        const w = (x: string) => (x === "green" ? 2 : x === "yellow" ? 1 : 0);
+        const dw = w(b.match_band) - w(a.match_band);
+        if (dw !== 0) return dw;
+        return (b.match_score ?? 0) - (a.match_score ?? 0);
+      })
+      .slice(0, limit);
 
           return res.status(200).json({
             rows: scored,

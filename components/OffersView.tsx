@@ -503,6 +503,22 @@ useEffect(() => {
 function isHttpUrl(v: unknown): v is string {
   return typeof v === "string" && /^https?:\/\//i.test(v.trim());
 }
+function hasAnyFilters(f: EverybotFilters) {
+  return !!(
+    f.q?.trim() ||
+    f.transactionType?.trim() ||
+    f.propertyType?.trim() ||
+    f.voivodeship?.trim() ||
+    f.city?.trim() ||
+    f.district?.trim() ||
+    f.locationText?.trim() ||
+    f.minPrice?.trim() ||
+    f.maxPrice?.trim() ||
+    f.minArea?.trim() ||
+    f.maxArea?.trim() ||
+    f.rooms?.trim()
+  );
+}
 async function runLiveHunter(
   filtersOverride?: typeof botFilters,
   runTs?: string
@@ -1035,12 +1051,16 @@ async function runRcnBatch() {
                   continue;
                 }
 
-                if (a?.type === "run_live") {
-                  const runTs = typeof a.runTs === "string" ? a.runTs : new Date().toISOString();
-
-                  await runLiveHunter(currentFilters, runTs);
-
-                  // ❌ NIE wywołuj drugi raz loadEverybot — runLiveHunter już to robi
+                  if (a?.type === "run_live") {
+                  // traktuj jak klik "Szukaj" na aktualnych filtrach
+                  await (async () => {
+                    const local = await loadEverybot({ filters: currentFilters, cursor: null, append: false, matchedSince: null });
+                    if (local.rows.length === 0) {
+                      const runTs = typeof a.runTs === "string" ? a.runTs : new Date().toISOString();
+                      await runLiveHunter(currentFilters, runTs);
+                      await loadEverybot({ filters: currentFilters, cursor: null, append: false, matchedSince: null });
+                    }
+                  })();
                   continue;
                 }
 
@@ -1099,61 +1119,62 @@ async function runRcnBatch() {
           filters={botFilters}
           setFilters={(next) => setBotFilters(next)}
           onSearch={async (filters) => {
-            const hasRealFilters =
-              !!filters.q?.trim() ||
-              !!filters.transactionType?.trim() ||
-              !!filters.propertyType?.trim() ||
-              !!filters.voivodeship?.trim() ||
-              !!filters.city?.trim() ||
-              !!filters.district?.trim() ||
-              !!filters.locationText?.trim() ||
-              !!filters.minPrice?.trim() ||
-              !!filters.maxPrice?.trim() ||
-              !!filters.minArea?.trim() ||
-              !!filters.maxArea?.trim() ||
-              !!filters.rooms?.trim();
-
-            if (!hasRealFilters) {
-              setBotSearching(false);
-              setBotSearchSeconds(0);
+            // 0) jeśli brak filtrów -> tylko Neon
+            if (!hasAnyFilters(filters)) {
               setBotMatchedSince(null);
+              setBotCursor(null);
+              setBotHasMore(false);
 
-              await loadEverybot({
+              const { rows } = await loadEverybot({
                 filters,
                 cursor: null,
                 append: false,
                 matchedSince: null,
               });
 
+              setHighlightFromRows(rows, 10);
               await loadMapPins().catch(() => null);
               return;
             }
 
-            const runTs = new Date().toISOString();
-            setBotMatchedSince(runTs);
+            // 1) sprawdź Neon najpierw
+            setBotMatchedSince(null);
+            setBotCursor(null);
+            setBotHasMore(false);
 
-            if (searchIntervalRef.current) {
-              window.clearInterval(searchIntervalRef.current);
-              searchIntervalRef.current = null;
-            }
-
-            searchingRef.current = true;
-            setBotSearching(true);
-            setBotSearchSeconds(0);
-
-            await runLiveHunter(filters, runTs);
-
-            await loadEverybot({
+            const local = await loadEverybot({
               filters,
               cursor: null,
               append: false,
-              matchedSince: runTs,
+              matchedSince: null,
             });
 
+            setHighlightFromRows(local.rows, 10);
             await loadMapPins().catch(() => null);
 
-            searchingRef.current = false;
-            setBotSearching(false);
+            // 2) jeśli NIC nie ma w Neon -> dopiero wtedy run portali
+            if (local.rows.length === 0) {
+              const runTs = new Date().toISOString();
+              setBotMatchedSince(runTs);
+
+              setBotSearching(true);
+              setBotSearchSeconds(0);
+
+              await runLiveHunter(filters, runTs);
+
+              // po runLiveHunter: odśwież Neon (bez matchedSince — bo i tak zapisane)
+              const after = await loadEverybot({
+                filters,
+                cursor: null,
+                append: false,
+                matchedSince: null,
+              });
+
+              setHighlightFromRows(after.rows, 10);
+              await loadMapPins().catch(() => null);
+
+              setBotSearching(false);
+            }
           }}
         />
 
