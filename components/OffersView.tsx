@@ -822,7 +822,7 @@ async function runRcnBatch() {
           {/* CONTENT */}
           {tab === "office" ? (
             <>
-              {/* LISTA OFERT */}
+             {/* LISTA OFERT */}
               <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
                 {loading ? (
                   <div className="text-sm text-gray-500">{t(lang, "offersLoading" as any)}</div>
@@ -835,157 +835,84 @@ async function runRcnBatch() {
                     <p className="text-sm text-gray-500">{t(lang, "offersEmpty" as any)}</p>
                   </div>
                 ) : (
-                  <div ref={everybotTableRef} className="w-full">
-                  <div className="divide-y divide-gray-100">
-                    {botRows.map((r) => {
-                      const selected = selectedExternalId === r.id;
-                      const highlighted = highlightIds.includes(r.id);
+                  <div ref={officeTableRef} className="w-full">
+                    <div className="divide-y divide-gray-100">
+                      {rows.map((r) => {
+                        const title =
+                          r.record_type === "offer"
+                            ? `${t(lang, "offersTabOffice" as any)}`
+                            : `${t(lang, "offersTabOffice" as any)}`;
 
-                      const title = r.title ?? "-";
-                      const price = fmtPrice(r.price_amount, r.currency);
+                        const metaLeft = [
+                          r.record_type === "offer" ? "offer" : "search",
+                          r.transaction_type,
+                          r.status,
+                        ].filter(Boolean) as string[];
 
-                      const ppm2 =
-                        r.price_per_m2 != null && Number.isFinite(r.price_per_m2)
-                          ? `${Math.round(r.price_per_m2).toLocaleString()} zł/m²`
-                          : null;
+                        const created = r.created_at ? new Date(r.created_at).toLocaleDateString() : null;
 
-                      const metaLeft = [
-                        r.transaction_type ?? null,
-                        r.property_type ?? null,
-                        r.area_m2 != null ? `${r.area_m2} m²` : null,
-                        r.rooms != null ? `${r.rooms} pokoje` : null,
-                        r.floor ? `${r.floor} piętro` : null,
-                        r.year_built != null ? `${r.year_built}` : null,
-                      ].filter(Boolean) as string[];
-
-                      const locLine =
-                        [r.street, r.district, r.city, r.voivodeship].filter(Boolean).join(", ") ||
-                        (r.location_text ?? "");
-
-                      const matched =
-                        r.matched_at ? new Date(r.matched_at).toLocaleDateString() : null;
-
-                      return (
-                        <div
-                          key={r.id}
-                          ref={(el) => {
-                            rowRefs.current[r.id] = el;
-                          }}
-                          className={clsx(
-                            "p-3 md:p-4",
-                            "transition",
-                            (r as any).match_band === "green" && "bg-green-50",
-                            (r as any).match_band === "yellow" && "bg-yellow-50",
-                            selected && "bg-ew-accent/10 ring-1 ring-ew-accent"
-                          )}
-                          onClick={() => setSelectedExternalId(r.id)}
-                          role="button"
-                          tabIndex={0}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") setSelectedExternalId(r.id);
-                          }}
-                        >
-                          <div className="flex gap-3">
-                            {/* thumb */}
-                            <div className="shrink-0">
-                              {r.thumb_url ? (
-                                <img
-                                  src={r.thumb_url}
-                                  alt=""
-                                  className="h-16 w-24 rounded-xl object-cover ring-1 ring-gray-200"
-                                  loading="lazy"
-                                />
-                              ) : (
+                        return (
+                          <div
+                            key={r.listing_id}
+                            className={clsx("p-3 md:p-4", "transition")}
+                          >
+                            <div className="flex gap-3">
+                              {/* thumb (placeholder) */}
+                              <div className="shrink-0">
                                 <div className="h-16 w-24 rounded-xl bg-gray-100 ring-1 ring-gray-200" />
-                              )}
 
-                              <div className="mt-1 flex items-center gap-2 text-[11px] text-gray-500">
-                                <span className="rounded-md bg-gray-100 px-2 py-0.5">{r.source}</span>
-                                {matched ? <span>{matched}</span> : null}
-                              </div>
-                            </div>
-
-                            {/* content */}
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                  <div className="truncate text-sm font-extrabold text-ew-primary">
-                                    {title}
-                                  </div>
-                                  {locLine ? (
-                                    <div className="truncate text-xs text-gray-600">{locLine}</div>
-                                  ) : null}
-                                </div>
-
-                                <div className="text-right">
-                                  <div className="text-base font-extrabold text-ew-primary">
-                                    {price}
-                                  </div>
-                                  {ppm2 ? <div className="text-xs text-gray-500">{ppm2}</div> : null}
+                                <div className="mt-1 flex items-center gap-2 text-[11px] text-gray-500">
+                                  <span className="rounded-md bg-gray-100 px-2 py-0.5">
+                                    {r.record_type}
+                                  </span>
+                                  {created ? <span>{created}</span> : null}
                                 </div>
                               </div>
 
-                              {/* meta */}
-                              {metaLeft.length ? (
-                                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-700">
-                                  {metaLeft.map((x, i) => (
-                                    <span key={i} className="rounded-md bg-gray-50 px-2 py-1 ring-1 ring-gray-200">
-                                      {x}
-                                    </span>
-                                  ))}
-                                </div>
-                              ) : null}
+                              {/* content */}
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <div className="truncate text-sm font-extrabold text-ew-primary">
+                                      {title}
+                                    </div>
 
-                              {/* bottom row */}
-                              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                                <div className="text-xs text-gray-600">
-                                  {r.owner_phone ? <span className="mr-3">📞 {r.owner_phone}</span> : null}
+                                    {(r.case_owner_name || r.parties_summary) ? (
+                                      <div className="truncate text-xs text-gray-600">
+                                        {r.case_owner_name ?? "-"}
+                                        {r.parties_summary ? ` • ${r.parties_summary}` : ""}
+                                      </div>
+                                    ) : null}
+                                  </div>
 
-                                  {r.rcn_last_price != null ? (
-                                    <span className="mr-3">
-                                      🧾 RCN: {Math.round(r.rcn_last_price).toLocaleString()} zł
-                                      {r.rcn_last_date
-                                        ? ` (${new Date(r.rcn_last_date).toLocaleDateString()})`
-                                        : ""}
-                                      {r.rcn_link ? (
-                                        <>
-                                          {" "}
-                                          <a
-                                            href={r.rcn_link}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-ew-accent underline"
-                                            onClick={(e) => e.stopPropagation()}
-                                          >
-                                            źródło
-                                          </a>
-                                        </>
-                                      ) : null}
-                                    </span>
-                                  ) : null}
+                                  <div className="text-right">
+                                    <div className="text-base font-extrabold text-ew-primary">
+                                      {r.transaction_type}
+                                    </div>
+                                    <div className="text-xs text-gray-500">{r.status}</div>
+                                  </div>
                                 </div>
 
-                                <div className="flex items-center gap-3">
-                                  {r.source_url ? (
-                                    <a
-                                      href={r.source_url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-ew-accent underline text-xs font-semibold"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      {t(lang, "everybotOpen" as any)}
-                                    </a>
-                                  ) : null}
-                                </div>
+                                {/* meta */}
+                                {metaLeft.length ? (
+                                  <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-700">
+                                    {metaLeft.map((x, i) => (
+                                      <span
+                                        key={i}
+                                        className="rounded-md bg-gray-50 px-2 py-1 ring-1 ring-gray-200"
+                                      >
+                                        {x}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : null}
                               </div>
                             </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
                 )}
               </div>
 
