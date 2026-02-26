@@ -96,8 +96,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       const body = req.body ?? {};
 
-      // ✅ NOWY KONTRAKT: body.filters
-      const filters = (body.filters ?? null) as IncomingFilters | null;
+      // ✅ wspieramy: body.filters (nowy kontrakt) oraz body.* (stary kontrakt)
+      const filters = ((body.filters && typeof body.filters === "object") ? body.filters : body) as IncomingFilters;
 
       // ✅ kompatybilność wstecz: body.q/body.source
       const qFromFilters = filters ? pickString(filters.q, "") : "";

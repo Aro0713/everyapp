@@ -1011,19 +1011,20 @@ async function runRcnBatch() {
           <EverybotAgentPanel
             contextFilters={botFilters}
             onAgentResult={async ({ actions }) => {
-              // wykonuj akcje po kolei
+              // ✅ lokalny “stan filtrów” na potrzeby sekwencji akcji
+              let currentFilters = botFilters;
+
               for (const a of actions ?? []) {
                 if (a?.type === "set_filters" && a.filters && typeof a.filters === "object") {
-                  const next = { ...botFilters, ...a.filters };
-                  setBotFilters(next);
+                  currentFilters = { ...currentFilters, ...a.filters };
+                  setBotFilters(currentFilters);
 
-                  // od razu odśwież listę z Neon (bazowe)
                   setBotMatchedSince(null);
                   setBotSearching(false);
                   setBotSearchSeconds(0);
 
                   const { rows } = await loadEverybot({
-                    filters: next,
+                    filters: currentFilters,
                     cursor: null,
                     append: false,
                     matchedSince: null,
@@ -1035,10 +1036,12 @@ async function runRcnBatch() {
 
                 if (a?.type === "run_live") {
                   const runTs = typeof a.runTs === "string" ? a.runTs : new Date().toISOString();
-                  await runLiveHunter(botFilters, runTs);
+
+                  // ✅ użyj currentFilters, nie botFilters
+                  await runLiveHunter(currentFilters, runTs);
 
                   const { rows } = await loadEverybot({
-                    filters: botFilters,
+                    filters: currentFilters,
                     cursor: null,
                     append: false,
                     matchedSince: runTs,
@@ -1052,7 +1055,7 @@ async function runRcnBatch() {
                   setBotMatchedSince(null);
 
                   const { rows } = await loadEverybot({
-                    filters: botFilters,
+                    filters: currentFilters,
                     cursor: null,
                     append: false,
                     matchedSince: null,

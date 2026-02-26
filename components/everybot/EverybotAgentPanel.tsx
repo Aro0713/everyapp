@@ -39,9 +39,9 @@ export default function EverybotAgentPanel({
     setText("");
 
     try {
-    const history = messages
+    const history = [...messages, ...(msg ? [{ role: "user", text: msg } as Msg] : [])]
     .filter((m) => m.role === "user" || m.role === "assistant")
-    .slice(-10);
+    .slice(-10);;
 
     const r = await fetch("/api/everybot/agent", {
     method: "POST",
