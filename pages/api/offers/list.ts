@@ -1,3 +1,4 @@
+// pages/api/offers/list.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { pool } from "../../../lib/neonDb";
 import { getUserIdFromRequest } from "../../../lib/session";
@@ -61,9 +62,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         case_owner_name,
         parties_summary
       FROM office_listings_overview
-      WHERE office_id = $1
+      WHERE office_id = $1::uuid
       ORDER BY created_at DESC
-      LIMIT $2
+      LIMIT $2::int
       `,
       [officeId, limit]
     );
@@ -74,10 +75,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       created_at:
         typeof r.created_at === "string"
           ? r.created_at
-          : new Date(r.created_at).toISOString(),
+          : new Date(r.created_at as any).toISOString(),
     }));
 
-    return res.status(200).json({ rows: safeRows });
+    // ✅ DEBUG META (tymczasowo) – zobaczysz czy filtr trafia w office_id
+    return res.status(200).json({
+      rows: safeRows,
+      meta: {
+        officeId,
+        limit,
+        count: safeRows.length,
+      },
+    });
   } catch (e: any) {
     if (e?.message === "NO_OFFICE_MEMBERSHIP") {
       return res.status(403).json({ error: "NO_OFFICE_MEMBERSHIP" });
