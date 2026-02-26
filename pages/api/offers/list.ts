@@ -9,17 +9,30 @@ function optNumber(v: unknown): number | null {
   return null;
 }
 
+type ListingRow = {
+  listing_id: string;
+  office_id: string;
+  record_type: string;
+  transaction_type: string;
+  status: string;
+  created_at: string;
+  case_owner_name: string | null;
+  parties_summary: string | null;
+};
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
-    // 🔒 OffersView używa GET → wspieramy tylko GET
+    // 🔒 tylko GET
     if (req.method !== "GET") {
       res.setHeader("Allow", "GET");
       return res.status(405).json({ error: "Method not allowed" });
     }
 
-    // 🔒 brak cache (Vercel)
+    // 🔒 twarde wyłączenie cache (Vercel + przeglądarka)
     res.removeHeader("ETag");
-    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
     res.setHeader("CDN-Cache-Control", "no-store");
     res.setHeader("Vercel-CDN-Cache-Control", "no-store");
 
@@ -34,9 +47,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const limitRaw = optNumber(req.query.limit) ?? 50;
-    const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 50, 1), 200);
+    const limit = Math.min(Math.max(limitRaw ?? 50, 1), 200);
 
-    const { rows } = await pool.query(
+    const { rows } = await pool.query<ListingRow>(
       `
       SELECT
         listing_id::text,
@@ -55,7 +68,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       [officeId, limit]
     );
 
-    return res.status(200).json({ rows });
+    // 🔒 serializacja daty (żeby frontend nie dostał Date object)
+    const safeRows: ListingRow[] = rows.map((r) => ({
+      ...r,
+      created_at:
+        typeof r.created_at === "string"
+          ? r.created_at
+          : new Date(r.created_at).toISOString(),
+    }));
+
+    return res.status(200).json({ rows: safeRows });
   } catch (e: any) {
     if (e?.message === "NO_OFFICE_MEMBERSHIP") {
       return res.status(403).json({ error: "NO_OFFICE_MEMBERSHIP" });
