@@ -35,7 +35,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    const base = getBaseUrl(req);
+    const base =
+    (process.env.PUBLIC_BASE_URL || "").trim() || getBaseUrl(req);
 
     const r = await fetch(`${base}/api/everybot/geocode`, {
       method: "POST",
