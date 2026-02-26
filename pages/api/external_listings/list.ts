@@ -151,7 +151,14 @@ function scoreRow(row: any, f: any): { band: "green" | "yellow" | "none"; restSc
 
   // propertyType: canonical map (house/apartment/plot/commercial)
   const fpt = mapPropertyFilterToCanonical(String(f.propertyType ?? ""));
-  add(!!fpt, mapPropertyFilterToCanonical(row.property_type) === fpt);
+  add(
+  !!fpt,
+  mapPropertyFilterToCanonical(row.property_type) === fpt ||
+    (fpt === "house" && norm(row.title).includes("dom")) ||
+    (fpt === "apartment" && norm(row.title).includes("mieszkan")) ||
+    (fpt === "plot" && (norm(row.title).includes("działk") || norm(row.title).includes("dzialk") || norm(row.title).includes("grunt"))) ||
+    (fpt === "commercial" && (norm(row.title).includes("lokal") || norm(row.title).includes("biur")))
+);
 
   // area
   const minA = num(f.minArea);
