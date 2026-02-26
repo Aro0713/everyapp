@@ -858,7 +858,8 @@ async function runRcnBatch() {
                           className={clsx(
                             "p-3 md:p-4",
                             "transition",
-                            highlighted && "bg-green-50",
+                            (r as any).match_band === "green" && "bg-green-50",
+                            (r as any).match_band === "yellow" && "bg-yellow-50",
                             selected && "bg-ew-accent/10 ring-1 ring-ew-accent"
                           )}
                           onClick={() => setSelectedExternalId(r.id)}

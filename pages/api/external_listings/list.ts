@@ -87,7 +87,106 @@ function normalizeVoivodeshipInput(v: string | null): string | null {
       .trim() || null
   );
 }
+function norm(s: unknown) {
+  return String(s ?? "").trim().toLowerCase();
+}
 
+function isMatchText(rowVal: unknown, filterVal: string) {
+  const fv = norm(filterVal);
+  if (!fv) return true; // nieaktywne
+  const rv = norm(rowVal);
+  return rv === fv;
+}
+
+// fallback gdy w row.city/district jest null: sprawdzaj w location_text
+function isMatchCity(row: any, city: string) {
+  const fv = norm(city);
+  if (!fv) return true;
+  const rv = norm(row.city);
+  if (rv) return rv === fv;
+  return norm(row.location_text).includes(fv);
+}
+
+function isMatchDistrict(row: any, district: string) {
+  const fv = norm(district);
+  if (!fv) return true;
+  const rv = norm(row.district);
+  if (rv) return rv === fv;
+  return norm(row.location_text).includes(fv);
+}
+
+function num(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string") {
+    const n = Number(v.replace(/\s/g, "").replace(",", "."));
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function scoreRow(row: any, f: any): { band: "green" | "yellow" | "none"; restScore: number } {
+  // 1) gate: lokalizacja 100%
+  const fVoiv = norm(f.voivodeship);
+  if (fVoiv && norm(row.voivodeship) !== fVoiv) return { band: "none", restScore: 0 };
+
+  const fCity = norm(f.city);
+  if (fCity && !isMatchCity(row, f.city)) return { band: "none", restScore: 0 };
+
+  const fDistrict = norm(f.district);
+  if (fDistrict && !isMatchDistrict(row, f.district)) return { band: "none", restScore: 0 };
+
+  // 2) reszta
+  let active = 0;
+  let matched = 0;
+
+  const add = (isActive: boolean, ok: boolean) => {
+    if (!isActive) return;
+    active += 1;
+    if (ok) matched += 1;
+  };
+
+  // transactionType
+  const ft = norm(f.transactionType);
+  add(!!ft, norm(row.transaction_type) === ft);
+
+  // propertyType: canonical map (house/apartment/plot/commercial)
+  const fpt = mapPropertyFilterToCanonical(String(f.propertyType ?? ""));
+  add(!!fpt, mapPropertyFilterToCanonical(row.property_type) === fpt);
+
+  // area
+  const minA = num(f.minArea);
+  const maxA = num(f.maxArea);
+  const area = num(row.area_m2);
+  add(minA != null, area != null && area >= (minA as number));
+  add(maxA != null, area != null && area <= (maxA as number));
+
+  // price
+  const minP = num(f.minPrice);
+  const maxP = num(f.maxPrice);
+  const price = num(row.price_amount);
+  add(minP != null, price != null && price >= (minP as number));
+  add(maxP != null, price != null && price <= (maxP as number));
+
+  // rooms
+  const fr = num(f.rooms);
+  const rooms = num(row.rooms);
+  add(fr != null, rooms != null && rooms === (fr as number));
+
+  const restScore = active === 0 ? 1 : matched / active;
+
+  if (restScore >= 0.9) return { band: "green", restScore };
+  if (restScore >= 0.5) return { band: "yellow", restScore };
+  return { band: "none", restScore };
+}
+function mapPropertyFilterToCanonical(s: string) {
+  const v = (s ?? "").toLowerCase();
+  if (!v) return "";
+  if (v.includes("dom") || v.includes("house")) return "house";
+  if (v.includes("miesz") || v.includes("apart") || v.includes("flat") || v.includes("apartment")) return "apartment";
+  if (v.includes("dzial") || v.includes("dział") || v.includes("plot") || v.includes("grunt")) return "plot";
+  if (v.includes("lokal") || v.includes("biur") || v.includes("commercial")) return "commercial";
+  return v;
+}
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
 
@@ -188,6 +287,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const minArea = optNumber(req.query.minArea);
     const maxArea = optNumber(req.query.maxArea);
     const rooms = optNumber(req.query.rooms);
+    
+    const scoreFilters = {
+      voivodeship: voivodeship ?? "",
+      city: city ?? "",
+      district: district ?? "",
+      transactionType: transactionType ?? "",
+      propertyType: propertyType ?? "",
+      minPrice: minPrice ?? "",
+      maxPrice: maxPrice ?? "",
+      minArea: minArea ?? "",
+      maxArea: maxArea ?? "",
+      rooms: rooms ?? "",
+      };
 
     // Q działa TYLKO jeśli nie ma filtrów strukturalnych
     const hasDetailFilters =
@@ -282,39 +394,7 @@ if (locationText) {
   p++;
 }
 
-// 4) CITY
-if (city) {
-  const v = city.toLowerCase().trim();
-  where.push(
-    strict
-      ? `(LOWER(COALESCE(city,'')) LIKE $${p})`
-      : `(
-          city IS NULL
-          OR city = ''
-          OR LOWER(city) LIKE $${p}
-        )`
-  );
-  params.push(`%${v}%`);
-  p++;
-}
-
-// 5) DISTRICT
-if (district) {
-  const v = district.toLowerCase().trim();
-  where.push(
-    strict
-      ? `(LOWER(COALESCE(district,'')) LIKE $${p})`
-      : `(
-          district IS NULL
-          OR district = ''
-          OR LOWER(district) LIKE $${p}
-        )`
-  );
-  params.push(`%${v}%`);
-  p++;
-}
-
-// 6) STREET
+// 4) STREET
 if (street) {
   const v = street.toLowerCase().trim();
   where.push(
@@ -330,23 +410,7 @@ if (street) {
   p++;
 }
 
-// 7) VOIVODESHIP
-if (voivodeship) {
-  const v = voivodeship.toLowerCase().trim();
-  where.push(
-    strict
-      ? `(LOWER(COALESCE(voivodeship,'')) LIKE $${p})`
-      : `(
-          voivodeship IS NULL
-          OR voivodeship = ''
-          OR LOWER(voivodeship) LIKE $${p}
-        )`
-  );
-  params.push(`%${v}%`);
-  p++;
-}
-
-// 8) NUMERIC FILTERS
+// 5) NUMERIC FILTERS
 if (minPrice != null) {
   where.push(
     strict
@@ -354,46 +418,6 @@ if (minPrice != null) {
       : `(price_amount IS NULL OR price_amount >= $${p})`
   );
   params.push(minPrice);
-  p++;
-}
-
-if (maxPrice != null) {
-  where.push(
-    strict
-      ? `(price_amount <= $${p})`
-      : `(price_amount IS NULL OR price_amount <= $${p})`
-  );
-  params.push(maxPrice);
-  p++;
-}
-
-if (minArea != null) {
-  where.push(
-    strict
-      ? `(area_m2 >= $${p})`
-      : `(area_m2 IS NULL OR area_m2 >= $${p})`
-  );
-  params.push(minArea);
-  p++;
-}
-
-if (maxArea != null) {
-  where.push(
-    strict
-      ? `(area_m2 <= $${p})`
-      : `(area_m2 IS NULL OR area_m2 <= $${p})`
-  );
-  params.push(maxArea);
-  p++;
-}
-
-if (rooms != null) {
-  where.push(
-    strict
-      ? `(rooms = $${p})`
-      : `(rooms IS NULL OR rooms = $${p})`
-  );
-  params.push(rooms);
   p++;
 }
 
@@ -445,6 +469,7 @@ if (rooms != null) {
       const total = Number(countRes.rows?.[0]?.cnt ?? "0");
       const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
 
+      const overfetch = Math.min(limit * 10, 2000);
       const offset = (page - 1) * limit;
       const sql = `
         SELECT
@@ -470,17 +495,31 @@ if (rooms != null) {
         LIMIT $${p} OFFSET $${p + 1}
       `;
 
-      const listParams = [...params, limit, offset];
+      const listParams = [...params, overfetch, offset];
       const { rows } = await pool.query<Row>(sql, listParams);
 
-      return res.status(200).json({
-        rows,
-        page,
-        limit,
-        total,
-        totalPages,
-      });
-    }
+      const scored = rows
+        .map((r: any) => {
+          const s = scoreRow(r, scoreFilters);
+          return { ...r, match_band: s.band, match_score: s.restScore };
+        })
+        .filter((r: any) => r.match_band !== "none")
+        .sort((a: any, b: any) => {
+          const w = (x: string) => (x === "green" ? 2 : x === "yellow" ? 1 : 0);
+          const dw = w(b.match_band) - w(a.match_band);
+          if (dw !== 0) return dw;
+          return (b.match_score ?? 0) - (a.match_score ?? 0);
+        })
+        .slice(0, limit);
+
+          return res.status(200).json({
+            rows: scored,
+            page,
+            limit,
+            total,
+            totalPages,
+          });
+              }
 
     // ====== TRYB 2: cursor-based (dotychczasowy) ======
     if (cursorUpdatedAt && isUuid(cursorId)) {
@@ -516,16 +555,30 @@ if (rooms != null) {
       LIMIT $${p++}
     `;
 
-    params.push(limit);
+    const overfetch = Math.min(limit * 10, 2000);
+    params.push(overfetch);
 
     const { rows } = await pool.query<Row>(sql, params);
+    const scored = rows
+      .map((r: any) => {
+        const s = scoreRow(r, scoreFilters);
+        return { ...r, match_band: s.band, match_score: s.restScore };
+      })
+      .filter((r: any) => r.match_band !== "none")
+      .sort((a: any, b: any) => {
+        const w = (x: string) => (x === "green" ? 2 : x === "yellow" ? 1 : 0);
+        const dw = w(b.match_band) - w(a.match_band);
+        if (dw !== 0) return dw;
+        return (b.match_score ?? 0) - (a.match_score ?? 0);
+      })
+      .slice(0, limit);
 
     const last = rows.length ? rows[rows.length - 1] : null;
     const nextCursor =
-      rows.length === limit && last ? { updated_at: last.updated_at, id: last.id } : null;
+    rows.length === overfetch && last ? { updated_at: last.updated_at, id: last.id } : null;
 
-    return res.status(200).json({ rows, nextCursor });
-  } catch (e: any) {
+    return res.status(200).json({ rows: scored, nextCursor });
+     } catch (e: any) {
     console.error("EXTERNAL_LISTINGS_LIST_ERROR", e);
     return res.status(400).json({ error: e?.message ?? "Bad request" });
   }
