@@ -90,7 +90,7 @@ export default function OffersView({ lang }: { lang: LangKey }) {
   const searchingRef = useRef(false);
 
   const officeTableRef = useRef<HTMLDivElement | null>(null);
-  const [tab, setTab] = useState<OffersTab>("office");
+  const [tab, setTab] = useState<OffersTab>("everybot");
   const everybotTableRef = useRef<HTMLDivElement | null>(null);
 
   // --- Office listings ---
