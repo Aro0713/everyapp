@@ -96,13 +96,6 @@ function norm(s: unknown) {
     .replace(/ł/g, "l");
 }
 
-function isMatchText(rowVal: unknown, filterVal: string) {
-  const fv = norm(filterVal);
-  if (!fv) return true; // nieaktywne
-  const rv = norm(rowVal);
-  return rv === fv;
-}
-
 // fallback gdy w row.city/district jest null: sprawdzaj w location_text
 function isMatchCity(row: any, city: string) {
   const fv = norm(city);
@@ -161,7 +154,14 @@ function scoreRow(row: any, f: any): { band: "green" | "yellow" | "none"; restSc
 
   // propertyType: canonical map (house/apartment/plot/commercial)
   const fpt = mapPropertyFilterToCanonical(String(f.propertyType ?? ""));
-  add(!!fpt, mapPropertyFilterToCanonical(row.property_type) === fpt);
+    add(
+    !!fpt,
+    mapPropertyFilterToCanonical(row.property_type) === fpt ||
+      (fpt === "house" && norm(row.title).includes("dom")) ||
+      (fpt === "apartment" && norm(row.title).includes("mieszkan")) ||
+      (fpt === "plot" && (norm(row.title).includes("dzialk") || norm(row.title).includes("grunt"))) ||
+      (fpt === "commercial" && (norm(row.title).includes("lokal") || norm(row.title).includes("biur")))
+  );
 
   // area
   const minA = num(f.minArea);
@@ -359,52 +359,28 @@ if (transactionType) {
     v === "wynajem" ? "rent" :
     v;
 
-  where.push(
-    strict
-      ? `(LOWER(COALESCE(transaction_type,'')) = $${p})`
-      : `(
-          transaction_type IS NULL
-          OR transaction_type = ''
-          OR LOWER(transaction_type) = $${p}
-        )`
-  );
+  where.push(`(LOWER(COALESCE(transaction_type,'')) = $${p})`);
   params.push(mapped);
   p++;
 }
 
 // 2) PROPERTY TYPE
 if (propertyType) {
-  const v = propertyType.toLowerCase().trim();
-  where.push(
-    strict
-      ? `(LOWER(COALESCE(property_type,'')) LIKE $${p})`
-      : `(
-          property_type IS NULL
-          OR property_type = ''
-          OR LOWER(property_type) LIKE $${p}
-        )`
-  );
-  params.push(`%${v}%`);
+  const vCanon = mapPropertyFilterToCanonical(propertyType);
+  where.push(`(LOWER(COALESCE(property_type,'')) = $${p})`);
+  params.push(vCanon);
   p++;
 }
 
 // 3) LOCATION TEXT
-if (locationText) {
+if (locationText && !(city || district)) {
   const v = locationText.toLowerCase().trim();
-  where.push(
-    strict
-      ? `(LOWER(COALESCE(location_text,'')) LIKE $${p})`
-      : `(
-          location_text IS NULL
-          OR location_text = ''
-          OR LOWER(location_text) LIKE $${p}
-        )`
-  );
+  where.push(`(LOWER(COALESCE(location_text,'')) LIKE $${p})`);
   params.push(`%${v}%`);
   p++;
 }
 
-// 4) STREET
+// 4) STREET (ulica NIE musi być 100%)
 if (street) {
   const v = street.toLowerCase().trim();
   where.push(
@@ -420,7 +396,7 @@ if (street) {
   p++;
 }
 
-// 5) NUMERIC FILTERS
+// 5) PRICE
 if (minPrice != null) {
   where.push(
     strict
@@ -432,37 +408,43 @@ if (minPrice != null) {
 }
 
 if (maxPrice != null) {
-  where.push(`(
-    price_amount IS NULL
-    OR price_amount <= $${p}
-  )`);
+  where.push(
+    strict
+      ? `(price_amount <= $${p})`
+      : `(price_amount IS NULL OR price_amount <= $${p})`
+  );
   params.push(maxPrice);
   p++;
 }
 
+// 6) AREA
 if (minArea != null) {
-  where.push(`(
-    area_m2 IS NULL
-    OR area_m2 >= $${p}
-  )`);
+  where.push(
+    strict
+      ? `(area_m2 >= $${p})`
+      : `(area_m2 IS NULL OR area_m2 >= $${p})`
+  );
   params.push(minArea);
   p++;
 }
 
 if (maxArea != null) {
-  where.push(`(
-    area_m2 IS NULL
-    OR area_m2 <= $${p}
-  )`);
+  where.push(
+    strict
+      ? `(area_m2 <= $${p})`
+      : `(area_m2 IS NULL OR area_m2 <= $${p})`
+  );
   params.push(maxArea);
   p++;
 }
 
+// 7) ROOMS
 if (rooms != null) {
-  where.push(`(
-    rooms IS NULL
-    OR rooms = $${p}
-  )`);
+  where.push(
+    strict
+      ? `(rooms = $${p})`
+      : `(rooms IS NULL OR rooms = $${p})`
+  );
   params.push(rooms);
   p++;
 }
