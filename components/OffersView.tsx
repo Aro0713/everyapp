@@ -1037,17 +1037,9 @@ async function runRcnBatch() {
                 if (a?.type === "run_live") {
                   const runTs = typeof a.runTs === "string" ? a.runTs : new Date().toISOString();
 
-                  // ✅ użyj currentFilters, nie botFilters
                   await runLiveHunter(currentFilters, runTs);
 
-                  const { rows } = await loadEverybot({
-                    filters: currentFilters,
-                    cursor: null,
-                    append: false,
-                    matchedSince: runTs,
-                  });
-                  setHighlightFromRows(rows, 10);
-                  await loadMapPins().catch(() => null);
+                  // ❌ NIE wywołuj drugi raz loadEverybot — runLiveHunter już to robi
                   continue;
                 }
 
