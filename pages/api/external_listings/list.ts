@@ -88,7 +88,12 @@ function normalizeVoivodeshipInput(v: string | null): string | null {
   );
 }
 function norm(s: unknown) {
-  return String(s ?? "").trim().toLowerCase();
+  return String(s ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ł/g, "l");
 }
 
 function isMatchText(rowVal: unknown, filterVal: string) {
@@ -102,17 +107,22 @@ function isMatchText(rowVal: unknown, filterVal: string) {
 function isMatchCity(row: any, city: string) {
   const fv = norm(city);
   if (!fv) return true;
+
+  const inLoc = norm(row.location_text).includes(fv);
   const rv = norm(row.city);
-  if (rv) return rv === fv;
-  return norm(row.location_text).includes(fv);
+
+  // ✅ akceptuj, jeśli city dokładnie pasuje ALBO location_text zawiera miasto
+  return (rv ? rv === fv : false) || inLoc;
 }
 
 function isMatchDistrict(row: any, district: string) {
   const fv = norm(district);
   if (!fv) return true;
+
+  const inLoc = norm(row.location_text).includes(fv);
   const rv = norm(row.district);
-  if (rv) return rv === fv;
-  return norm(row.location_text).includes(fv);
+
+  return (rv ? rv === fv : false) || inLoc;
 }
 
 function num(v: unknown): number | null {
@@ -151,14 +161,7 @@ function scoreRow(row: any, f: any): { band: "green" | "yellow" | "none"; restSc
 
   // propertyType: canonical map (house/apartment/plot/commercial)
   const fpt = mapPropertyFilterToCanonical(String(f.propertyType ?? ""));
-  add(
-  !!fpt,
-  mapPropertyFilterToCanonical(row.property_type) === fpt ||
-    (fpt === "house" && norm(row.title).includes("dom")) ||
-    (fpt === "apartment" && norm(row.title).includes("mieszkan")) ||
-    (fpt === "plot" && (norm(row.title).includes("działk") || norm(row.title).includes("dzialk") || norm(row.title).includes("grunt"))) ||
-    (fpt === "commercial" && (norm(row.title).includes("lokal") || norm(row.title).includes("biur")))
-);
+  add(!!fpt, mapPropertyFilterToCanonical(row.property_type) === fpt);
 
   // area
   const minA = num(f.minArea);
