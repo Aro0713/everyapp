@@ -279,7 +279,7 @@ if (Array.isArray(adsItems) && adsItems.length) {
     if (!full) continue;
 
     const norm = normalizeOtodomUrl(full);
-    if (!norm.includes("/pl/oferta/")) continue;
+    if (!norm.includes("/oferta/")) continue;
     if (seen.has(norm)) continue;
     seen.add(norm);
 
@@ -404,7 +404,7 @@ if (Array.isArray(adsItems) && adsItems.length) {
     const norm = normalizeOtodomUrl(full);
 
     // filtr: interesują nas oferty
-    if (!norm.includes("/pl/oferta/")) continue;
+    if (!norm.includes("/oferta/")) continue;
     if (seen.has(norm)) continue;
     seen.add(norm);
 
@@ -530,16 +530,25 @@ function normalizeOtodomUrl(u: string): string {
   // /hpr/ -> /
   let out = u.replace("://www.otodom.pl/hpr/", "://www.otodom.pl/");
 
-  // czasem trafiają się linki bez /pl/ (albo z inną wersją)
-  // nie ruszamy ofert (/pl/oferta/), bo to i tak jest OK
-  // ale wyniki chcemy trzymać kanonicznie w /pl/wyniki
   try {
     const url = new URL(out);
-    if (url.hostname.includes("otodom.") && url.pathname.startsWith("/wyniki")) {
-      url.pathname = "/pl" + url.pathname;
-      out = url.toString();
+
+    if (url.hostname.includes("otodom.")) {
+      // ✅ kanonizuj wyniki
+      if (url.pathname.startsWith("/wyniki")) {
+        url.pathname = "/pl" + url.pathname;
+      }
+
+      // ✅ krytyczne: kanonizuj oferty bez /pl/
+      // np. /oferta/... albo /pl/oferta/...
+      if (url.pathname.startsWith("/oferta/")) {
+        url.pathname = "/pl" + url.pathname;
+      }
     }
+
+    out = url.toString();
   } catch {}
+
   return out;
 }
 function inferTransactionTypeFromPriceText(
@@ -1362,6 +1371,13 @@ if (detected === "otodom") {
   // DEBUG – struktura danych wyników Otodom
   const nd = next;
   console.log("otodom data keys:", Object.keys(nd?.props?.pageProps?.data ?? {}));
+  const adsItemsDbg = nd?.props?.pageProps?.data?.searchAds?.items;
+  console.log("otodom searchAds items:", {
+    isArray: Array.isArray(adsItemsDbg),
+    len: Array.isArray(adsItemsDbg) ? adsItemsDbg.length : null,
+    sampleHref: Array.isArray(adsItemsDbg) && adsItemsDbg[0] ? adsItemsDbg[0]?.href : null,
+    sampleSlug: Array.isArray(adsItemsDbg) && adsItemsDbg[0] ? adsItemsDbg[0]?.slug : null,
+  });
 }
 
   let rows: ExternalRow[] = [];
