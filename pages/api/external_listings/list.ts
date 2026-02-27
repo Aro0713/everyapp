@@ -372,7 +372,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    // 1) TRANSACTION TYPE
+    //  TRANSACTION TYPE
     if (transactionType) {
       const v = transactionType.toLowerCase().trim();
 
@@ -386,15 +386,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       p++;
     }
 
-    // 2) PROPERTY TYPE
+    //  PROPERTY TYPE
     if (propertyType) {
       const vCanon = mapPropertyFilterToCanonical(propertyType);
-      where.push(`(LOWER(COALESCE(property_type,'')) = $${p})`);
+
+      // ✅ dopasuj elastycznie: canonical + oryginał (dom/mieszkanie/działka/lokal)
+      where.push(`(
+        LOWER(COALESCE(property_type,'')) = $${p}
+        OR LOWER(COALESCE(property_type,'')) LIKE $${p + 1}
+        OR LOWER(COALESCE(title,'')) LIKE $${p + 1}
+      )`);
       params.push(vCanon);
-      p++;
+      params.push(`%${String(propertyType).trim().toLowerCase()}%`);
+      p += 2;
     }
 
-    // 3) LOCATION TEXT
+    //  LOCATION TEXT
     if (locationText && !(city || district)) {
       const v = locationText.toLowerCase().trim();
       where.push(`(LOWER(COALESCE(location_text,'')) LIKE $${p})`);
@@ -402,7 +409,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       p++;
     }
 
-    // 4) STREET
+    // STREET
     if (street) {
       const v = street.toLowerCase().trim();
       where.push(
@@ -417,8 +424,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       params.push(`%${v}%`);
       p++;
     }
+    if (voivodeship) {
+      where.push(`(LOWER(COALESCE(voivodeship,'')) LIKE $${p})`);
+      params.push(`%${voivodeship.toLowerCase()}%`);
+      p++;
+    }
 
-    // 5) PRICE
+    if (city) {
+      where.push(`(
+        LOWER(COALESCE(city,'')) LIKE $${p}
+        OR LOWER(COALESCE(location_text,'')) LIKE $${p}
+      )`);
+      params.push(`%${city.toLowerCase()}%`);
+      p++;
+    }
+
+    if (district) {
+      where.push(`(
+        LOWER(COALESCE(district,'')) LIKE $${p}
+        OR LOWER(COALESCE(location_text,'')) LIKE $${p}
+      )`);
+      params.push(`%${district.toLowerCase()}%`);
+      p++;
+    }
+
+    // PRICE
     if (minPrice != null) {
       where.push(
         strict
@@ -460,7 +490,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       p++;
     }
 
-    // 7) ROOMS
+    //  ROOMS
     if (rooms != null) {
       where.push(
         strict
@@ -470,7 +500,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       params.push(rooms);
       p++;
     }
-
+    // ✅ DEBUG: pokaż jakie WHERE i parametry idą do SQL (na czas diagnostyki)
+console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
+  where: where.join(" AND "),
+  params,
+  p,
+  useScoring,
+  filters: {
+    q,
+    source,
+    transactionType,
+    propertyType,
+    voivodeship,
+    city,
+    district,
+    street,
+    minPrice,
+    maxPrice,
+    minArea,
+    maxArea,
+    rooms,
+    matchedSince,
+  },
+});
     // ====== TRYB 1: page-based (LIMIT/OFFSET) ======
     if (page != null) {
       const countSql = `
