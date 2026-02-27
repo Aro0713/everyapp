@@ -273,6 +273,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const includePreview = optString(req.query.includePreview) !== "0"; // domyślnie TAK
     const strict = optString(req.query.strict) === "1";
     const matchedSince = optTimestamptz(req.query.matchedSince);
+    const mode = optString(req.query.mode) ?? null; // null | "search"
+    const filtersHash = optString(req.query.filtersHash) ?? null; // opcjonalnie: echo z UI
 
     const where: string[] = [`1=1`];
 
@@ -350,6 +352,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       rooms != null;
 
     const hasStructuredFilters = hasDetailFilters;
+
+        // ✅ Guard: jeśli UI jest w trybie search, a request przyszedł "pusty",
+    // to NIE wolno zwracać pełnej listy (bo to nadpisuje wyniki i robi "przeskok").
+    if (mode === "search") {
+      const hasAny =
+        !!q || hasStructuredFilters || useScoring;
+
+      if (!hasAny) {
+        return res.status(200).json({
+          rows: [],
+          nextCursor: null,
+          meta: {
+            officeId,
+            limit,
+            includeInactive,
+            includePreview,
+            onlyEnriched,
+            mode,
+            filtersHash,
+            reason: "EMPTY_SEARCH_GUARD",
+          },
+        });
+      }
+    }
 
     // q działa tylko gdy nie ma structured filters (jak masz)
     if (q && !hasStructuredFilters) {
@@ -598,7 +624,9 @@ console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
       const listParams = [...params, overfetch, offset];
       const { rows } = await pool.query<Row>(sql, listParams);
 
-      // ✅ jeśli filtry puste -> nie scoringuj i nie wycinaj nic
+      // ===============================
+      // PAGE MODE – NO SCORING
+      // ===============================
       if (!useScoring) {
         return res.status(200).json({
           rows: rows.slice(0, limit),
@@ -606,15 +634,19 @@ console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
           limit,
           total,
           totalPages,
+          meta: { mode, filtersHash },
         });
       }
 
+      // ===============================
+      // PAGE MODE – WITH SCORING
+      // ===============================
       const scored = rows
         .map((r: any) => {
           const s = scoreRow(r, scoreFilters);
           return { ...r, match_band: s.band, match_score: s.restScore };
         })
-        .filter((r: any) => r.match_band !== "none") // ✅ DODAJ
+        .filter((r: any) => r.match_band !== "none")
         .sort((a: any, b: any) => {
           const w = (x: string) => (x === "green" ? 2 : x === "yellow" ? 1 : 0);
           const dw = w(b.match_band) - w(a.match_band);
@@ -629,7 +661,8 @@ console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
         limit,
         total,
         totalPages,
-      });
+        meta: { mode, filtersHash },
+});
     }
 
     // ====== TRYB 2: cursor-based (dotychczasowy) ======
@@ -702,48 +735,64 @@ console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
     const { rows } = await pool.query<Row>(sql, params);
 
     // ✅ jeśli filtry puste -> nie scoringuj i nie wycinaj nic
-    if (!useScoring) {
-      const pageRows = rows.slice(0, limit);
-      const lastRaw = pageRows.length ? pageRows[pageRows.length - 1] : null;
+        if (!useScoring) {
+          const pageRows = rows.slice(0, limit);
+          const lastRaw = pageRows.length ? pageRows[pageRows.length - 1] : null;
+
+          const nextCursor =
+            rows.length === overfetch && lastRaw
+              ? { updated_at: lastRaw.updated_at, id: lastRaw.id }
+              : null;
+
+          return res.status(200).json({
+            rows: pageRows,
+            nextCursor,
+            meta: {
+              officeId,
+              limit,
+              includeInactive,
+              includePreview,
+              onlyEnriched,
+              mode,
+              filtersHash,
+            },
+          });
+        }
+      // ===============================
+      // cursor-mode: scoring
+      // ===============================
+      const scored = rows
+        .map((r: any) => {
+          const s = scoreRow(r, scoreFilters);
+          return { ...r, match_band: s.band, match_score: s.restScore };
+        })
+        .filter((r: any) => r.match_band !== "none")
+        .sort((a: any, b: any) => {
+          const w = (x: string) => (x === "green" ? 2 : x === "yellow" ? 1 : 0);
+          const dw = w(b.match_band) - w(a.match_band);
+          if (dw !== 0) return dw;
+          return (b.match_score ?? 0) - (a.match_score ?? 0);
+        })
+        .slice(0, limit);
+
+      // ✅ nextCursor liczysz z RAW rows, nie ze scored
+      const lastRaw = rows.length ? rows[rows.length - 1] : null;
       const nextCursor =
-        rows.length === overfetch && lastRaw ? { updated_at: lastRaw.updated_at, id: lastRaw.id } : null;
+        rows.length === overfetch && lastRaw
+          ? { updated_at: lastRaw.updated_at, id: lastRaw.id }
+          : null;
 
       return res.status(200).json({
-      rows: pageRows,
-      nextCursor,
-      meta: { officeId, limit, includeInactive, includePreview, onlyEnriched },
-    });
-    }
-
-    const scored = rows
-      .map((r: any) => {
-        const s = scoreRow(r, scoreFilters);
-        return { ...r, match_band: s.band, match_score: s.restScore };
-      })
-      .filter((r: any) => r.match_band !== "none")
-      .sort((a: any, b: any) => {
-        const w = (x: string) => (x === "green" ? 2 : x === "yellow" ? 1 : 0);
-        const dw = w(b.match_band) - w(a.match_band);
-        if (dw !== 0) return dw;
-        return (b.match_score ?? 0) - (a.match_score ?? 0);
-      })
-      .slice(0, limit);
-
-    const lastRaw = rows.length ? rows[rows.length - 1] : null;
-    const nextCursor =
-      scored.length > 0 && rows.length === overfetch && lastRaw
-        ? { updated_at: lastRaw.updated_at, id: lastRaw.id }
-        : null;
-
-      return res.status(200).json({
-      rows: scored,
-      nextCursor,
-      meta: {
-        officeId,
-        limit,
-        includeInactive,
-        includePreview,
-        onlyEnriched,
+        rows: scored,
+        nextCursor,
+        meta: {
+          officeId,
+          limit,
+          includeInactive,
+          includePreview,
+          onlyEnriched,
+          mode,
+          filtersHash,
         },
       });
         } catch (e: any) {
