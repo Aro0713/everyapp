@@ -276,12 +276,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const params: any[] = [officeId];
     let p = 2;
 
-    // ✅ żeby countSql ZAWSZE miało co najmniej $1 i nie wybuchało bez filtrów
+    // ✅ stabilizacja bindów (countSql też dostaje params)
     where.push(`$1::uuid IS NOT NULL`);
 
-    if (!includePreview) {
-      where.push(`status <> 'preview'`);
-    }
     if (matchedSince) {
       // ✅ nie wycinaj rekordów z NULL matched_at (stare cache)
       where.push(`(
@@ -301,21 +298,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (source && source !== "all") {
       where.push(`source = $${p++}`);
       params.push(source);
-    }
-
-    // ✅ SAFETY: OLX ma być tylko nieruchomości (real-estate category)
-    where.push(`(
-      source <> 'olx'
-      OR (source_url LIKE '%/nieruchomosci/%' AND source_url LIKE '%/d/oferta/%')
-    )`);
-
-    if (!includeInactive && status) {
-      where.push(`COALESCE(source_status, 'active') = $${p++}`);
-      params.push(status);
-    }
-
-    if (!includePreview) {
-      where.push(`status <> 'preview'`);
     }
 
     // --- NEW FILTERS FROM SEARCH PANEL ---
