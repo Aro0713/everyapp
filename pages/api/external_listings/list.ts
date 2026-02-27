@@ -489,42 +489,42 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // ✅ unaccent tylko na kolumnach, parametr znormalizowany w JS
     if (street) {
-      // ✅ unaccent tylko na kolumnie; parametr jako czysty tekst (bez %), składamy w SQL
+      // ✅ parametr już z %...% (bez konkatenacji w SQL)
       where.push(
         strict
-          ? `(unaccent(LOWER(COALESCE(street,''))) LIKE ('%' || $${p}::text || '%'))`
+          ? `(unaccent(LOWER(COALESCE(street,''))) LIKE $${p})`
           : `(
               street IS NULL
               OR street = ''
-              OR unaccent(LOWER(street)) LIKE ('%' || $${p}::text || '%')
+              OR unaccent(LOWER(street)) LIKE $${p}
             )`
       );
-      params.push(norm(street));
+      params.push(normLike(street));
       p++;
     }
 
     if (voivodeship) {
-      where.push(`(unaccent(LOWER(COALESCE(voivodeship,''))) LIKE ('%' || $${p}::text || '%'))`);
-      params.push(norm(voivodeship));
+      where.push(`(unaccent(LOWER(COALESCE(voivodeship,''))) LIKE $${p})`);
+      params.push(normLike(voivodeship));
       p++;
     }
 
     if (city) {
       where.push(`(
-        unaccent(LOWER(COALESCE(city,''))) LIKE ('%' || $${p}::text || '%')
-        OR unaccent(LOWER(COALESCE(district,''))) LIKE ('%' || $${p}::text || '%')
-        OR unaccent(LOWER(COALESCE(location_text,''))) LIKE ('%' || $${p}::text || '%')
+        unaccent(LOWER(COALESCE(city,''))) LIKE $${p}
+        OR unaccent(LOWER(COALESCE(district,''))) LIKE $${p}
+        OR unaccent(LOWER(COALESCE(location_text,''))) LIKE $${p}
       )`);
-      params.push(norm(city));
+      params.push(normLike(city));
       p++;
     }
 
     if (district) {
       where.push(`(
-        unaccent(LOWER(COALESCE(district,''))) LIKE ('%' || $${p}::text || '%')
-        OR unaccent(LOWER(COALESCE(location_text,''))) LIKE ('%' || $${p}::text || '%')
+        unaccent(LOWER(COALESCE(district,''))) LIKE $${p}
+        OR unaccent(LOWER(COALESCE(location_text,''))) LIKE $${p}
       )`);
-      params.push(norm(district));
+      params.push(normLike(district));
       p++;
     }
     if (minPrice != null) {
@@ -579,7 +579,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         matchedSince,
       },
     });
-
+    console.log("EXTERNAL_LISTINGS_LIST_BUILD_ID", {
+      buildTs: "2026-02-27T17:xx:xxZ",
+      file: "pages/api/external_listings/list.ts",
+    });
+    
     // ====== TRYB 1: page-based ======
     if (page != null) {
       const countSql = `
