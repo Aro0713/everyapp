@@ -638,8 +638,56 @@ async function runRcnBatch() {
   await loadMapPins().catch(() => null);   // 🔥 DODANE
   return j;
   }
+function EverybotLoadingGlass({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-white/40 bg-white/55 p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)] backdrop-blur-xl">
+      {/* shimmer */}
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -left-1/2 top-0 h-full w-[200%] animate-[shimmer_1.6s_linear_infinite] bg-gradient-to-r from-transparent via-white/40 to-transparent" />
+      </div>
 
-      return (
+      <div className="relative flex items-center gap-4">
+        {/* rotating logo */}
+        <div className="relative h-14 w-14">
+          <div className="absolute inset-0 rounded-full border border-ew-accent/25 bg-white/60 shadow-inner" />
+          <img
+            src="/brand/everyapp-logo.svg"
+            alt="EveryAPP"
+            className="absolute inset-[8px] h-[calc(100%-16px)] w-[calc(100%-16px)] animate-[spinSlow_1.8s_linear_infinite]"
+            draggable={false}
+          />
+        </div>
+
+        <div className="min-w-0">
+          <div className="text-sm font-extrabold text-ew-primary">{title}</div>
+          <div className="mt-1 text-xs text-gray-600">{subtitle}</div>
+
+          <div className="mt-4 h-2 w-64 overflow-hidden rounded-full bg-ew-accent/15">
+            <div className="h-full w-1/2 animate-[bar_1.1s_ease-in-out_infinite] rounded-full bg-ew-accent" />
+          </div>
+        </div>
+      </div>
+
+      <style jsx>{`
+        @keyframes shimmer {
+          0% { transform: translateX(-30%); }
+          100% { transform: translateX(30%); }
+        }
+        @keyframes bar {
+          0% { transform: translateX(-20%); opacity: .55; }
+          50% { transform: translateX(110%); opacity: 1; }
+          100% { transform: translateX(-20%); opacity: .55; }
+        }
+        @keyframes spinSlow {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+  return (
         <div className="space-y-6">
           {/* HEADER */}
           <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -1118,10 +1166,11 @@ async function runRcnBatch() {
         )}
 
         <div className="mt-6 rounded-2xl border border-gray-200 bg-white">
-          {botLoading && botRows.length === 0 ? (
-            <div className="p-4 text-sm text-gray-500">
-              {t(lang, "everybotLoading" as any)}
-            </div>
+         {botLoading && botRows.length === 0 ? (
+            <EverybotLoadingGlass
+              title={t(lang, "everybotLoading" as any)}
+              subtitle={t(lang, "everybotSearching" as any)}
+            />
           ) : botErr ? (
             <div className="p-4 text-sm text-red-700">
               {t(lang, "everybotLoadError" as any)}: {botErr}
