@@ -21,6 +21,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!userId) return res.status(401).json({ error: "UNAUTHORIZED" });
 
     const officeId = await getOfficeIdForUserId(userId);
+    if (!officeId) return res.status(400).json({ error: "MISSING_OFFICE_ID" });
 
     const body = req.body ?? {};
     const externalListingId = optString(body.external_listing_id);
@@ -31,35 +32,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: "Missing external_listing_id" });
     }
 
-    // agent => user_id = current user
-    // office => user_id = null
-    const userIdToSave = mode === "office" ? null : userId;
+    const allowedActions: ListingAction[] = ["save", "reject", "call", "visit"];
+    const action =
+      typeof body.action === "string" && allowedActions.includes(body.action as ListingAction)
+        ? (body.action as ListingAction)
+        : "save";
 
-    // idempotent: nie duplikuj tego samego zapisu
+    // office-mode nadal zapisujemy kto kliknął (audyt). Tryb dajemy do payload.
+    const payload = {
+      mode,
+      note: note ?? null,
+      ua: optString(req.headers["user-agent"]) ?? null,
+    };
+
     const sql = `
-    INSERT INTO external_listing_actions (
-        office_id, external_listing_id, user_id, action, note
-    ) VALUES ($1, $2, $3, $4, $5)
-    ON CONFLICT (office_id, external_listing_id, user_id)
-    DO UPDATE SET
-        action = EXCLUDED.action,
-        note = COALESCE(EXCLUDED.note, external_listing_actions.note),
-        updated_at = now()
-    RETURNING id
+      INSERT INTO external_listing_actions (
+        office_id,
+        external_listing_id,
+        user_id,
+        action,
+        payload
+      ) VALUES ($1::uuid, $2::uuid, $3::uuid, $4::text, $5::jsonb)
+      RETURNING id
     `;
 
-     const allowedActions: ListingAction[] = ["save", "reject", "call", "visit"];
-        const action =
-        typeof body.action === "string" && allowedActions.includes(body.action as ListingAction)
-            ? (body.action as ListingAction)
-            : "save";
-
     const { rows } = await pool.query<{ id: string }>(sql, [
-    officeId,
-    externalListingId,
-    userIdToSave,
-    action,
-    note,
+      officeId,
+      externalListingId,
+      userId,
+      action,
+      JSON.stringify(payload),
     ]);
 
     return res.status(200).json({ ok: true, id: rows?.[0]?.id ?? null });

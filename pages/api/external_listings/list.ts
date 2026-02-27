@@ -48,6 +48,12 @@ type Row = {
   enriched_at: string | null;
 
   updated_at: string;
+
+  handled_by_office_id?: string | null;
+  handled_since?: string | null;
+  last_interaction_at?: string | null;
+  last_action?: string | null;
+  my_office_saved?: boolean | null;
 };
 
 function optString(v: unknown): string | null {
@@ -266,10 +272,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const where: string[] = [`1=1`];
     const params: any[] = [];
     let p = 1;
-
-    // ✅ zawsze tnij po biurze
-    where.push(`office_id = $${p++}`);
-    params.push(officeId);
 
     if (!includePreview) {
       where.push(`status <> 'preview'`);
@@ -490,31 +492,61 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const overfetch = Math.min(limit * 10, 2000);
       const offset = (page - 1) * limit;
 
-      const sql = `
+        const sql = `
+        WITH action_agg AS (
+          SELECT
+            external_listing_id,
+            -- kto ostatnio coś zrobił na tym ogłoszeniu (jakiekolwiek biuro)
+            (ARRAY_AGG(office_id ORDER BY created_at DESC))[1] AS handled_by_office_id,
+            MAX(created_at) AS last_interaction_at,
+            (ARRAY_AGG(action ORDER BY created_at DESC))[1] AS last_action,
+            -- kiedy to ogłoszenie zostało "save" po raz pierwszy (przez jakiekolwiek biuro)
+            MIN(created_at) FILTER (WHERE action = 'save') AS handled_since
+          FROM external_listing_actions
+          GROUP BY external_listing_id
+        ),
+        my_saved AS (
+          SELECT
+            external_listing_id,
+            TRUE AS my_office_saved
+          FROM external_listing_actions
+          WHERE office_id = $${p}::uuid AND action = 'save'
+          GROUP BY external_listing_id
+        )
         SELECT
-          id, office_id, source, source_url, status,
-          title, description,
-          price_amount, currency, location_text,
-          thumb_url, matched_at,
-          transaction_type, property_type,
-          area_m2, price_per_m2, rooms,
-          floor, year_built,
-          voivodeship, city, district, street,
-          owner_phone,
-          source_status, last_seen_at, last_checked_at, enriched_at,
+          l.id, l.office_id, l.source, l.source_url, l.status,
+          l.title, l.description,
+          l.price_amount, l.currency, l.location_text,
+          l.thumb_url, l.matched_at,
+          l.transaction_type, l.property_type,
+          l.area_m2, l.price_per_m2, l.rooms,
+          l.floor, l.year_built,
+          l.voivodeship, l.city, l.district, l.street,
+          l.owner_phone,
+          l.source_status, l.last_seen_at, l.last_checked_at, l.enriched_at,
 
           -- NOWE KOLUMNY
-          lat, lng,
-          rcn_last_price, rcn_last_date, rcn_link,
+          l.lat, l.lng,
+          l.rcn_last_price, l.rcn_last_date, l.rcn_link,
 
-          updated_at
-        FROM external_listings
+          l.updated_at,
+
+          -- ✅ MARKERY OBSŁUGI
+          a.handled_by_office_id,
+          a.handled_since,
+          a.last_interaction_at,
+          a.last_action,
+          COALESCE(ms.my_office_saved, FALSE) AS my_office_saved
+
+        FROM external_listings l
+        LEFT JOIN action_agg a ON a.external_listing_id = l.id
+        LEFT JOIN my_saved ms ON ms.external_listing_id = l.id
         WHERE ${where.join(" AND ")}
         ORDER BY ${orderBy}
-        LIMIT $${p} OFFSET $${p + 1}
+        LIMIT $${p + 1} OFFSET $${p + 2}
       `;
 
-      const listParams = [...params, overfetch, offset];
+      const listParams = [...params, officeId, overfetch, offset];
       const { rows } = await pool.query<Row>(sql, listParams);
 
       // ✅ jeśli filtry puste -> nie scoringuj i nie wycinaj nic
@@ -560,33 +592,64 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       p += 2;
     }
 
-    const sql = `
+        const sql = `
+      WITH action_agg AS (
+        SELECT
+          external_listing_id,
+          -- kto ostatnio coś zrobił na tym ogłoszeniu (jakiekolwiek biuro)
+          (ARRAY_AGG(office_id ORDER BY created_at DESC))[1] AS handled_by_office_id,
+          MAX(created_at) AS last_interaction_at,
+          (ARRAY_AGG(action ORDER BY created_at DESC))[1] AS last_action,
+          -- kiedy to ogłoszenie zostało "save" po raz pierwszy (przez jakiekolwiek biuro)
+          MIN(created_at) FILTER (WHERE action = 'save') AS handled_since
+        FROM external_listing_actions
+        GROUP BY external_listing_id
+      ),
+      my_saved AS (
+        SELECT
+          external_listing_id,
+          TRUE AS my_office_saved
+        FROM external_listing_actions
+        WHERE office_id = $${p}::uuid AND action = 'save'
+        GROUP BY external_listing_id
+      )
       SELECT
-        id, office_id, source, source_url, status,
-        title, description,
-        price_amount, currency, location_text,
-        thumb_url, matched_at,
-        transaction_type, property_type,
-        area_m2, price_per_m2, rooms,
-        floor, year_built,
-        voivodeship, city, district, street,
-        owner_phone,
-        source_status, last_seen_at, last_checked_at, enriched_at,
+        l.id, l.office_id, l.source, l.source_url, l.status,
+        l.title, l.description,
+        l.price_amount, l.currency, l.location_text,
+        l.thumb_url, l.matched_at,
+        l.transaction_type, l.property_type,
+        l.area_m2, l.price_per_m2, l.rooms,
+        l.floor, l.year_built,
+        l.voivodeship, l.city, l.district, l.street,
+        l.owner_phone,
+        l.source_status, l.last_seen_at, l.last_checked_at, l.enriched_at,
 
         -- NOWE KOLUMNY
-        lat, lng,
-        rcn_last_price, rcn_last_date, rcn_link,
+        l.lat, l.lng,
+        l.rcn_last_price, l.rcn_last_date, l.rcn_link,
 
-        updated_at
-      FROM external_listings
+        l.updated_at,
+
+        -- ✅ MARKERY OBSŁUGI
+        a.handled_by_office_id,
+        a.handled_since,
+        a.last_interaction_at,
+        a.last_action,
+        COALESCE(ms.my_office_saved, FALSE) AS my_office_saved
+
+      FROM external_listings l
+      LEFT JOIN action_agg a ON a.external_listing_id = l.id
+      LEFT JOIN my_saved ms ON ms.external_listing_id = l.id
       WHERE ${where.join(" AND ")}
       ORDER BY ${orderBy}
-      LIMIT $${p++}
+      LIMIT $${p + 1} OFFSET $${p + 2}
     `;
 
     const overfetch = Math.min(limit * 10, 2000);
+    
+    params.push(officeId);
     params.push(overfetch);
-
     const { rows } = await pool.query<Row>(sql, params);
 
     // ✅ jeśli filtry puste -> nie scoringuj i nie wycinaj nic
@@ -619,9 +682,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ? { updated_at: lastRaw.updated_at, id: lastRaw.id }
         : null;
 
-    return res.status(200).json({ rows: scored, nextCursor });
-  } catch (e: any) {
-    console.error("EXTERNAL_LISTINGS_LIST_ERROR", e);
-    return res.status(400).json({ error: e?.message ?? "Bad request" });
-  }
-}
+    return res.status(200).json({
+      rows: scored,
+      nextCursor,
+      meta: {
+        officeId,
+        limit,
+        includeInactive,
+        includePreview,
+        onlyEnriched,
+      },
+    });
+      } catch (e: any) {
+        console.error("EXTERNAL_LISTINGS_LIST_ERROR", e);
+        return res.status(400).json({ error: e?.message ?? "Bad request" });
+      }
+    }
