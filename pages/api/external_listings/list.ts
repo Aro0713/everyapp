@@ -237,6 +237,50 @@ function hasAnyFiltersForScoring(f: {
   );
 }
 
+type RelaxedFlags = { city?: boolean; district?: boolean };
+
+function buildWhereWithoutSoft(
+  baseWhere: string[],
+  opts: { dropCity?: boolean; dropDistrict?: boolean }
+) {
+  // Uwaga: nie próbujemy parsować SQL-a – usuwamy dokładnie te fragmenty,
+  // które dokładamy w tym pliku (city/district).
+  const out: string[] = [];
+
+  for (const w of baseWhere) {
+    const s = String(w);
+
+    // city clause zaczyna się od "(\n        unaccent(LOWER(COALESCE(city,'')))"
+   if (
+    opts.dropCity &&
+    s.includes("COALESCE(city,''))") &&
+    s.includes("COALESCE(location_text,''))")
+  ) {
+    continue;
+  }
+
+    // district clause zaczyna się od "(\n        unaccent(LOWER(COALESCE(district,'')))"
+   if (
+    opts.dropDistrict &&
+    s.includes("COALESCE(district,''))") &&
+    s.includes("COALESCE(location_text,''))")
+  ) {
+    continue;
+  }
+
+    out.push(w);
+  }
+
+  return out;
+}
+
+function scoreFiltersWithRelax(scoreFilters: any, relaxed: RelaxedFlags) {
+  // scoring ma gate na city/district → jak poluzowaliśmy SQL, to musimy poluzować gate scoringu
+  const next = { ...scoreFilters };
+  if (relaxed.city) next.city = "";
+  if (relaxed.district) next.district = "";
+  return next;
+}
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     if (req.method !== "GET") {
@@ -624,7 +668,34 @@ console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
       `;
 
       const listParams = [...params, overfetch, offset];
-      const { rows } = await pool.query<Row>(sql, listParams);
+      let relaxed: RelaxedFlags = {};
+      let { rows } = await pool.query<Row>(sql, listParams);
+
+      // ✅ fallback: jeżeli 0 wyników i mamy city/district, poluzuj (najpierw city, potem district)
+      if (rows.length === 0 && !strict && (city || district)) {
+        // 1) drop city
+        if (city) {
+          const where2 = buildWhereWithoutSoft(where, { dropCity: true, dropDistrict: false });
+          const sql2 = sql.replace(`WHERE ${where.join(" AND ")}`, `WHERE ${where2.join(" AND ")}`);
+          const { rows: r2 } = await pool.query<Row>(sql2, listParams);
+          if (r2.length) {
+            rows = r2;
+            relaxed.city = true;
+          }
+        }
+
+        // 2) drop district (jeśli dalej 0)
+        if (rows.length === 0 && district) {
+          const where3 = buildWhereWithoutSoft(where, { dropCity: true, dropDistrict: true });
+          const sql3 = sql.replace(`WHERE ${where.join(" AND ")}`, `WHERE ${where3.join(" AND ")}`);
+          const { rows: r3 } = await pool.query<Row>(sql3, listParams);
+          if (r3.length) {
+            rows = r3;
+            relaxed.city = !!city;
+            relaxed.district = true;
+          }
+        }
+      }
 
       // ===============================
       // PAGE MODE – NO SCORING
@@ -636,7 +707,7 @@ console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
           limit,
           total,
           totalPages,
-          meta: { mode, filtersHash },
+          meta: { mode, filtersHash, relaxed },
         });
       }
 
@@ -645,7 +716,7 @@ console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
       // ===============================
       const scored = rows
         .map((r: any) => {
-          const s = scoreRow(r, scoreFilters);
+          const s = scoreRow(r, scoreFiltersWithRelax(scoreFilters, relaxed));
           return { ...r, match_band: s.band, match_score: s.restScore };
         })
         .filter((r: any) => r.match_band !== "none")
@@ -663,7 +734,7 @@ console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
         limit,
         total,
         totalPages,
-        meta: { mode, filtersHash },
+        meta: { mode, filtersHash, relaxed },
 });
     }
 
@@ -734,7 +805,31 @@ console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
     const overfetch = Math.min(limit * 10, 2000);
     
     params.push(overfetch);
-    const { rows } = await pool.query<Row>(sql, params);
+    let relaxed: RelaxedFlags = {};
+    let { rows } = await pool.query<Row>(sql, params);
+
+    if (rows.length === 0 && !strict && (city || district)) {
+      if (city) {
+        const where2 = buildWhereWithoutSoft(where, { dropCity: true, dropDistrict: false });
+        const sql2 = sql.replace(`WHERE ${where.join(" AND ")}`, `WHERE ${where2.join(" AND ")}`);
+        const { rows: r2 } = await pool.query<Row>(sql2, params);
+        if (r2.length) {
+          rows = r2;
+          relaxed.city = true;
+        }
+      }
+
+      if (rows.length === 0 && district) {
+        const where3 = buildWhereWithoutSoft(where, { dropCity: true, dropDistrict: true });
+        const sql3 = sql.replace(`WHERE ${where.join(" AND ")}`, `WHERE ${where3.join(" AND ")}`);
+        const { rows: r3 } = await pool.query<Row>(sql3, params);
+        if (r3.length) {
+          rows = r3;
+          relaxed.city = !!city;
+          relaxed.district = true;
+        }
+      }
+    }
 
     // ✅ jeśli filtry puste -> nie scoringuj i nie wycinaj nic
         if (!useScoring) {
@@ -757,6 +852,7 @@ console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
               onlyEnriched,
               mode,
               filtersHash,
+              relaxed,
             },
           });
         }
@@ -765,7 +861,7 @@ console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
       // ===============================
       const scored = rows
         .map((r: any) => {
-          const s = scoreRow(r, scoreFilters);
+          const s = scoreRow(r, scoreFiltersWithRelax(scoreFilters, relaxed));
           return { ...r, match_band: s.band, match_score: s.restScore };
         })
         .filter((r: any) => r.match_band !== "none")
@@ -795,6 +891,7 @@ console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
           onlyEnriched,
           mode,
           filtersHash,
+          relaxed,
         },
       });
         } catch (e: any) {
