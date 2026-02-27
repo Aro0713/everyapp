@@ -487,45 +487,46 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       p++;
     }
 
-    // ✅ unaccent tylko na kolumnach, parametr znormalizowany w JS
-    if (street) {
-      where.push(
-        strict
-          ? `(unaccent(LOWER(COALESCE(street,''))) LIKE $${p}::text)`
-          : `(
-              street IS NULL
-              OR street = ''
-              OR unaccent(LOWER(street)) LIKE $${p}::text
-            )`
-      );
-      params.push(normLike(street));
-      p++;
-    }
+          // ✅ unaccent tylko na kolumnach, parametr znormalizowany w JS
+      if (street) {
+        // ✅ unaccent tylko na kolumnie; parametr jako czysty tekst (bez %), składamy w SQL
+        where.push(
+          strict
+            ? `(unaccent(LOWER(COALESCE(street,''))) LIKE ('%' || $${p} || '%'))`
+            : `(
+                street IS NULL
+                OR street = ''
+                OR unaccent(LOWER(street)) LIKE ('%' || $${p} || '%')
+              )`
+        );
+        params.push(norm(street));
+        p++;
+      }
 
-    if (voivodeship) {
-      where.push(`(unaccent(LOWER(COALESCE(voivodeship,''))) LIKE $${p}::text)`);
-      params.push(normLike(voivodeship));
-      p++;
-    }
+      if (voivodeship) {
+        where.push(`(unaccent(LOWER(COALESCE(voivodeship,''))) LIKE ('%' || $${p} || '%'))`);
+        params.push(norm(voivodeship));
+        p++;
+      }
 
-    if (city) {
-      where.push(`(
-        unaccent(LOWER(COALESCE(city,''))) LIKE $${p}::text
-        OR unaccent(LOWER(COALESCE(district,''))) LIKE $${p}::text
-        OR unaccent(LOWER(COALESCE(location_text,''))) LIKE $${p}::text
-      )`);
-      params.push(normLike(city));
-      p++;
-    }
+      if (city) {
+        where.push(`(
+          unaccent(LOWER(COALESCE(city,''))) LIKE ('%' || $${p} || '%')
+          OR unaccent(LOWER(COALESCE(district,''))) LIKE ('%' || $${p} || '%')
+          OR unaccent(LOWER(COALESCE(location_text,''))) LIKE ('%' || $${p} || '%')
+        )`);
+        params.push(norm(city));
+        p++;
+      }
 
-    if (district) {
-      where.push(`(
-        unaccent(LOWER(COALESCE(district,''))) LIKE $${p}::text
-        OR unaccent(LOWER(COALESCE(location_text,''))) LIKE $${p}::text
-      )`);
-      params.push(normLike(district));
-      p++;
-    }
+      if (district) {
+        where.push(`(
+          unaccent(LOWER(COALESCE(district,''))) LIKE ('%' || $${p} || '%')
+          OR unaccent(LOWER(COALESCE(location_text,''))) LIKE ('%' || $${p} || '%')
+        )`);
+        params.push(norm(district));
+        p++;
+      }
 
     if (minPrice != null) {
       where.push(strict ? `(price_amount >= $${p})` : `(price_amount IS NULL OR price_amount >= $${p})`);
