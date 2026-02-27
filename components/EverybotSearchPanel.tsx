@@ -21,9 +21,11 @@ export type EverybotFilters = {
   minArea: string;
   maxArea: string;
   rooms: string;
+
+  // ✅ INTERNAL: token uruchomienia wyszukiwania
+  // (parent może ignorować; służy do stabilizacji i debugowania)
+  searchNonce?: string;
 };
-
-
 
 function clsx(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
@@ -67,7 +69,10 @@ async function reverseGeocodeOSM(lat: number, lon: number) {
 function isNonEmpty(v: unknown): v is string {
   return typeof v === "string" && v.trim().length > 0;
 }
-
+function makeSearchNonce() {
+  // stabilny token "to jest konkretne kliknięcie search"
+  return `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
 function buildEverybotQueryFromFilters(f: EverybotFilters): string {
   // Budujemy „komendę wyszukiwania” pod EveryBOT (fraza tekstowa),
   // ale tylko jeśli user nie podał własnej q.
@@ -187,25 +192,28 @@ export default function EverybotSearchPanel(props: {
 function onClickSearch() {
   const current = latestFiltersRef.current;
 
+  // ✅ każde kliknięcie "Szukaj" dostaje swój token
+  const nonce = makeSearchNonce();
+
   // jeśli user nie podał q, budujemy frazę z pól
-  if (!isNonEmpty(current.q)) {
-    const built = buildEverybotQueryFromFilters(current);
-    const next = { ...current, q: built || "" };
+  const builtQ = !isNonEmpty(current.q) ? buildEverybotQueryFromFilters(current) : current.q;
 
-    // zapisujemy w state (żeby UI pokazało q)
-    props.setFilters(next);
+  const next: EverybotFilters = {
+    ...current,
+    q: isNonEmpty(builtQ) ? String(builtQ) : "",
+    searchNonce: nonce,
+  };
 
-    // i od razu odpalamy run na NEXT (bez czekania aż state się odświeży)
+  // ✅ aktualizujemy UI (żeby user widział q)
+  props.setFilters(next);
+
+  // ✅ krytyczne: odpal search w mikro-tasku, żeby nie ścigać się z parent/useEffect
+  queueMicrotask(() => {
     props.onSearch(next);
-    return;
-  }
-
-  // jeśli q jest, odpalamy run na current
-  props.onSearch(current);
+  });
 }
 
-
-  const inputCls =
+const inputCls =
     "w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20";
 
   // ✅ backend realnie obsługuje tylko te źródła w harvest
