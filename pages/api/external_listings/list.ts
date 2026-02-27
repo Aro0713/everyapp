@@ -71,13 +71,11 @@ function optTimestamptz(v: unknown): string | null {
   const s = optString(v);
   if (!s) return null;
 
-  // ⛔️ najczęstszy syf z UI / query
   if (s === "0" || s.toLowerCase() === "null" || s.toLowerCase() === "undefined") return null;
 
   const ms = Date.parse(s);
   if (!Number.isFinite(ms)) return null;
 
-  // ✅ sanity (żeby nie filtrować po 1970)
   if (ms < 946684800000) return null; // 2000-01-01
 
   return new Date(ms).toISOString();
@@ -101,6 +99,9 @@ function norm(s: unknown) {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/ł/g, "l");
 }
+function normLike(v: string) {
+  return `%${norm(v)}%`;
+}
 
 // fallback gdy w row.city/district jest null: sprawdzaj w location_text
 function isMatchCity(row: any, city: string) {
@@ -110,7 +111,6 @@ function isMatchCity(row: any, city: string) {
   const inLoc = norm(row.location_text).includes(fv);
   const rv = norm(row.city);
 
-  // ✅ akceptuj, jeśli city dokładnie pasuje ALBO location_text zawiera miasto
   return (rv ? rv === fv : false) || inLoc;
 }
 
@@ -129,7 +129,7 @@ function num(v: unknown): number | null {
 
   if (typeof v === "string") {
     const raw = v.trim();
-    if (!raw) return null; // ✅ pusty string to brak wartości, nie 0
+    if (!raw) return null;
 
     const n = Number(raw.replace(/\s/g, "").replace(",", "."));
     return Number.isFinite(n) ? n : null;
@@ -149,7 +149,6 @@ function mapPropertyFilterToCanonical(s: string) {
 }
 
 function scoreRow(row: any, f: any): { band: "green" | "yellow" | "none"; restScore: number } {
-  // 1) gate: lokalizacja 100%
   const fVoiv = norm(f.voivodeship);
   if (fVoiv && norm(row.voivodeship) !== fVoiv) return { band: "none", restScore: 0 };
 
@@ -159,7 +158,6 @@ function scoreRow(row: any, f: any): { band: "green" | "yellow" | "none"; restSc
   const fDistrict = norm(f.district);
   if (fDistrict && !isMatchDistrict(row, f.district)) return { band: "none", restScore: 0 };
 
-  // 2) reszta
   let active = 0;
   let matched = 0;
 
@@ -169,11 +167,9 @@ function scoreRow(row: any, f: any): { band: "green" | "yellow" | "none"; restSc
     if (ok) matched += 1;
   };
 
-  // transactionType
   const ft = norm(f.transactionType);
   add(!!ft, norm(row.transaction_type) === ft);
 
-  // propertyType: canonical map (house/apartment/plot/commercial)
   const fpt = mapPropertyFilterToCanonical(String(f.propertyType ?? ""));
   add(
     !!fpt,
@@ -184,21 +180,18 @@ function scoreRow(row: any, f: any): { band: "green" | "yellow" | "none"; restSc
       (fpt === "commercial" && (norm(row.title).includes("lokal") || norm(row.title).includes("biur")))
   );
 
-  // area
   const minA = num(f.minArea);
   const maxA = num(f.maxArea);
   const area = num(row.area_m2);
   add(minA != null, area != null && area >= (minA as number));
   add(maxA != null, area != null && area <= (maxA as number));
 
-  // price
   const minP = num(f.minPrice);
   const maxP = num(f.maxPrice);
   const price = num(row.price_amount);
   add(minP != null, price != null && price >= (minP as number));
   add(maxP != null, price != null && price <= (maxP as number));
 
-  // rooms
   const fr = num(f.rooms);
   const rooms = num(row.rooms);
   add(fr != null, rooms != null && rooms === (fr as number));
@@ -210,7 +203,6 @@ function scoreRow(row: any, f: any): { band: "green" | "yellow" | "none"; restSc
   return { band: "none", restScore };
 }
 
-// ✅ klucz: jeśli filtry puste, NIE rób scoring/filter — zwróć wszystko
 function hasAnyFiltersForScoring(f: {
   voivodeship?: string;
   city?: string;
@@ -239,35 +231,18 @@ function hasAnyFiltersForScoring(f: {
 
 type RelaxedFlags = { city?: boolean; district?: boolean };
 
-function buildWhereWithoutSoft(
-  baseWhere: string[],
-  opts: { dropCity?: boolean; dropDistrict?: boolean }
-) {
-  // Uwaga: nie próbujemy parsować SQL-a – usuwamy dokładnie te fragmenty,
-  // które dokładamy w tym pliku (city/district).
+function buildWhereWithoutSoft(baseWhere: string[], opts: { dropCity?: boolean; dropDistrict?: boolean }) {
   const out: string[] = [];
 
   for (const w of baseWhere) {
     const s = String(w);
 
-    // city clause zaczyna się od "(\n        unaccent(LOWER(COALESCE(city,'')))"
-   if (
-    opts.dropCity &&
-    s.includes("COALESCE(city,''))") &&
-    s.includes("COALESCE(location_text,''))")
-  ) {
-    continue;
-  }
-
-    // district clause zaczyna się od "(\n        unaccent(LOWER(COALESCE(district,'')))"
-   if (
-    opts.dropDistrict &&
-    s.includes("COALESCE(district,''))") &&
-    s.includes("COALESCE(location_text,''))")
-  ) {
-    continue;
-  }
-
+    if (opts.dropCity && s.includes("COALESCE(city,''))") && s.includes("COALESCE(location_text,''))")) {
+      continue;
+    }
+    if (opts.dropDistrict && s.includes("COALESCE(district,''))") && s.includes("COALESCE(location_text,''))")) {
+      continue;
+    }
     out.push(w);
   }
 
@@ -275,12 +250,12 @@ function buildWhereWithoutSoft(
 }
 
 function scoreFiltersWithRelax(scoreFilters: any, relaxed: RelaxedFlags) {
-  // scoring ma gate na city/district → jak poluzowaliśmy SQL, to musimy poluzować gate scoringu
   const next = { ...scoreFilters };
   if (relaxed.city) next.city = "";
   if (relaxed.district) next.district = "";
   return next;
 }
+
 function buildListSql(whereSql: string, orderBy: string, pLimit: number, pOffset?: number) {
   return `
     WITH action_agg AS (
@@ -332,6 +307,7 @@ function buildListSql(whereSql: string, orderBy: string, pLimit: number, pOffset
     ${typeof pOffset === "number" ? `OFFSET $${pOffset}` : ``}
   `;
 }
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     if (req.method !== "GET") {
@@ -352,37 +328,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const limitRaw = optNumber(req.query.limit) ?? 50;
     const limit = Math.min(Math.max(limitRaw, 1), 200);
 
-    // ✅ nowa paginacja stronami (page=1..N). Jeśli page jest podane -> używamy OFFSET.
     const pageRaw = optNumber(req.query.page);
     const page = pageRaw != null ? Math.min(Math.max(pageRaw, 1), 1000000) : null;
 
-    // ✅ cursor (seek pagination): updated_at + id (fallback, gdy nie ma page)
     const cursorUpdatedAt = optTimestamptz(req.query.cursorUpdatedAt);
     const cursorId = optString(req.query.cursorId);
 
     const q = optString(req.query.q)?.toLowerCase() ?? null;
-    const source = optString(req.query.source); // "otodom"|"olx"|...
-    const status = optString(req.query.status) ?? "active";
+    const source = optString(req.query.source);
     const includeInactive = optString(req.query.includeInactive) === "1";
     const onlyEnriched = optString(req.query.onlyEnriched) === "1";
-    const includePreview = optString(req.query.includePreview) !== "0"; // domyślnie TAK
+    const includePreview = optString(req.query.includePreview) !== "0";
     const strict = optString(req.query.strict) === "1";
     const matchedSince = optTimestamptz(req.query.matchedSince);
-    const mode = optString(req.query.mode) ?? null; // null | "search"
-    const filtersHash = optString(req.query.filtersHash) ?? null; // opcjonalnie: echo z UI
+    const mode = optString(req.query.mode) ?? null;
+    const filtersHash = optString(req.query.filtersHash) ?? null;
 
     const where: string[] = [`1=1`];
 
-    // ✅ $1 = officeId (tylko do my_saved)
-    // ✅ filtry zaczynają się od $2
     const params: any[] = [officeId];
     let p = 2;
 
-    // ✅ stabilizacja bindów (countSql też dostaje params)
     where.push(`$1::uuid IS NOT NULL`);
 
     if (matchedSince) {
-      // ✅ nie wycinaj rekordów z NULL matched_at (stare cache)
       where.push(`(
         matched_at >= $${p}::timestamptz
         OR matched_at IS NULL
@@ -402,7 +371,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       params.push(source);
     }
 
-    // --- NEW FILTERS FROM SEARCH PANEL ---
     const transactionType = optString(req.query.transactionType);
     const propertyType = optString(req.query.propertyType);
     const locationText = optString(req.query.locationText);
@@ -422,14 +390,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       district: district ?? "",
       transactionType: transactionType ?? "",
       propertyType: propertyType ?? "",
-      minPrice,   // ✅ null zostaje null
+      minPrice,
       maxPrice,
       minArea,
       maxArea,
       rooms,
     };
 
-    // ✅ scoring ma sens TYLKO jeśli user podał jakiekolwiek filtry strukturalne
     const useScoring = hasAnyFiltersForScoring(scoreFilters);
 
     const hasDetailFilters =
@@ -448,12 +415,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const hasStructuredFilters = hasDetailFilters;
 
-        // ✅ Guard: jeśli UI jest w trybie search, a request przyszedł "pusty",
-    // to NIE wolno zwracać pełnej listy (bo to nadpisuje wyniki i robi "przeskok").
     if (mode === "search") {
-      const hasAny =
-        !!q || hasStructuredFilters || useScoring;
-
+      const hasAny = !!q || hasStructuredFilters || useScoring;
       if (!hasAny) {
         return res.status(200).json({
           rows: [],
@@ -472,7 +435,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    // q działa tylko gdy nie ma structured filters (jak masz)
     if (q && !hasStructuredFilters) {
       const terms = q
         .split(/[,\s]+/g)
@@ -493,21 +455,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    //  TRANSACTION TYPE
     if (transactionType) {
       const v = transactionType.toLowerCase().trim();
-
-      const mapped =
-        v === "kupno" ? "sale" :
-        v === "wynajem" ? "rent" :
-        v;
+      const mapped = v === "kupno" ? "sale" : v === "wynajem" ? "rent" : v;
 
       where.push(`(LOWER(COALESCE(transaction_type,'')) = $${p})`);
       params.push(mapped);
       p++;
     }
 
-    // PROPERTY TYPE
     if (propertyType) {
       const vCanon = mapPropertyFilterToCanonical(propertyType);
       const raw = String(propertyType).trim().toLowerCase();
@@ -524,7 +480,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       p += 2;
     }
 
-    //  LOCATION TEXT
     if (locationText && !(city || district)) {
       const v = locationText.toLowerCase().trim();
       where.push(`(LOWER(COALESCE(location_text,'')) LIKE $${p})`);
@@ -532,125 +487,100 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       p++;
     }
 
-    // STREET
+    // ✅ unaccent tylko na kolumnach, parametr znormalizowany w JS
     if (street) {
-      const v = street.toLowerCase().trim();
-
       where.push(
         strict
-       ? `(unaccent(LOWER(COALESCE(street,''))) LIKE unaccent($${p}::text))`
+          ? `(unaccent(LOWER(COALESCE(street,''))) LIKE $${p}::text)`
           : `(
               street IS NULL
               OR street = ''
-              OR unaccent(LOWER(street)) LIKE unaccent($${p}::text)
+              OR unaccent(LOWER(street)) LIKE $${p}::text
             )`
       );
-
-      params.push(`%${v}%`);
+      params.push(normLike(street));
       p++;
     }
 
     if (voivodeship) {
-      where.push(`(unaccent(LOWER(COALESCE(voivodeship,''))) LIKE unaccent(LOWER($${p}::text)))`);
-      params.push(`%${voivodeship.toLowerCase()}%`);
+      where.push(`(unaccent(LOWER(COALESCE(voivodeship,''))) LIKE $${p}::text)`);
+      params.push(normLike(voivodeship));
       p++;
     }
 
     if (city) {
-      // ✅ city bywa w district albo tylko w location_text, więc szukamy w 3 polach
       where.push(`(
-      unaccent(LOWER(COALESCE(city,''))) LIKE unaccent(LOWER($${p}::text))
-      OR unaccent(LOWER(COALESCE(district,''))) LIKE unaccent(LOWER($${p}::text))
-      OR unaccent(LOWER(COALESCE(location_text,''))) LIKE unaccent(LOWER($${p}::text))
-     )`);
-      params.push(`%${city.toLowerCase()}%`);
+        unaccent(LOWER(COALESCE(city,''))) LIKE $${p}::text
+        OR unaccent(LOWER(COALESCE(district,''))) LIKE $${p}::text
+        OR unaccent(LOWER(COALESCE(location_text,''))) LIKE $${p}::text
+      )`);
+      params.push(normLike(city));
       p++;
     }
 
     if (district) {
       where.push(`(
-      unaccent(LOWER(COALESCE(district,''))) LIKE unaccent(LOWER($${p}::text))
-      OR unaccent(LOWER(COALESCE(location_text,''))) LIKE unaccent(LOWER($${p}::text))
-    )`);
-      params.push(`%${district.toLowerCase()}%`);
+        unaccent(LOWER(COALESCE(district,''))) LIKE $${p}::text
+        OR unaccent(LOWER(COALESCE(location_text,''))) LIKE $${p}::text
+      )`);
+      params.push(normLike(district));
       p++;
     }
-    // PRICE
+
     if (minPrice != null) {
-      where.push(
-        strict
-          ? `(price_amount >= $${p})`
-          : `(price_amount IS NULL OR price_amount >= $${p})`
-      );
+      where.push(strict ? `(price_amount >= $${p})` : `(price_amount IS NULL OR price_amount >= $${p})`);
       params.push(minPrice);
       p++;
     }
 
     if (maxPrice != null) {
-      where.push(
-        strict
-          ? `(price_amount <= $${p})`
-          : `(price_amount IS NULL OR price_amount <= $${p})`
-      );
+      where.push(strict ? `(price_amount <= $${p})` : `(price_amount IS NULL OR price_amount <= $${p})`);
       params.push(maxPrice);
       p++;
     }
 
-    // 6) AREA
     if (minArea != null) {
-      where.push(
-        strict
-          ? `(area_m2 >= $${p})`
-          : `(area_m2 IS NULL OR area_m2 >= $${p})`
-      );
+      where.push(strict ? `(area_m2 >= $${p})` : `(area_m2 IS NULL OR area_m2 >= $${p})`);
       params.push(minArea);
       p++;
     }
 
     if (maxArea != null) {
-      where.push(
-        strict
-          ? `(area_m2 <= $${p})`
-          : `(area_m2 IS NULL OR area_m2 <= $${p})`
-      );
+      where.push(strict ? `(area_m2 <= $${p})` : `(area_m2 IS NULL OR area_m2 <= $${p})`);
       params.push(maxArea);
       p++;
     }
 
-    //  ROOMS
     if (rooms != null) {
-      where.push(
-        strict
-          ? `(rooms = $${p})`
-          : `(rooms IS NULL OR rooms = $${p})`
-      );
+      where.push(strict ? `(rooms = $${p})` : `(rooms IS NULL OR rooms = $${p})`);
       params.push(rooms);
       p++;
     }
-    // ✅ DEBUG: pokaż jakie WHERE i parametry idą do SQL (na czas diagnostyki)
-console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
-  where: where.join(" AND "),
-  params,
-  p,
-  useScoring,
-  filters: {
-    q,
-    source,
-    transactionType,
-    propertyType,
-    voivodeship,
-    city,
-    district,
-    street,
-    minPrice,
-    maxPrice,
-    minArea,
-    maxArea,
-    rooms,
-    matchedSince,
-  },
-});
-    // ====== TRYB 1: page-based (LIMIT/OFFSET) ======
+
+    console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
+      where: where.join(" AND "),
+      params,
+      p,
+      useScoring,
+      filters: {
+        q,
+        source,
+        transactionType,
+        propertyType,
+        voivodeship,
+        city,
+        district,
+        street,
+        minPrice,
+        maxPrice,
+        minArea,
+        maxArea,
+        rooms,
+        matchedSince,
+      },
+    });
+
+    // ====== TRYB 1: page-based ======
     if (page != null) {
       const countSql = `
         SELECT count(*)::bigint AS cnt
@@ -664,71 +594,16 @@ console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
       const overfetch = Math.min(limit * 10, 2000);
       const offset = (page - 1) * limit;
 
-        const sql = `
-        WITH action_agg AS (
-          SELECT
-            external_listing_id,
-            -- kto ostatnio coś zrobił na tym ogłoszeniu (jakiekolwiek biuro)
-            (ARRAY_AGG(office_id ORDER BY created_at DESC))[1] AS handled_by_office_id,
-            MAX(created_at) AS last_interaction_at,
-            (ARRAY_AGG(action ORDER BY created_at DESC))[1] AS last_action,
-            -- kiedy to ogłoszenie zostało "save" po raz pierwszy (przez jakiekolwiek biuro)
-            MIN(created_at) FILTER (WHERE action = 'save') AS handled_since
-          FROM external_listing_actions
-          GROUP BY external_listing_id
-        ),
-        my_saved AS (
-          SELECT
-            external_listing_id,
-            TRUE AS my_office_saved
-          FROM external_listing_actions
-          WHERE office_id = $1::uuid AND action = 'save'
-          GROUP BY external_listing_id
-        )
-        SELECT
-          l.id, l.office_id, l.source, l.source_url, l.status,
-          l.title, l.description,
-          l.price_amount, l.currency, l.location_text,
-          l.thumb_url, l.matched_at,
-          l.transaction_type, l.property_type,
-          l.area_m2, l.price_per_m2, l.rooms,
-          l.floor, l.year_built,
-          l.voivodeship, l.city, l.district, l.street,
-          l.owner_phone,
-          l.source_status, l.last_seen_at, l.last_checked_at, l.enriched_at,
-
-          -- NOWE KOLUMNY
-          l.lat, l.lng,
-          l.rcn_last_price, l.rcn_last_date, l.rcn_link,
-
-          l.updated_at,
-
-          -- ✅ MARKERY OBSŁUGI
-          a.handled_by_office_id,
-          a.handled_since,
-          a.last_interaction_at,
-          a.last_action,
-          COALESCE(ms.my_office_saved, FALSE) AS my_office_saved
-
-        FROM external_listings l
-        LEFT JOIN action_agg a ON a.external_listing_id = l.id
-        LEFT JOIN my_saved ms ON ms.external_listing_id = l.id
-        WHERE ${where.join(" AND ")}
-        ORDER BY ${orderBy}
-        LIMIT $${p} OFFSET $${p + 1}
-      `;
-
+      const sql = buildListSql(where.join(" AND "), orderBy, p, p + 1);
       const listParams = [...params, overfetch, offset];
+
       let relaxed: RelaxedFlags = {};
       let { rows } = await pool.query<Row>(sql, listParams);
 
-      // ✅ fallback: jeżeli 0 wyników i mamy city/district, poluzuj (najpierw city, potem district)
       if (rows.length === 0 && !strict && (city || district)) {
-        // 1) drop city
         if (city) {
           const where2 = buildWhereWithoutSoft(where, { dropCity: true, dropDistrict: false });
-          const whereSql2 = where2.join(" AND ");
-          const sql2 = buildListSql(whereSql2, orderBy, p, p + 1);
+          const sql2 = buildListSql(where2.join(" AND "), orderBy, p, p + 1);
           const { rows: r2 } = await pool.query<Row>(sql2, listParams);
           if (r2.length) {
             rows = r2;
@@ -736,11 +611,9 @@ console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
           }
         }
 
-        // 2) drop district (jeśli dalej 0)
         if (rows.length === 0 && district) {
           const where3 = buildWhereWithoutSoft(where, { dropCity: true, dropDistrict: true });
-          const whereSql3 = where3.join(" AND ");
-          const sql3 = buildListSql(whereSql3, orderBy, p, p + 1);
+          const sql3 = buildListSql(where3.join(" AND "), orderBy, p, p + 1);
           const { rows: r3 } = await pool.query<Row>(sql3, listParams);
           if (r3.length) {
             rows = r3;
@@ -750,9 +623,6 @@ console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
         }
       }
 
-      // ===============================
-      // PAGE MODE – NO SCORING
-      // ===============================
       if (!useScoring) {
         return res.status(200).json({
           rows: rows.slice(0, limit),
@@ -764,9 +634,6 @@ console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
         });
       }
 
-      // ===============================
-      // PAGE MODE – WITH SCORING
-      // ===============================
       const scored = rows
         .map((r: any) => {
           const s = scoreRow(r, scoreFiltersWithRelax(scoreFilters, relaxed));
@@ -788,10 +655,10 @@ console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
         total,
         totalPages,
         meta: { mode, filtersHash, relaxed },
-});
+      });
     }
 
-    // ====== TRYB 2: cursor-based (dotychczasowy) ======
+    // ====== TRYB 2: cursor-based ======
     if (cursorUpdatedAt && isUuid(cursorId)) {
       where.push(`(
         updated_at < $${p}::timestamptz
@@ -801,71 +668,17 @@ console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
       p += 2;
     }
 
-        const sql = `
-      WITH action_agg AS (
-        SELECT
-          external_listing_id,
-          -- kto ostatnio coś zrobił na tym ogłoszeniu (jakiekolwiek biuro)
-          (ARRAY_AGG(office_id ORDER BY created_at DESC))[1] AS handled_by_office_id,
-          MAX(created_at) AS last_interaction_at,
-          (ARRAY_AGG(action ORDER BY created_at DESC))[1] AS last_action,
-          -- kiedy to ogłoszenie zostało "save" po raz pierwszy (przez jakiekolwiek biuro)
-          MIN(created_at) FILTER (WHERE action = 'save') AS handled_since
-        FROM external_listing_actions
-        GROUP BY external_listing_id
-      ),
-      my_saved AS (
-        SELECT
-          external_listing_id,
-          TRUE AS my_office_saved
-        FROM external_listing_actions
-        WHERE office_id = $1::uuid AND action = 'save'
-        GROUP BY external_listing_id
-      )
-      SELECT
-        l.id, l.office_id, l.source, l.source_url, l.status,
-        l.title, l.description,
-        l.price_amount, l.currency, l.location_text,
-        l.thumb_url, l.matched_at,
-        l.transaction_type, l.property_type,
-        l.area_m2, l.price_per_m2, l.rooms,
-        l.floor, l.year_built,
-        l.voivodeship, l.city, l.district, l.street,
-        l.owner_phone,
-        l.source_status, l.last_seen_at, l.last_checked_at, l.enriched_at,
-
-        -- NOWE KOLUMNY
-        l.lat, l.lng,
-        l.rcn_last_price, l.rcn_last_date, l.rcn_link,
-
-        l.updated_at,
-
-        -- ✅ MARKERY OBSŁUGI
-        a.handled_by_office_id,
-        a.handled_since,
-        a.last_interaction_at,
-        a.last_action,
-        COALESCE(ms.my_office_saved, FALSE) AS my_office_saved
-
-      FROM external_listings l
-      LEFT JOIN action_agg a ON a.external_listing_id = l.id
-      LEFT JOIN my_saved ms ON ms.external_listing_id = l.id
-      WHERE ${where.join(" AND ")}
-      ORDER BY ${orderBy}
-      LIMIT $${p}
-    `;
-
     const overfetch = Math.min(limit * 10, 2000);
-    
     params.push(overfetch);
+
+    const sql = buildListSql(where.join(" AND "), orderBy, p);
     let relaxed: RelaxedFlags = {};
     let { rows } = await pool.query<Row>(sql, params);
 
     if (rows.length === 0 && !strict && (city || district)) {
       if (city) {
         const where2 = buildWhereWithoutSoft(where, { dropCity: true, dropDistrict: false });
-        const whereSql2 = where2.join(" AND ");
-        const sql2 = buildListSql(whereSql2, orderBy, p);
+        const sql2 = buildListSql(where2.join(" AND "), orderBy, p);
         const { rows: r2 } = await pool.query<Row>(sql2, params);
         if (r2.length) {
           rows = r2;
@@ -875,8 +688,7 @@ console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
 
       if (rows.length === 0 && district) {
         const where3 = buildWhereWithoutSoft(where, { dropCity: true, dropDistrict: true });
-        const whereSql3 = where3.join(" AND ");
-        const sql3 = buildListSql(whereSql3, orderBy, p);
+        const sql3 = buildListSql(where3.join(" AND "), orderBy, p);
         const { rows: r3 } = await pool.query<Row>(sql3, params);
         if (r3.length) {
           rows = r3;
@@ -886,57 +698,15 @@ console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
       }
     }
 
-    // ✅ jeśli filtry puste -> nie scoringuj i nie wycinaj nic
-        if (!useScoring) {
-          const pageRows = rows.slice(0, limit);
-          const lastRaw = pageRows.length ? pageRows[pageRows.length - 1] : null;
+    if (!useScoring) {
+      const pageRows = rows.slice(0, limit);
+      const lastRaw = pageRows.length ? pageRows[pageRows.length - 1] : null;
 
-          const nextCursor =
-            rows.length === overfetch && lastRaw
-              ? { updated_at: lastRaw.updated_at, id: lastRaw.id }
-              : null;
-
-          return res.status(200).json({
-            rows: pageRows,
-            nextCursor,
-            meta: {
-              officeId,
-              limit,
-              includeInactive,
-              includePreview,
-              onlyEnriched,
-              mode,
-              filtersHash,
-              relaxed,
-            },
-          });
-        }
-      // ===============================
-      // cursor-mode: scoring
-      // ===============================
-      const scored = rows
-        .map((r: any) => {
-          const s = scoreRow(r, scoreFiltersWithRelax(scoreFilters, relaxed));
-          return { ...r, match_band: s.band, match_score: s.restScore };
-        })
-        .filter((r: any) => r.match_band !== "none")
-        .sort((a: any, b: any) => {
-          const w = (x: string) => (x === "green" ? 2 : x === "yellow" ? 1 : 0);
-          const dw = w(b.match_band) - w(a.match_band);
-          if (dw !== 0) return dw;
-          return (b.match_score ?? 0) - (a.match_score ?? 0);
-        })
-        .slice(0, limit);
-
-      // ✅ nextCursor liczysz z RAW rows, nie ze scored
-      const lastRaw = rows.length ? rows[rows.length - 1] : null;
       const nextCursor =
-        rows.length === overfetch && lastRaw
-          ? { updated_at: lastRaw.updated_at, id: lastRaw.id }
-          : null;
+        rows.length === overfetch && lastRaw ? { updated_at: lastRaw.updated_at, id: lastRaw.id } : null;
 
       return res.status(200).json({
-        rows: scored,
+        rows: pageRows,
         nextCursor,
         meta: {
           officeId,
@@ -949,7 +719,40 @@ console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
           relaxed,
         },
       });
-        } catch (e: any) {
+    }
+
+    const scored = rows
+      .map((r: any) => {
+        const s = scoreRow(r, scoreFiltersWithRelax(scoreFilters, relaxed));
+        return { ...r, match_band: s.band, match_score: s.restScore };
+      })
+      .filter((r: any) => r.match_band !== "none")
+      .sort((a: any, b: any) => {
+        const w = (x: string) => (x === "green" ? 2 : x === "yellow" ? 1 : 0);
+        const dw = w(b.match_band) - w(a.match_band);
+        if (dw !== 0) return dw;
+        return (b.match_score ?? 0) - (a.match_score ?? 0);
+      })
+      .slice(0, limit);
+
+    const lastRaw = rows.length ? rows[rows.length - 1] : null;
+    const nextCursor = rows.length === overfetch && lastRaw ? { updated_at: lastRaw.updated_at, id: lastRaw.id } : null;
+
+    return res.status(200).json({
+      rows: scored,
+      nextCursor,
+      meta: {
+        officeId,
+        limit,
+        includeInactive,
+        includePreview,
+        onlyEnriched,
+        mode,
+        filtersHash,
+        relaxed,
+      },
+    });
+  } catch (e: any) {
     console.error("EXTERNAL_LISTINGS_LIST_ERROR", e);
     return res.status(400).json({ error: e?.message ?? "Bad request" });
   }
