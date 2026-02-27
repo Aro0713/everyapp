@@ -35,7 +35,12 @@ function toSourceKey(s: string): SourceKey | null {
   }
 
   // nieruchomosci-online
-  if (v === "no" || v === "nieruchomosci-online" || v === "nieruchomoscisonline" || v === "nieruchomosci_online") {
+  if (
+    v === "no" ||
+    v === "nieruchomosci-online" ||
+    v === "nieruchomoscisonline" ||
+    v === "nieruchomosci_online"
+  ) {
     return "nieruchomosci_online";
   }
 
@@ -44,6 +49,10 @@ function toSourceKey(s: string): SourceKey | null {
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+function isNonEmptyString(x: unknown): boolean {
+  return typeof x === "string" && x.trim().length > 0;
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -104,11 +113,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               OR city IS NULL
               OR location_text IS NULL
             )
-            AND (last_checked_at IS NULL OR last_checked_at < now() - interval '12 hours')
+            AND (
+              last_checked_at IS NULL
+              OR last_checked_at < now() - interval '12 hours'
+              OR (
+                (transaction_type IS NULL OR property_type IS NULL)
+                AND last_checked_at < now() - interval '60 minutes'
+              )
+            )
           ORDER BY enriched_at NULLS FIRST, last_seen_at DESC NULLS LAST, updated_at DESC
           LIMIT $2
         `,
-
       onlyId || onlyUrl ? [officeId, (onlyId ?? onlyUrl)!] : [officeId, limit]
     );
 
@@ -146,77 +161,100 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       try {
         const data = await enricher(r.source_url);
 
+        // ✅ core = jeśli nie mamy tych pól, NIE uznajemy rekordu za enriched
+        const hasCore = isNonEmptyString((data as any).transaction_type) && isNonEmptyString((data as any).property_type);
+
+        // ✅ raw (jeśli enricher zwraca) – zapisujemy do jsonb, żeby mieć debug/backfill
+        const rawJson =
+          (data as any).raw != null
+            ? JSON.stringify((data as any).raw)
+            : null;
+
         // Aktualizuj tylko tym, co przyszło (COALESCE: jeśli null/undefined -> zostaw starą wartość)
-    await pool.query(
-      `
-      UPDATE external_listings
-      SET
-        thumb_url        = COALESCE($1, thumb_url),
-        matched_at       = COALESCE($2, matched_at),
+        await pool.query(
+          `
+          UPDATE external_listings
+          SET
+            thumb_url        = COALESCE($1, thumb_url),
+            matched_at       = COALESCE($2, matched_at),
 
-        transaction_type = COALESCE($3, transaction_type),
-        property_type    = COALESCE($4, property_type),
+            transaction_type = COALESCE($3, transaction_type),
+            property_type    = COALESCE($4, property_type),
 
-        price_amount     = COALESCE($5, price_amount),
-        currency         = COALESCE($6, currency),
+            price_amount     = COALESCE($5, price_amount),
+            currency         = COALESCE($6, currency),
 
-        area_m2          = COALESCE($7, area_m2),
-        price_per_m2     = COALESCE($8, price_per_m2),
-        rooms            = COALESCE($9, rooms),
+            area_m2          = COALESCE($7, area_m2),
+            price_per_m2     = COALESCE($8, price_per_m2),
+            rooms            = COALESCE($9, rooms),
 
-        floor            = COALESCE($10, floor),
-        year_built       = COALESCE($11, year_built),
+            floor            = COALESCE($10, floor),
+            year_built       = COALESCE($11, year_built),
 
-        voivodeship      = COALESCE($12, voivodeship),
-        city             = COALESCE($13, city),
-        district         = COALESCE($14, district),
-        street           = COALESCE($15, street),
+            voivodeship      = COALESCE($12, voivodeship),
+            city             = COALESCE($13, city),
+            district         = COALESCE($14, district),
+            street           = COALESCE($15, street),
 
-        owner_phone      = COALESCE($16, owner_phone),
+            owner_phone      = COALESCE($16, owner_phone),
 
-        location_text    = COALESCE($17, location_text),
-        title            = COALESCE($18, title),
-        description      = COALESCE($19, description),
+            location_text    = COALESCE($17, location_text),
+            title            = COALESCE($18, title),
+            description      = COALESCE($19, description),
 
-        source_status    = COALESCE(NULLIF($20, ''), COALESCE(NULLIF(source_status, ''), 'active')),
-        last_checked_at  = now(),
-        enriched_at      = now(),
-        updated_at       = now()
-      WHERE office_id = $21 AND id = $22
-    `,
-      [
-        data.thumb_url ?? null,
-        data.matched_at ?? null,
+            source_status    = COALESCE(NULLIF($20, ''), COALESCE(NULLIF(source_status, ''), 'active')),
 
-        data.transaction_type ?? null,
-        data.property_type ?? null,
+            -- ✅ raw: tylko jeśli enricher dał cokolwiek; nie kasujemy istniejącego
+            raw              = CASE
+                                 WHEN $23::jsonb IS NULL THEN raw
+                                 WHEN raw = '{}'::jsonb THEN $23::jsonb
+                                 ELSE raw || $23::jsonb
+                               END,
 
-        data.price_amount ?? null,
-        data.currency ?? null,
+            last_checked_at  = now(),
 
-        data.area_m2 ?? null,
-        data.price_per_m2 ?? null,
-        data.rooms ?? null,
+            -- ✅ enriched_at tylko gdy mamy core; inaczej zostawiamy poprzednie (albo NULL)
+            enriched_at      = CASE WHEN $24::boolean THEN now() ELSE enriched_at END,
 
-        data.floor ?? null,
-        data.year_built ?? null,
+            updated_at       = now()
+          WHERE office_id = $21 AND id = $22
+        `,
+          [
+            data.thumb_url ?? null,
+            data.matched_at ?? null,
 
-        data.voivodeship ?? null,
-        data.city ?? null,
-        data.district ?? null,
-        data.street ?? null,
+            (data as any).transaction_type ?? null,
+            (data as any).property_type ?? null,
 
-        data.owner_phone ?? null,
+            (data as any).price_amount ?? null,
+            (data as any).currency ?? null,
 
-        data.location_text ?? null,
-        data.title ?? null,
-        data.description ?? null,
+            (data as any).area_m2 ?? null,
+            (data as any).price_per_m2 ?? null,
+            (data as any).rooms ?? null,
 
-        (data as any).source_status ?? null, // ✅ jeśli enricher zwraca
-        officeId,
-        r.id,
-      ]
-    );
+            (data as any).floor ?? null,
+            (data as any).year_built ?? null,
+
+            (data as any).voivodeship ?? null,
+            (data as any).city ?? null,
+            (data as any).district ?? null,
+            (data as any).street ?? null,
+
+            (data as any).owner_phone ?? null,
+
+            (data as any).location_text ?? null,
+            (data as any).title ?? null,
+            (data as any).description ?? null,
+
+            (data as any).source_status ?? null, // ✅ jeśli enricher zwraca
+            officeId,
+            r.id,
+
+            rawJson,  // $23
+            hasCore,  // $24
+          ]
+        );
 
         processed += 1;
 
