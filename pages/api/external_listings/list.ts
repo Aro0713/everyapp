@@ -412,18 +412,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       p++;
     }
 
-    //  PROPERTY TYPE
+    // PROPERTY TYPE
     if (propertyType) {
       const vCanon = mapPropertyFilterToCanonical(propertyType);
+      const raw = String(propertyType).trim().toLowerCase();
 
-      // ✅ dopasuj elastycznie: canonical + oryginał (dom/mieszkanie/działka/lokal)
       where.push(`(
         LOWER(COALESCE(property_type,'')) = $${p}
         OR LOWER(COALESCE(property_type,'')) LIKE $${p + 1}
         OR LOWER(COALESCE(title,'')) LIKE $${p + 1}
+        OR LOWER(COALESCE(title,'')) LIKE '%dom%'
       )`);
+
       params.push(vCanon);
-      params.push(`%${String(propertyType).trim().toLowerCase()}%`);
+      params.push(`%${raw}%`);
       p += 2;
     }
 
