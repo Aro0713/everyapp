@@ -551,7 +551,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (voivodeship) {
-      where.push(`(unaccent(LOWER(COALESCE(voivodeship,''))) LIKE unaccent($${p}::text))`);
+      where.push(`(unaccent(LOWER(COALESCE(voivodeship,''))) LIKE unaccent(LOWER($${p}::text)))`);
       params.push(`%${voivodeship.toLowerCase()}%`);
       p++;
     }
@@ -559,18 +559,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (city) {
       // ✅ city bywa w district albo tylko w location_text, więc szukamy w 3 polach
       where.push(`(
-      unaccent(LOWER(COALESCE(city,''))) LIKE unaccent($${p}::text)
-      OR unaccent(LOWER(COALESCE(district,''))) LIKE unaccent($${p}::text)
-      OR unaccent(LOWER(COALESCE(location_text,''))) LIKE unaccent($${p}::text)
-    )`);
+      unaccent(LOWER(COALESCE(city,''))) LIKE unaccent(LOWER($${p}::text))
+      OR unaccent(LOWER(COALESCE(district,''))) LIKE unaccent(LOWER($${p}::text))
+      OR unaccent(LOWER(COALESCE(location_text,''))) LIKE unaccent(LOWER($${p}::text))
+     )`);
       params.push(`%${city.toLowerCase()}%`);
       p++;
     }
 
     if (district) {
       where.push(`(
-      unaccent(LOWER(COALESCE(district,''))) LIKE unaccent($${p}::text)
-      OR unaccent(LOWER(COALESCE(location_text,''))) LIKE unaccent($${p}::text)
+      unaccent(LOWER(COALESCE(district,''))) LIKE unaccent(LOWER($${p}::text))
+      OR unaccent(LOWER(COALESCE(location_text,''))) LIKE unaccent(LOWER($${p}::text))
     )`);
       params.push(`%${district.toLowerCase()}%`);
       p++;
