@@ -270,8 +270,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const matchedSince = optTimestamptz(req.query.matchedSince);
 
     const where: string[] = [`1=1`];
-    const params: any[] = [];
-    let p = 1;
+
+    // ✅ $1 = officeId (tylko do my_saved)
+    // ✅ filtry zaczynają się od $2
+    const params: any[] = [officeId];
+    let p = 2;
+
+    // ✅ żeby countSql ZAWSZE miało co najmniej $1 i nie wybuchało bez filtrów
+    where.push(`$1::uuid IS NOT NULL`);
 
     if (!includePreview) {
       where.push(`status <> 'preview'`);
@@ -510,7 +516,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             external_listing_id,
             TRUE AS my_office_saved
           FROM external_listing_actions
-          WHERE office_id = $${p}::uuid AND action = 'save'
+          WHERE office_id = $1::uuid AND action = 'save'
           GROUP BY external_listing_id
         )
         SELECT
@@ -543,10 +549,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         LEFT JOIN my_saved ms ON ms.external_listing_id = l.id
         WHERE ${where.join(" AND ")}
         ORDER BY ${orderBy}
-        LIMIT $${p + 1} OFFSET $${p + 2}
+        LIMIT $${p} OFFSET $${p + 1}
       `;
 
-      const listParams = [...params, officeId, overfetch, offset];
+      const listParams = [...params, overfetch, offset];
       const { rows } = await pool.query<Row>(sql, listParams);
 
       // ✅ jeśli filtry puste -> nie scoringuj i nie wycinaj nic
@@ -610,7 +616,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           external_listing_id,
           TRUE AS my_office_saved
         FROM external_listing_actions
-        WHERE office_id = $${p}::uuid AND action = 'save'
+        WHERE office_id = $1::uuid AND action = 'save'
         GROUP BY external_listing_id
       )
       SELECT
@@ -643,12 +649,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       LEFT JOIN my_saved ms ON ms.external_listing_id = l.id
       WHERE ${where.join(" AND ")}
       ORDER BY ${orderBy}
-      LIMIT $${p + 1} OFFSET $${p + 2}
+      LIMIT $${p}
     `;
 
     const overfetch = Math.min(limit * 10, 2000);
     
-    params.push(officeId);
     params.push(overfetch);
     const { rows } = await pool.query<Row>(sql, params);
 
@@ -682,19 +687,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ? { updated_at: lastRaw.updated_at, id: lastRaw.id }
         : null;
 
-    return res.status(200).json({
-      rows: scored,
-      nextCursor,
-      meta: {
-        officeId,
-        limit,
-        includeInactive,
-        includePreview,
-        onlyEnriched,
-      },
-    });
-      } catch (e: any) {
-        console.error("EXTERNAL_LISTINGS_LIST_ERROR", e);
-        return res.status(400).json({ error: e?.message ?? "Bad request" });
-      }
-    }
+return res.status(200).json({
+rows: scored,
+nextCursor,
+meta: {
+   officeId,
+   limit,
+   includeInactive,
+   includePreview,
+   onlyEnriched,
+  },
+});
+} catch (e: any) {
+  console.error("EXTERNAL_LISTINGS_LIST_ERROR", e);
+  return res.status(400).json({ error: e?.message ?? "Bad request" });
+}
+}
