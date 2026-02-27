@@ -487,11 +487,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       where.push(
         strict
-          ? `(unaccent(LOWER(COALESCE(street,''))) LIKE unaccent($${p}))`
+       ? `(unaccent(LOWER(COALESCE(street,''))) LIKE unaccent($${p}::text))`
           : `(
               street IS NULL
               OR street = ''
-              OR unaccent(LOWER(street)) LIKE unaccent($${p})
+              OR unaccent(LOWER(street)) LIKE unaccent($${p}::text)
             )`
       );
 
@@ -500,7 +500,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (voivodeship) {
-      where.push(`(unaccent(LOWER(COALESCE(voivodeship,''))) LIKE unaccent($${p}))`);
+      where.push(`(unaccent(LOWER(COALESCE(voivodeship,''))) LIKE unaccent($${p}::text))`);
       params.push(`%${voivodeship.toLowerCase()}%`);
       p++;
     }
@@ -508,19 +508,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (city) {
       // ✅ city bywa w district albo tylko w location_text, więc szukamy w 3 polach
       where.push(`(
-        unaccent(LOWER(COALESCE(city,''))) LIKE unaccent($${p})
-        OR unaccent(LOWER(COALESCE(district,''))) LIKE unaccent($${p})
-        OR unaccent(LOWER(COALESCE(location_text,''))) LIKE unaccent($${p})
-      )`);
+      unaccent(LOWER(COALESCE(city,''))) LIKE unaccent($${p}::text)
+      OR unaccent(LOWER(COALESCE(district,''))) LIKE unaccent($${p}::text)
+      OR unaccent(LOWER(COALESCE(location_text,''))) LIKE unaccent($${p}::text)
+    )`);
       params.push(`%${city.toLowerCase()}%`);
       p++;
     }
 
     if (district) {
       where.push(`(
-        unaccent(LOWER(COALESCE(district,''))) LIKE unaccent($${p})
-        OR unaccent(LOWER(COALESCE(location_text,''))) LIKE unaccent($${p})
-      )`);
+      unaccent(LOWER(COALESCE(district,''))) LIKE unaccent($${p}::text)
+      OR unaccent(LOWER(COALESCE(location_text,''))) LIKE unaccent($${p}::text)
+    )`);
       params.push(`%${district.toLowerCase()}%`);
       p++;
     }
