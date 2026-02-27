@@ -126,10 +126,15 @@ function isMatchDistrict(row: any, district: string) {
 
 function num(v: unknown): number | null {
   if (typeof v === "number" && Number.isFinite(v)) return v;
+
   if (typeof v === "string") {
-    const n = Number(v.replace(/\s/g, "").replace(",", "."));
+    const raw = v.trim();
+    if (!raw) return null; // ✅ pusty string to brak wartości, nie 0
+
+    const n = Number(raw.replace(/\s/g, "").replace(",", "."));
     return Number.isFinite(n) ? n : null;
   }
+
   return null;
 }
 
@@ -320,11 +325,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       district: district ?? "",
       transactionType: transactionType ?? "",
       propertyType: propertyType ?? "",
-      minPrice: minPrice ?? "",
-      maxPrice: maxPrice ?? "",
-      minArea: minArea ?? "",
-      maxArea: maxArea ?? "",
-      rooms: rooms ?? "",
+      minPrice,   // ✅ null zostaje null
+      maxPrice,
+      minArea,
+      maxArea,
+      rooms,
     };
 
     // ✅ scoring ma sens TYLKO jeśli user podał jakiekolwiek filtry strukturalne
@@ -553,6 +558,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const s = scoreRow(r, scoreFilters);
           return { ...r, match_band: s.band, match_score: s.restScore };
         })
+        .filter((r: any) => r.match_band !== "none") // ✅ DODAJ
         .sort((a: any, b: any) => {
           const w = (x: string) => (x === "green" ? 2 : x === "yellow" ? 1 : 0);
           const dw = w(b.match_band) - w(a.match_band);
@@ -646,7 +652,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const nextCursor =
         rows.length === overfetch && lastRaw ? { updated_at: lastRaw.updated_at, id: lastRaw.id } : null;
 
-      return res.status(200).json({ rows: pageRows, nextCursor });
+      return res.status(200).json({
+      rows: pageRows,
+      nextCursor,
+      meta: { officeId, limit, includeInactive, includePreview, onlyEnriched },
+    });
     }
 
     const scored = rows
@@ -669,19 +679,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ? { updated_at: lastRaw.updated_at, id: lastRaw.id }
         : null;
 
-return res.status(200).json({
-rows: scored,
-nextCursor,
-meta: {
-   officeId,
-   limit,
-   includeInactive,
-   includePreview,
-   onlyEnriched,
-  },
-});
-} catch (e: any) {
-  console.error("EXTERNAL_LISTINGS_LIST_ERROR", e);
-  return res.status(400).json({ error: e?.message ?? "Bad request" });
-}
+      return res.status(200).json({
+      rows: scored,
+      nextCursor,
+      meta: {
+        officeId,
+        limit,
+        includeInactive,
+        includePreview,
+        onlyEnriched,
+        },
+      });
+        } catch (e: any) {
+    console.error("EXTERNAL_LISTINGS_LIST_ERROR", e);
+    return res.status(400).json({ error: e?.message ?? "Bad request" });
+  }
 }
