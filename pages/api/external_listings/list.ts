@@ -281,6 +281,57 @@ function scoreFiltersWithRelax(scoreFilters: any, relaxed: RelaxedFlags) {
   if (relaxed.district) next.district = "";
   return next;
 }
+function buildListSql(whereSql: string, orderBy: string, pLimit: number, pOffset?: number) {
+  return `
+    WITH action_agg AS (
+      SELECT
+        external_listing_id,
+        (ARRAY_AGG(office_id ORDER BY created_at DESC))[1] AS handled_by_office_id,
+        MAX(created_at) AS last_interaction_at,
+        (ARRAY_AGG(action ORDER BY created_at DESC))[1] AS last_action,
+        MIN(created_at) FILTER (WHERE action = 'save') AS handled_since
+      FROM external_listing_actions
+      GROUP BY external_listing_id
+    ),
+    my_saved AS (
+      SELECT
+        external_listing_id,
+        TRUE AS my_office_saved
+      FROM external_listing_actions
+      WHERE office_id = $1::uuid AND action = 'save'
+      GROUP BY external_listing_id
+    )
+    SELECT
+      l.id, l.office_id, l.source, l.source_url, l.status,
+      l.title, l.description,
+      l.price_amount, l.currency, l.location_text,
+      l.thumb_url, l.matched_at,
+      l.transaction_type, l.property_type,
+      l.area_m2, l.price_per_m2, l.rooms,
+      l.floor, l.year_built,
+      l.voivodeship, l.city, l.district, l.street,
+      l.owner_phone,
+      l.source_status, l.last_seen_at, l.last_checked_at, l.enriched_at,
+
+      l.lat, l.lng,
+      l.rcn_last_price, l.rcn_last_date, l.rcn_link,
+
+      l.updated_at,
+
+      a.handled_by_office_id,
+      a.handled_since,
+      a.last_interaction_at,
+      a.last_action,
+      COALESCE(ms.my_office_saved, FALSE) AS my_office_saved
+    FROM external_listings l
+    LEFT JOIN action_agg a ON a.external_listing_id = l.id
+    LEFT JOIN my_saved ms ON ms.external_listing_id = l.id
+    WHERE ${whereSql}
+    ORDER BY ${orderBy}
+    LIMIT $${pLimit}
+    ${typeof pOffset === "number" ? `OFFSET $${pOffset}` : ``}
+  `;
+}
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     if (req.method !== "GET") {
@@ -676,7 +727,8 @@ console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
         // 1) drop city
         if (city) {
           const where2 = buildWhereWithoutSoft(where, { dropCity: true, dropDistrict: false });
-          const sql2 = sql.replace(`WHERE ${where.join(" AND ")}`, `WHERE ${where2.join(" AND ")}`);
+          const whereSql2 = where2.join(" AND ");
+          const sql2 = buildListSql(whereSql2, orderBy, p, p + 1);
           const { rows: r2 } = await pool.query<Row>(sql2, listParams);
           if (r2.length) {
             rows = r2;
@@ -687,7 +739,8 @@ console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
         // 2) drop district (jeśli dalej 0)
         if (rows.length === 0 && district) {
           const where3 = buildWhereWithoutSoft(where, { dropCity: true, dropDistrict: true });
-          const sql3 = sql.replace(`WHERE ${where.join(" AND ")}`, `WHERE ${where3.join(" AND ")}`);
+          const whereSql3 = where3.join(" AND ");
+          const sql3 = buildListSql(whereSql3, orderBy, p, p + 1);
           const { rows: r3 } = await pool.query<Row>(sql3, listParams);
           if (r3.length) {
             rows = r3;
@@ -811,7 +864,8 @@ console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
     if (rows.length === 0 && !strict && (city || district)) {
       if (city) {
         const where2 = buildWhereWithoutSoft(where, { dropCity: true, dropDistrict: false });
-        const sql2 = sql.replace(`WHERE ${where.join(" AND ")}`, `WHERE ${where2.join(" AND ")}`);
+        const whereSql2 = where2.join(" AND ");
+        const sql2 = buildListSql(whereSql2, orderBy, p);
         const { rows: r2 } = await pool.query<Row>(sql2, params);
         if (r2.length) {
           rows = r2;
@@ -821,7 +875,8 @@ console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
 
       if (rows.length === 0 && district) {
         const where3 = buildWhereWithoutSoft(where, { dropCity: true, dropDistrict: true });
-        const sql3 = sql.replace(`WHERE ${where.join(" AND ")}`, `WHERE ${where3.join(" AND ")}`);
+        const whereSql3 = where3.join(" AND ");
+        const sql3 = buildListSql(whereSql3, orderBy, p);
         const { rows: r3 } = await pool.query<Row>(sql3, params);
         if (r3.length) {
           rows = r3;
