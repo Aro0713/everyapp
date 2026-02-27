@@ -412,28 +412,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // STREET
     if (street) {
       const v = street.toLowerCase().trim();
+
       where.push(
         strict
-          ? `(LOWER(COALESCE(street,'')) LIKE $${p})`
+          ? `(unaccent(LOWER(COALESCE(street,''))) LIKE unaccent($${p}))`
           : `(
               street IS NULL
               OR street = ''
-              OR LOWER(street) LIKE $${p}
+              OR unaccent(LOWER(street)) LIKE unaccent($${p})
             )`
       );
+
       params.push(`%${v}%`);
       p++;
     }
+
     if (voivodeship) {
-      where.push(`(LOWER(COALESCE(voivodeship,'')) LIKE $${p})`);
+      where.push(`(unaccent(LOWER(COALESCE(voivodeship,''))) LIKE unaccent($${p}))`);
       params.push(`%${voivodeship.toLowerCase()}%`);
       p++;
     }
 
     if (city) {
+      // ✅ city bywa w district albo tylko w location_text, więc szukamy w 3 polach
       where.push(`(
-        LOWER(COALESCE(city,'')) LIKE $${p}
-        OR LOWER(COALESCE(location_text,'')) LIKE $${p}
+        unaccent(LOWER(COALESCE(city,''))) LIKE unaccent($${p})
+        OR unaccent(LOWER(COALESCE(district,''))) LIKE unaccent($${p})
+        OR unaccent(LOWER(COALESCE(location_text,''))) LIKE unaccent($${p})
       )`);
       params.push(`%${city.toLowerCase()}%`);
       p++;
@@ -441,13 +446,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (district) {
       where.push(`(
-        LOWER(COALESCE(district,'')) LIKE $${p}
-        OR LOWER(COALESCE(location_text,'')) LIKE $${p}
+        unaccent(LOWER(COALESCE(district,''))) LIKE unaccent($${p})
+        OR unaccent(LOWER(COALESCE(location_text,''))) LIKE unaccent($${p})
       )`);
       params.push(`%${district.toLowerCase()}%`);
       p++;
     }
-
     // PRICE
     if (minPrice != null) {
       where.push(
