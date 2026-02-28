@@ -95,7 +95,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         select id, office_id, source, source_url
         from external_listings
         where enriched_at is null
-        and status in ('preview','active')
+        and status in ('preview','active','enriched')
         and (location_text is null or location_text = '' or city is null or voivodeship is null)
         order by updated_at asc
         limit $1
@@ -167,7 +167,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             }
 
 
-            const loc = parseLocationPartsFromText(data?.location_text ?? null);
+                const loc = parseLocationPartsFromText(locationText);
 
             await pool.query(
             `
@@ -184,7 +184,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 rooms = coalesce($9, rooms),
                 price_per_m2 = coalesce($10, price_per_m2),
 
-                -- ✅ uzupełnij lokalizację (tylko jeśli coś wyciągnęliśmy)
                 voivodeship = coalesce($11, voivodeship),
                 city = coalesce($12, city),
                 district = coalesce($13, district),
@@ -201,7 +200,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 data?.description ?? null,
                 data?.price_amount ?? null,
                 data?.currency ?? null,
-                data?.location_text ?? null,
+                locationText,
                 data?.thumb_url ?? null,
 
                 data?.area_m2 ?? null,

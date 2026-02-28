@@ -86,6 +86,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 last_checked_at = now(),
                 last_seen_at = coalesce(last_seen_at, now()),
                 source_status = coalesce(source_status, 'active'),
+                enriched_at = case when status = 'enriched' and enriched_at is null then now() else enriched_at end,
                 updated_at = now()
             where id = $1
             `,
