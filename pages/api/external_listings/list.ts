@@ -303,8 +303,8 @@ function buildListSql(whereSql: string, orderBy: string, pLimit: number, pOffset
     LEFT JOIN my_saved ms ON ms.external_listing_id = l.id
     WHERE ${whereSql}
     ORDER BY ${orderBy}
-    LIMIT $${pLimit}
-    ${typeof pOffset === "number" ? `OFFSET $${pOffset}` : ``}
+    LIMIT $${pLimit}::int
+    ${typeof pOffset === "number" ? `OFFSET $${pOffset}::int` : ``}
   `;
 }
 
@@ -526,51 +526,51 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         p++;
       }
 
-      if (minPrice != null) {
-        where.push(
-          strict
-            ? `(price_amount >= $${p}::double precision)`
-            : `(price_amount IS NULL OR price_amount >= $${p}::double precision)`
-        );
-        params.push(minPrice);
-        p++;
-      }
+          if (minPrice != null) {
+      where.push(
+        strict
+          ? `(price_amount >= $${p}::double precision)`
+          : `(price_amount IS NULL OR price_amount >= $${p}::double precision)`
+      );
+      params.push(minPrice);
+      p++;
+    }
 
-      if (maxPrice != null) {
-        where.push(
-          strict
-            ? `(price_amount <= $${p}::double precision)`
-            : `(price_amount IS NULL OR price_amount IS NULL OR price_amount <= $${p}::double precision)`
-        );
-        params.push(maxPrice);
-        p++;
-      }
+    if (maxPrice != null) {
+      where.push(
+        strict
+          ? `(price_amount <= $${p}::double precision)`
+          : `(price_amount IS NULL OR price_amount <= $${p}::double precision)`
+      );
+      params.push(maxPrice);
+      p++;
+    }
 
-      if (minArea != null) {
-        where.push(
-          strict
-            ? `(area_m2 >= $${p}::double precision)`
-            : `(area_m2 IS NULL OR area_m2 >= $${p}::double precision)`
-        );
-        params.push(minArea);
-        p++;
-      }
+    if (minArea != null) {
+      where.push(
+        strict
+          ? `(area_m2 >= $${p}::double precision)`
+          : `(area_m2 IS NULL OR area_m2 >= $${p}::double precision)`
+      );
+      params.push(minArea);
+      p++;
+    }
 
-      if (maxArea != null) {
-        where.push(
-          strict
-            ? `(area_m2 <= $${p}::double precision)`
-            : `(area_m2 IS NULL OR area_m2 <= $${p}::double precision)`
-        );
-        params.push(maxArea);
-        p++;
-      }
+    if (maxArea != null) {
+      where.push(
+        strict
+          ? `(area_m2 <= $${p}::double precision)`
+          : `(area_m2 IS NULL OR area_m2 <= $${p}::double precision)`
+      );
+      params.push(maxArea);
+      p++;
+    }
 
-      if (rooms != null) {
-        where.push(strict ? `(rooms = $${p}::int)` : `(rooms IS NULL OR rooms = $${p}::int)`);
-        params.push(rooms);
-        p++;
-      }
+    if (rooms != null) {
+      where.push(strict ? `(rooms = $${p}::int)` : `(rooms IS NULL OR rooms = $${p}::int)`);
+      params.push(rooms);
+      p++;
+    }
 
     console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
       where: where.join(" AND "),
