@@ -445,7 +445,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const ors: string[] = [];
         for (const term of terms) {
           ors.push(`(
-            LOWER(COALESCE(title,'')) LIKE $${p}
+            LOWER(COALESCE(title,'')) LIKE $${p}::text
             OR LOWER(COALESCE(location_text,'')) LIKE $${p}
           )`);
           params.push(`%${term}%`);
@@ -482,21 +482,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (locationText && !(city || district)) {
       const v = locationText.toLowerCase().trim();
-      where.push(`(LOWER(COALESCE(location_text,'')) LIKE $${p})`);
+      where.push(`(LOWER(COALESCE(location_text,'')) LIKE $${p}::text)`);
       params.push(`%${v}%`);
       p++;
     }
 
       // ✅ unaccent tylko na kolumnach, parametr znormalizowany w JS
-    if (street) {
-      // ✅ parametr już z %...% (bez konkatenacji w SQL)
+        if (street) {
       where.push(
         strict
-          ? `(unaccent(LOWER(COALESCE(street,''))) LIKE $${p})`
+          ? `(unaccent(LOWER(COALESCE(street,''))) LIKE $${p}::text)`
           : `(
               street IS NULL
               OR street = ''
-              OR unaccent(LOWER(street)) LIKE $${p}
+              OR unaccent(LOWER(street)) LIKE $${p}::text
             )`
       );
       params.push(normLike(street));
@@ -504,16 +503,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (voivodeship) {
-      where.push(`(unaccent(LOWER(COALESCE(voivodeship,''))) LIKE $${p})`);
+      where.push(`(unaccent(LOWER(COALESCE(voivodeship,''))) LIKE $${p}::text)`);
       params.push(normLike(voivodeship));
       p++;
     }
 
     if (city) {
       where.push(`(
-        unaccent(LOWER(COALESCE(city,''))) LIKE $${p}
-        OR unaccent(LOWER(COALESCE(district,''))) LIKE $${p}
-        OR unaccent(LOWER(COALESCE(location_text,''))) LIKE $${p}
+        unaccent(LOWER(COALESCE(city,''))) LIKE $${p}::text
+        OR unaccent(LOWER(COALESCE(district,''))) LIKE $${p}::text
+        OR unaccent(LOWER(COALESCE(location_text,''))) LIKE $${p}::text
       )`);
       params.push(normLike(city));
       p++;
@@ -521,8 +520,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (district) {
       where.push(`(
-        unaccent(LOWER(COALESCE(district,''))) LIKE $${p}
-        OR unaccent(LOWER(COALESCE(location_text,''))) LIKE $${p}
+        unaccent(LOWER(COALESCE(district,''))) LIKE $${p}::text
+        OR unaccent(LOWER(COALESCE(location_text,''))) LIKE $${p}::text
       )`);
       params.push(normLike(district));
       p++;
