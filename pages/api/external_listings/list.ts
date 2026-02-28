@@ -434,127 +434,143 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
       }
     }
+      if (q && !hasStructuredFilters) {
+        const terms = q
+          .split(/[,\s]+/g)
+          .map((t) => t.trim().toLowerCase())
+          .filter((t) => t.length >= 2);
 
-    if (q && !hasStructuredFilters) {
-      const terms = q
-        .split(/[,\s]+/g)
-        .map((t) => t.trim().toLowerCase())
-        .filter((t) => t.length >= 2);
-
-      if (terms.length) {
-        const ors: string[] = [];
-        for (const term of terms) {
-          ors.push(`(
-            LOWER(COALESCE(title,'')) LIKE $${p}::text
-            OR LOWER(COALESCE(location_text,'')) LIKE $${p}
-          )`);
-          params.push(`%${term}%`);
-          p++;
+        if (terms.length) {
+          const ors: string[] = [];
+          for (const term of terms) {
+            ors.push(`(
+              LOWER(COALESCE(title,'')) LIKE $${p}::text
+              OR LOWER(COALESCE(location_text,'')) LIKE $${p}::text
+            )`);
+            params.push(`%${term}%`);
+            p++;
+          }
+          where.push(`(${ors.join(" OR ")})`);
         }
-        where.push(`(${ors.join(" OR ")})`);
       }
-    }
 
-    if (transactionType) {
-      const v = transactionType.toLowerCase().trim();
-      const mapped = v === "kupno" ? "sale" : v === "wynajem" ? "rent" : v;
+      if (transactionType) {
+        const v = transactionType.toLowerCase().trim();
+        const mapped = v === "kupno" ? "sale" : v === "wynajem" ? "rent" : v;
 
-      where.push(`(LOWER(COALESCE(transaction_type,'')) = $${p})`);
-      params.push(mapped);
-      p++;
-    }
+        where.push(`(LOWER(COALESCE(transaction_type,'')) = $${p}::text)`);
+        params.push(mapped);
+        p++;
+      }
 
-    if (propertyType) {
-      const vCanon = mapPropertyFilterToCanonical(propertyType);
-      const raw = String(propertyType).trim().toLowerCase();
+      if (propertyType) {
+        const vCanon = mapPropertyFilterToCanonical(propertyType);
+        const raw = String(propertyType).trim().toLowerCase();
 
-      where.push(`(
-        LOWER(COALESCE(property_type,'')) = $${p}
-        OR LOWER(COALESCE(property_type,'')) LIKE $${p + 1}
-        OR LOWER(COALESCE(title,'')) LIKE $${p + 1}
-        OR LOWER(COALESCE(title,'')) LIKE '%dom%'
-      )`);
+        where.push(`(
+          LOWER(COALESCE(property_type,'')) = $${p}::text
+          OR LOWER(COALESCE(property_type,'')) LIKE $${p + 1}::text
+          OR LOWER(COALESCE(title,'')) LIKE $${p + 1}::text
+          OR LOWER(COALESCE(title,'')) LIKE '%dom%'
+        )`);
 
-      params.push(vCanon);
-      params.push(`%${raw}%`);
-      p += 2;
-    }
+        params.push(vCanon);
+        params.push(`%${raw}%`);
+        p += 2;
+      }
 
-    if (locationText && !(city || district)) {
-      const v = locationText.toLowerCase().trim();
-      where.push(`(LOWER(COALESCE(location_text,'')) LIKE $${p}::text)`);
-      params.push(`%${v}%`);
-      p++;
-    }
+      if (locationText && !(city || district)) {
+        const v = locationText.toLowerCase().trim();
+        where.push(`(LOWER(COALESCE(location_text,'')) LIKE $${p}::text)`);
+        params.push(`%${v}%`);
+        p++;
+      }
 
-          // ✅ unaccent tylko na kolumnach, parametr znormalizowany w JS
+      // ✅ unaccent tylko na kolumnach, parametr znormalizowany w JS
       if (street) {
-      where.push(
-        strict
-          ? `(position($${p}::text in unaccent(LOWER(COALESCE(street,'')))::text) > 0)`
-          : `(
-              street IS NULL
-              OR street = ''
-              OR position($${p}::text in unaccent(LOWER(street))::text) > 0
-            )`
-      );
-      params.push(norm(street));
-      p++;
-    }
+        where.push(
+          strict
+            ? `(position($${p}::text in unaccent(LOWER(COALESCE(street,'')))::text) > 0)`
+            : `(
+                street IS NULL
+                OR street = ''
+                OR position($${p}::text in unaccent(LOWER(street))::text) > 0
+              )`
+        );
+        params.push(norm(street));
+        p++;
+      }
 
-    if (voivodeship) {
-      where.push(`(position($${p}::text in unaccent(LOWER(COALESCE(voivodeship,'')))::text) > 0)`);
-      params.push(norm(voivodeship));
-      p++;
-    }
+      if (voivodeship) {
+        where.push(`(position($${p}::text in unaccent(LOWER(COALESCE(voivodeship,'')))::text) > 0)`);
+        params.push(norm(voivodeship));
+        p++;
+      }
 
-    if (city) {
-      where.push(`(
-        position($${p}::text in unaccent(LOWER(COALESCE(city,'')))::text) > 0
-        OR position($${p}::text in unaccent(LOWER(COALESCE(district,'')))::text) > 0
-        OR position($${p}::text in unaccent(LOWER(COALESCE(location_text,'')))::text) > 0
-      )`);
-      params.push(norm(city));
-      p++;
-    }
+      if (city) {
+        where.push(`(
+          position($${p}::text in unaccent(LOWER(COALESCE(city,'')))::text) > 0
+          OR position($${p}::text in unaccent(LOWER(COALESCE(district,'')))::text) > 0
+          OR position($${p}::text in unaccent(LOWER(COALESCE(location_text,'')))::text) > 0
+        )`);
+        params.push(norm(city));
+        p++;
+      }
 
       if (district) {
-      where.push(`(
-        position($${p}::text in unaccent(LOWER(COALESCE(district,'')))::text) > 0
-        OR position($${p}::text in unaccent(LOWER(COALESCE(location_text,'')))::text) > 0
-      )`);
-      params.push(norm(district));
-      p++;
-    }
-    if (minPrice != null) {
-      where.push(strict ? `(price_amount >= $${p})` : `(price_amount IS NULL OR price_amount >= $${p})`);
-      params.push(minPrice);
-      p++;
-    }
+        where.push(`(
+          position($${p}::text in unaccent(LOWER(COALESCE(district,'')))::text) > 0
+          OR position($${p}::text in unaccent(LOWER(COALESCE(location_text,'')))::text) > 0
+        )`);
+        params.push(norm(district));
+        p++;
+      }
 
-    if (maxPrice != null) {
-      where.push(strict ? `(price_amount <= $${p})` : `(price_amount IS NULL OR price_amount <= $${p})`);
-      params.push(maxPrice);
-      p++;
-    }
+      if (minPrice != null) {
+        where.push(
+          strict
+            ? `(price_amount >= $${p}::double precision)`
+            : `(price_amount IS NULL OR price_amount >= $${p}::double precision)`
+        );
+        params.push(minPrice);
+        p++;
+      }
 
-    if (minArea != null) {
-      where.push(strict ? `(area_m2 >= $${p})` : `(area_m2 IS NULL OR area_m2 >= $${p})`);
-      params.push(minArea);
-      p++;
-    }
+      if (maxPrice != null) {
+        where.push(
+          strict
+            ? `(price_amount <= $${p}::double precision)`
+            : `(price_amount IS NULL OR price_amount IS NULL OR price_amount <= $${p}::double precision)`
+        );
+        params.push(maxPrice);
+        p++;
+      }
 
-    if (maxArea != null) {
-      where.push(strict ? `(area_m2 <= $${p})` : `(area_m2 IS NULL OR area_m2 <= $${p})`);
-      params.push(maxArea);
-      p++;
-    }
+      if (minArea != null) {
+        where.push(
+          strict
+            ? `(area_m2 >= $${p}::double precision)`
+            : `(area_m2 IS NULL OR area_m2 >= $${p}::double precision)`
+        );
+        params.push(minArea);
+        p++;
+      }
 
-    if (rooms != null) {
-      where.push(strict ? `(rooms = $${p})` : `(rooms IS NULL OR rooms = $${p})`);
-      params.push(rooms);
-      p++;
-    }
+      if (maxArea != null) {
+        where.push(
+          strict
+            ? `(area_m2 <= $${p}::double precision)`
+            : `(area_m2 IS NULL OR area_m2 <= $${p}::double precision)`
+        );
+        params.push(maxArea);
+        p++;
+      }
+
+      if (rooms != null) {
+        where.push(strict ? `(rooms = $${p}::int)` : `(rooms IS NULL OR rooms = $${p}::int)`);
+        params.push(rooms);
+        p++;
+      }
 
     console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
       where: where.join(" AND "),
