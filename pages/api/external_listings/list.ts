@@ -487,43 +487,43 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       p++;
     }
 
-      // ✅ unaccent tylko na kolumnach, parametr znormalizowany w JS
-        if (street) {
+          // ✅ unaccent tylko na kolumnach, parametr znormalizowany w JS
+      if (street) {
       where.push(
         strict
-          ? `(unaccent(LOWER(COALESCE(street,''))) LIKE $${p}::text)`
+          ? `(position($${p}::text in unaccent(LOWER(COALESCE(street,'')))::text) > 0)`
           : `(
               street IS NULL
               OR street = ''
-              OR unaccent(LOWER(street)) LIKE $${p}::text
+              OR position($${p}::text in unaccent(LOWER(street))::text) > 0
             )`
       );
-      params.push(normLike(street));
+      params.push(norm(street));
       p++;
     }
 
     if (voivodeship) {
-      where.push(`(unaccent(LOWER(COALESCE(voivodeship,''))) LIKE $${p}::text)`);
-      params.push(normLike(voivodeship));
+      where.push(`(position($${p}::text in unaccent(LOWER(COALESCE(voivodeship,'')))::text) > 0)`);
+      params.push(norm(voivodeship));
       p++;
     }
 
     if (city) {
       where.push(`(
-        unaccent(LOWER(COALESCE(city,''))) LIKE $${p}::text
-        OR unaccent(LOWER(COALESCE(district,''))) LIKE $${p}::text
-        OR unaccent(LOWER(COALESCE(location_text,''))) LIKE $${p}::text
+        position($${p}::text in unaccent(LOWER(COALESCE(city,'')))::text) > 0
+        OR position($${p}::text in unaccent(LOWER(COALESCE(district,'')))::text) > 0
+        OR position($${p}::text in unaccent(LOWER(COALESCE(location_text,'')))::text) > 0
       )`);
-      params.push(normLike(city));
+      params.push(norm(city));
       p++;
     }
 
-    if (district) {
+      if (district) {
       where.push(`(
-        unaccent(LOWER(COALESCE(district,''))) LIKE $${p}::text
-        OR unaccent(LOWER(COALESCE(location_text,''))) LIKE $${p}::text
+        position($${p}::text in unaccent(LOWER(COALESCE(district,'')))::text) > 0
+        OR position($${p}::text in unaccent(LOWER(COALESCE(location_text,'')))::text) > 0
       )`);
-      params.push(normLike(district));
+      params.push(norm(district));
       p++;
     }
     if (minPrice != null) {
