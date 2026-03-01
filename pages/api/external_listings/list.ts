@@ -435,6 +435,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
       }
     }
+      // ===== FILTERS (hard-typed, 42P18-safe) =====
+
+      // q (tylko jeśli brak structured filters)
       if (q && !hasStructuredFilters) {
         const terms = q
           .split(/[,\s]+/g)
@@ -445,8 +448,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const ors: string[] = [];
           for (const term of terms) {
             ors.push(`(
-              LOWER(COALESCE(title,'')) LIKE $${p}::text
-              OR LOWER(COALESCE(location_text,'')) LIKE $${p}::text
+              LOWER(COALESCE(title,'')) LIKE CAST($${p} AS text)
+              OR LOWER(COALESCE(location_text,'')) LIKE CAST($${p} AS text)
             )`);
             params.push(`%${term}%`);
             p++;
@@ -455,83 +458,63 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       }
 
+      // ===== FILTERS (SQL-safe; text matching moved to JS scoring) =====
+
+      // source
+      if (source && source !== "all") {
+        where.push(`source = CAST($${p} AS text)`);
+        params.push(source);
+        p++;
+      }
+
+      // transactionType
       if (transactionType) {
         const v = transactionType.toLowerCase().trim();
         const mapped = v === "kupno" ? "sale" : v === "wynajem" ? "rent" : v;
-
-        where.push(`(LOWER(COALESCE(transaction_type,'')) = $${p}::text)`);
+        where.push(`LOWER(COALESCE(transaction_type,'')) = CAST($${p} AS text)`);
         params.push(mapped);
         p++;
       }
 
+      // propertyType
       if (propertyType) {
         const vCanon = mapPropertyFilterToCanonical(propertyType);
-        const raw = String(propertyType).trim().toLowerCase();
-
-        where.push(`(
-          LOWER(COALESCE(property_type,'')) = $${p}::text
-          OR LOWER(COALESCE(property_type,'')) LIKE $${p + 1}::text
-          OR LOWER(COALESCE(title,'')) LIKE $${p + 1}::text
-          OR LOWER(COALESCE(title,'')) LIKE '%dom%'
-        )`);
-
+        where.push(`LOWER(COALESCE(property_type,'')) = CAST($${p} AS text)`);
         params.push(vCanon);
-        params.push(`%${raw}%`);
-        p += 2;
-      }
-
-      if (locationText && !(city || district)) {
-        const v = locationText.toLowerCase().trim();
-        where.push(`(LOWER(COALESCE(location_text,'')) LIKE $${p}::text)`);
-        params.push(`%${v}%`);
         p++;
       }
 
-      // ✅ unaccent tylko na kolumnach, parametr znormalizowany w JS
-      if (street) {
-        where.push(
-          strict
-            ? `(strpos(unaccent(LOWER(COALESCE(street,'')))::text, $${p}::text) > 0)`
-            : `(
-                street IS NULL
-                OR street = ''
-                OR strpos(unaccent(LOWER(street))::text, $${p}::text) > 0
-              )`
-        );
-        params.push(norm(street));
-        p++;
+      // q (tylko jako proste LIKE; bez unaccent)
+      if (q && !hasStructuredFilters) {
+        const terms = q
+          .split(/[,\s]+/g)
+          .map((t) => t.trim().toLowerCase())
+          .filter((t) => t.length >= 2);
+
+        if (terms.length) {
+          const ors: string[] = [];
+          for (const term of terms) {
+            ors.push(`(
+              LOWER(COALESCE(title,'')) LIKE CAST($${p} AS text)
+              OR LOWER(COALESCE(location_text,'')) LIKE CAST($${p} AS text)
+            )`);
+            params.push(`%${term}%`);
+            p++;
+          }
+          where.push(`(${ors.join(" OR ")})`);
+        }
       }
 
-      if (voivodeship) {
-        where.push(`(strpos(unaccent(LOWER(COALESCE(voivodeship,'')))::text, $${p}::text) > 0)`);
-        params.push(norm(voivodeship));
-        p++;
-      }
+      // matchedSince
+      // (to masz wcześniej, zostaw jak jest)
 
-      if (city) {
-        where.push(`(
-          strpos(unaccent(LOWER(COALESCE(city,'')))::text, $${p}::text) > 0
-          OR strpos(unaccent(LOWER(COALESCE(district,'')))::text, $${p}::text) > 0
-          OR strpos(unaccent(LOWER(COALESCE(location_text,'')))::text, $${p}::text) > 0
-        )`);
-        params.push(norm(city));
-        p++;
-      }
-
-      if (district) {
-        where.push(`(
-          strpos(unaccent(LOWER(COALESCE(district,'')))::text, $${p}::text) > 0
-          OR strpos(unaccent(LOWER(COALESCE(location_text,'')))::text, $${p}::text) > 0
-        )`);
-        params.push(norm(district));
-        p++;
-      }
+      // --- NUMERIC FILTERS (safe) ---
 
       if (minPrice != null) {
         where.push(
           strict
-            ? `(price_amount >= $${p}::double precision)`
-            : `(price_amount IS NULL OR price_amount >= $${p}::double precision)`
+            ? `(price_amount >= CAST($${p} AS double precision))`
+            : `(price_amount IS NULL OR price_amount >= CAST($${p} AS double precision))`
         );
         params.push(minPrice);
         p++;
@@ -540,8 +523,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (maxPrice != null) {
         where.push(
           strict
-            ? `(price_amount <= $${p}::double precision)`
-            : `(price_amount IS NULL OR price_amount <= $${p}::double precision)`
+            ? `(price_amount <= CAST($${p} AS double precision))`
+            : `(price_amount IS NULL OR price_amount <= CAST($${p} AS double precision))`
         );
         params.push(maxPrice);
         p++;
@@ -550,8 +533,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (minArea != null) {
         where.push(
           strict
-            ? `(area_m2 >= $${p}::double precision)`
-            : `(area_m2 IS NULL OR area_m2 >= $${p}::double precision)`
+            ? `(area_m2 >= CAST($${p} AS double precision))`
+            : `(area_m2 IS NULL OR area_m2 >= CAST($${p} AS double precision))`
         );
         params.push(minArea);
         p++;
@@ -560,18 +543,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (maxArea != null) {
         where.push(
           strict
-            ? `(area_m2 <= $${p}::double precision)`
-            : `(area_m2 IS NULL OR area_m2 <= $${p}::double precision)`
+            ? `(area_m2 <= CAST($${p} AS double precision))`
+            : `(area_m2 IS NULL OR area_m2 <= CAST($${p} AS double precision))`
         );
         params.push(maxArea);
         p++;
       }
 
       if (rooms != null) {
-        where.push(strict ? `(rooms = $${p}::int)` : `(rooms IS NULL OR rooms = $${p}::int)`);
+        where.push(
+          strict ? `(rooms = CAST($${p} AS int))` : `(rooms IS NULL OR rooms = CAST($${p} AS int))`
+        );
         params.push(rooms);
         p++;
       }
+
+      // --- TEXT GEO FILTERS REMOVED FROM SQL ---
+      // voivodeship/city/district/street/locationText
+      // -> handled by JS scoring + scoreRow() (already implemented)
 
     console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
       where: where.join(" AND "),
