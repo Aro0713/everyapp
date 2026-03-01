@@ -1390,17 +1390,34 @@ return (
                                     ) : null}
                                   </div>
 
-                                  <div className="flex items-center gap-3">
-                                    {r.source_url ? (
-                                      <a
-                                        href={r.source_url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-ew-accent underline text-[11px] font-semibold"
-                                      >
-                                        {t(lang, "everybotOpen" as any)}
-                                      </a>
-                                    ) : null}
+                                 <div className="flex flex-col items-end gap-1.5">
+                                  <button
+                                    type="button"
+                                    disabled={savingId === r.id || savedIds.has(r.id)}
+                                    className={clsx(
+                                      "rounded-xl border px-3 py-1 text-[11px] font-semibold shadow-sm transition",
+                                      savedIds.has(r.id)
+                                        ? "border-emerald-200 bg-emerald-50 text-emerald-700 cursor-default"
+                                        : savingId === r.id
+                                          ? "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed"
+                                          : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
+                                    )}
+                                    onClick={() => saveExternalListing(r.id, "save")}
+                                    title="Zapisz do działań"
+                                  >
+                                    {savedIds.has(r.id) ? "✅ Zapisane" : "💾 Zapisz"}
+                                  </button>
+
+                                  {r.source_url ? (
+                                    <a
+                                      href={r.source_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-ew-accent underline text-[11px] font-semibold"
+                                    >
+                                      {t(lang, "everybotOpen" as any)}
+                                    </a>
+                                  ) : null}
                                   </div>
                                 </div>
                               </div>
