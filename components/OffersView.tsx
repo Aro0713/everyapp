@@ -86,7 +86,7 @@ function normalizeVoivodeshipInput(v?: string | null): string | null {
 }
 
 export default function OffersView({ lang }: { lang: LangKey }) {
- const searchIntervalRef = useRef<number | null>(null);
+  const searchIntervalRef = useRef<number | null>(null);
   const searchingRef = useRef(false);
 
   const officeTableRef = useRef<HTMLDivElement | null>(null);
@@ -129,6 +129,11 @@ const [botFilters, setBotFilters] = useState<EverybotFilters>({
   maxArea: "",
   rooms: "",
 });
+  const botFiltersRef = useRef(botFilters);
+
+  useEffect(() => {
+    botFiltersRef.current = botFilters;
+  }, [botFilters]);
 
   const [botLoading, setBotLoading] = useState(false);
   const [botErr, setBotErr] = useState<string | null>(null);
@@ -314,7 +319,7 @@ async function loadEverybot(opts?: {
   refreshAbortRef.current = ac;
 
   try {
-    const f = botFilters;
+    const f = botFiltersRef.current ?? botFilters;
 
     const qs = new URLSearchParams();
     qs.set("limit", "50");
@@ -377,7 +382,7 @@ async function loadMapPins() {
     const qs = new URLSearchParams();
     qs.set("limit", "5000");
 
-    const f = botFilters;
+    const f = botFiltersRef.current ?? botFilters;
 
     if (f.voivodeship?.trim()) qs.set("voivodeship", f.voivodeship.trim());
     if (f.city?.trim()) qs.set("city", f.city.trim());
@@ -459,20 +464,24 @@ useEffect(() => {
   let startX = 0;
   let startScrollLeft = 0;
 
-  const onMouseDown = (e: MouseEvent) => {
-    // ignoruj klik w linki / przyciski
-    if ((e.target as HTMLElement).closest("a,button,input,select,textarea,label")) return;
+const onMouseDown = (e: MouseEvent) => {
+  // tylko lewy przycisk
+  if (e.button !== 0) return;
 
-    isDown = true;
-    startX = e.pageX;
-    startScrollLeft = el.scrollLeft;
-    el.style.cursor = "grabbing";
-  };
+  // ignoruj klik w linki / przyciski
+  if ((e.target as HTMLElement).closest("a,button,input,select,textarea,label")) return;
 
-  const onMouseUp = () => {
-    isDown = false;
-    el.style.cursor = "grab";
-  };
+  isDown = true;
+  startX = e.pageX;
+  startScrollLeft = el.scrollLeft;
+  el.style.cursor = "grabbing";
+};
+
+const onMouseUp = () => {
+  if (!isDown) return;
+  isDown = false;
+  el.style.cursor = "grab";
+};
 
   const onMouseMove = (e: MouseEvent) => {
     if (!isDown) return;
@@ -491,14 +500,17 @@ useEffect(() => {
     window.removeEventListener("mousemove", onMouseMove);
   };
 }, []);
-useEffect(() => {
-  if (tab !== "everybot") return;
+  useEffect(() => {
+    if (tab !== "everybot") return;
 
-  const tick = async () => {
+    const tick = async () => {
     if (botSearching) return;
-    if (botMatchedSince) return; // 🔥 nie dotykaj Neon listy, gdy aktywny LIVE run
     if (botLoading) return;
+    if (botMatchedSince) return; // nie dotykaj listy podczas LIVE
     if (document.visibilityState !== "visible") return;
+
+    const fNow = botFiltersRef.current ?? botFilters;
+    if (hasAnyFilters(fNow)) return; // nie refreshuj gdy user ma aktywne filtry
 
     await refreshEverybotList();
   };
@@ -514,7 +526,7 @@ useEffect(() => {
     window.clearInterval(timer);
     document.removeEventListener("visibilitychange", onVis);
   };
-}, [tab, botSearching, botMatchedSince]);
+}, [tab, botSearching, botMatchedSince, botLoading]);
 
   const empty = !loading && rows.length === 0 && !err;
 
@@ -1113,6 +1125,7 @@ function EverybotLoadingGlass({ title, subtitle }: { title: string; subtitle: st
           filters={botFilters}
           setFilters={(next) => setBotFilters(next)}
           onSearch={async (filters) => {
+            setBotFilters(filters);
             // 0) jeśli brak filtrów -> tylko Neon
             if (!hasAnyFilters(filters)) {
               setBotMatchedSince(null);
