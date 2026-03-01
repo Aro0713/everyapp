@@ -469,20 +469,49 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // transactionType
       if (transactionType) {
-        const v = transactionType.toLowerCase().trim();
-        const mapped = v === "kupno" ? "sale" : v === "wynajem" ? "rent" : v;
-        where.push(`LOWER(COALESCE(transaction_type,'')) = CAST($${p} AS text)`);
-        params.push(mapped);
-        p++;
-      }
+      const v = transactionType.toLowerCase().trim();
+      const mapped = v === "kupno" ? "sale" : v === "wynajem" ? "rent" : v;
+
+      // ✅ soft: nie zabijaj wyników, jeśli crawler nie uzupełnia kolumny
+      where.push(
+        strict
+          ? `LOWER(COALESCE(transaction_type,'')) = CAST($${p} AS text)`
+          : `(transaction_type IS NULL OR LOWER(COALESCE(transaction_type,'')) = CAST($${p} AS text))`
+      );
+
+      params.push(mapped);
+      p++;
+    }
 
       // propertyType
-      if (propertyType) {
-        const vCanon = mapPropertyFilterToCanonical(propertyType);
-        where.push(`LOWER(COALESCE(property_type,'')) = CAST($${p} AS text)`);
-        params.push(vCanon);
-        p++;
-      }
+     if (propertyType) {
+      const vCanon = mapPropertyFilterToCanonical(propertyType);
+
+      // Fallback: jeśli property_type NULL, próbuj z title (bez unaccent, tylko lower+like)
+      const titleFallback =
+        vCanon === "house"
+          ? `LOWER(COALESCE(title,'')) LIKE '%dom%' OR LOWER(COALESCE(title,'')) LIKE '%domek%'`
+          : vCanon === "apartment"
+          ? `LOWER(COALESCE(title,'')) LIKE '%mieszk%' OR LOWER(COALESCE(title,'')) LIKE '%apart%' OR LOWER(COALESCE(title,'')) LIKE '%lokal miesz%'`
+          : vCanon === "plot"
+          ? `LOWER(COALESCE(title,'')) LIKE '%dzial%' OR LOWER(COALESCE(title,'')) LIKE '%dział%' OR LOWER(COALESCE(title,'')) LIKE '%grunt%'`
+          : vCanon === "commercial"
+          ? `LOWER(COALESCE(title,'')) LIKE '%hala%' OR LOWER(COALESCE(title,'')) LIKE '%magaz%' OR LOWER(COALESCE(title,'')) LIKE '%lokal%' OR LOWER(COALESCE(title,'')) LIKE '%biur%'`
+          : `FALSE`;
+
+      where.push(
+        strict
+          ? `LOWER(COALESCE(property_type,'')) = CAST($${p} AS text)`
+          : `(
+              property_type IS NULL
+              OR LOWER(COALESCE(property_type,'')) = CAST($${p} AS text)
+              OR (${titleFallback})
+            )`
+      );
+
+      params.push(vCanon);
+      p++;
+    }
 
       // q (tylko jako proste LIKE; bez unaccent)
       if (q && !hasStructuredFilters) {
