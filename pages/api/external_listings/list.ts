@@ -491,11 +491,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (street) {
         where.push(
           strict
-            ? `(position($${p}::text in unaccent(LOWER(COALESCE(street,'')))::text) > 0)`
+            ? `(strpos(unaccent(LOWER(COALESCE(street,'')))::text, $${p}::text) > 0)`
             : `(
                 street IS NULL
                 OR street = ''
-                OR position($${p}::text in unaccent(LOWER(street))::text) > 0
+                OR strpos(unaccent(LOWER(street))::text, $${p}::text) > 0
               )`
         );
         params.push(norm(street));
@@ -503,16 +503,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       if (voivodeship) {
-        where.push(`(position($${p}::text in unaccent(LOWER(COALESCE(voivodeship,'')))::text) > 0)`);
+        where.push(`(strpos(unaccent(LOWER(COALESCE(voivodeship,'')))::text, $${p}::text) > 0)`);
         params.push(norm(voivodeship));
         p++;
       }
 
       if (city) {
         where.push(`(
-          position($${p}::text in unaccent(LOWER(COALESCE(city,'')))::text) > 0
-          OR position($${p}::text in unaccent(LOWER(COALESCE(district,'')))::text) > 0
-          OR position($${p}::text in unaccent(LOWER(COALESCE(location_text,'')))::text) > 0
+          strpos(unaccent(LOWER(COALESCE(city,'')))::text, $${p}::text) > 0
+          OR strpos(unaccent(LOWER(COALESCE(district,'')))::text, $${p}::text) > 0
+          OR strpos(unaccent(LOWER(COALESCE(location_text,'')))::text, $${p}::text) > 0
         )`);
         params.push(norm(city));
         p++;
@@ -520,58 +520,58 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       if (district) {
         where.push(`(
-          position($${p}::text in unaccent(LOWER(COALESCE(district,'')))::text) > 0
-          OR position($${p}::text in unaccent(LOWER(COALESCE(location_text,'')))::text) > 0
+          strpos(unaccent(LOWER(COALESCE(district,'')))::text, $${p}::text) > 0
+          OR strpos(unaccent(LOWER(COALESCE(location_text,'')))::text, $${p}::text) > 0
         )`);
         params.push(norm(district));
         p++;
       }
 
-          if (minPrice != null) {
-      where.push(
-        strict
-          ? `(price_amount >= $${p}::double precision)`
-          : `(price_amount IS NULL OR price_amount >= $${p}::double precision)`
-      );
-      params.push(minPrice);
-      p++;
-    }
+      if (minPrice != null) {
+        where.push(
+          strict
+            ? `(price_amount >= $${p}::double precision)`
+            : `(price_amount IS NULL OR price_amount >= $${p}::double precision)`
+        );
+        params.push(minPrice);
+        p++;
+      }
 
-    if (maxPrice != null) {
-      where.push(
-        strict
-          ? `(price_amount <= $${p}::double precision)`
-          : `(price_amount IS NULL OR price_amount <= $${p}::double precision)`
-      );
-      params.push(maxPrice);
-      p++;
-    }
+      if (maxPrice != null) {
+        where.push(
+          strict
+            ? `(price_amount <= $${p}::double precision)`
+            : `(price_amount IS NULL OR price_amount <= $${p}::double precision)`
+        );
+        params.push(maxPrice);
+        p++;
+      }
 
-    if (minArea != null) {
-      where.push(
-        strict
-          ? `(area_m2 >= $${p}::double precision)`
-          : `(area_m2 IS NULL OR area_m2 >= $${p}::double precision)`
-      );
-      params.push(minArea);
-      p++;
-    }
+      if (minArea != null) {
+        where.push(
+          strict
+            ? `(area_m2 >= $${p}::double precision)`
+            : `(area_m2 IS NULL OR area_m2 >= $${p}::double precision)`
+        );
+        params.push(minArea);
+        p++;
+      }
 
-    if (maxArea != null) {
-      where.push(
-        strict
-          ? `(area_m2 <= $${p}::double precision)`
-          : `(area_m2 IS NULL OR area_m2 <= $${p}::double precision)`
-      );
-      params.push(maxArea);
-      p++;
-    }
+      if (maxArea != null) {
+        where.push(
+          strict
+            ? `(area_m2 <= $${p}::double precision)`
+            : `(area_m2 IS NULL OR area_m2 <= $${p}::double precision)`
+        );
+        params.push(maxArea);
+        p++;
+      }
 
-    if (rooms != null) {
-      where.push(strict ? `(rooms = $${p}::int)` : `(rooms IS NULL OR rooms = $${p}::int)`);
-      params.push(rooms);
-      p++;
-    }
+      if (rooms != null) {
+        where.push(strict ? `(rooms = $${p}::int)` : `(rooms IS NULL OR rooms = $${p}::int)`);
+        params.push(rooms);
+        p++;
+      }
 
     console.log("EXTERNAL_LISTINGS_LIST_DEBUG", {
       where: where.join(" AND "),
