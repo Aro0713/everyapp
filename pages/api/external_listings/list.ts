@@ -367,8 +367,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       : `updated_at DESC, id DESC`;
 
     if (source && source !== "all") {
-      where.push(`source = $${p++}`);
+      where.push(`source = $${p}::text`);
       params.push(source);
+      p++;
     }
 
     const transactionType = optString(req.query.transactionType);
