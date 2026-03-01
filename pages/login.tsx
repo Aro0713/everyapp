@@ -24,7 +24,6 @@ export default function LoginPage() {
     if (isLangKey(c)) setLang(c);
   }, []);
 
-  // UI-only (na razie bez backendu)
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
@@ -69,17 +68,31 @@ export default function LoginPage() {
     }
   }
 
-   return (
+  return (
     <>
       <Head>
         <title>{t(lang, "loginPageTitle")}</title>
         <meta name="description" content={t(lang, "loginPageDesc")} />
       </Head>
 
-      <main className="min-h-screen bg-ew-bg text-ew-primary">
+      <main className="relative min-h-screen overflow-hidden text-white">
+        {/* BACKGROUND – Katowice */}
+        <div className="absolute inset-0">
+          <Image
+            src="/katowice-panorama.jpg"
+            alt="Panorama Katowic"
+            fill
+            priority
+            className="object-cover"
+          />
+          {/* overlay poziomy – przyciemnia lewą stronę */}
+          <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-900/70 to-slate-900/40" />
+          {/* overlay dolny – kontrast formularza */}
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-slate-950/70" />
+        </div>
 
         {/* TOPBAR – cienki, bez logo */}
-        <header className="sticky top-0 z-50 bg-ew-primary text-white">
+        <header className="sticky top-0 z-50 bg-ew-primary/70 text-white backdrop-blur-md">
           <div className="mx-auto flex h-12 max-w-7xl items-center justify-end px-4 sm:px-6">
             <div className="rounded-2xl bg-white/10 px-2 py-1">
               <LanguageSwitcher currentLang={lang} />
@@ -88,20 +101,19 @@ export default function LoginPage() {
         </header>
 
         {/* CONTENT */}
-        <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6">
+        <section className="relative mx-auto max-w-7xl px-4 py-20 sm:px-6">
           <div className="grid gap-10 md:grid-cols-12 md:items-center">
-
             {/* LEFT – DUŻE LOGO */}
             <div className="md:col-span-6">
               <div className="flex items-center justify-center md:justify-start">
-                <div className="rounded-3xl border border-ew-accent/20 bg-ew-accent/10 px-10 py-12 shadow-sm">
+                <div className="rounded-3xl border border-white/10 bg-white/10 px-10 py-12 shadow-2xl backdrop-blur-xl">
                   <Image
                     src="/everyapp-logo.svg"
                     alt="EveryAPP"
                     width={520}
                     height={130}
                     priority
-                    className="h-auto w-[320px] sm:w-[420px] md:w-[460px]"
+                    className="h-auto w-[320px] sm:w-[420px] md:w-[460px] brightness-0 invert"
                   />
                 </div>
               </div>
@@ -109,10 +121,8 @@ export default function LoginPage() {
 
             {/* RIGHT – LOGIN CARD */}
             <div className="md:col-span-6">
-              <div className="rounded-3xl border border-ew-accent/20 bg-ew-accent/10 p-8 shadow-sm">
-
+              <div className="rounded-3xl border border-white/10 bg-slate-950/60 p-8 shadow-2xl backdrop-blur-xl">
                 <form onSubmit={onSubmit} className="space-y-5">
-
                   <div>
                     <label className="block text-sm font-semibold" htmlFor="email">
                       {t(lang, "loginEmail")}
@@ -124,7 +134,7 @@ export default function LoginPage() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder={t(lang, "loginEmailPlaceholder")}
-                      className="mt-2 w-full rounded-2xl border border-ew-accent/20 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
+                      className="mt-2 w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm text-white placeholder:text-white/40 shadow-sm outline-none transition focus:border-white/40 focus:ring-2 focus:ring-white/20"
                     />
                   </div>
 
@@ -139,24 +149,24 @@ export default function LoginPage() {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder={t(lang, "loginPasswordPlaceholder")}
-                      className="mt-2 w-full rounded-2xl border border-ew-accent/20 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
+                      className="mt-2 w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm text-white placeholder:text-white/40 shadow-sm outline-none transition focus:border-white/40 focus:ring-2 focus:ring-white/20"
                     />
                   </div>
 
                   <div className="flex items-center justify-between gap-4">
-                    <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <label className="flex items-center gap-2 text-sm text-white/80">
                       <input
                         type="checkbox"
                         checked={remember}
                         onChange={(e) => setRemember(e.target.checked)}
-                        className="h-4 w-4 rounded border-gray-300"
+                        className="h-4 w-4 rounded border-white/20 bg-white/10"
                       />
                       {t(lang, "loginRemember")}
                     </label>
 
                     <Link
                       href="/reset-password"
-                      className="text-sm font-semibold text-ew-primary hover:text-ew-primary/80"
+                      className="text-sm font-semibold text-white/85 hover:text-white"
                     >
                       {t(lang, "loginForgot")}
                     </Link>
@@ -176,36 +186,30 @@ export default function LoginPage() {
                     {loading ? t(lang, "loginSubmitting") : t(lang, "loginSubmit")}
                   </button>
 
-                  <p className="text-xs text-gray-600">
-                    {t(lang, "loginLegal")}
-                  </p>
-
+                  <p className="text-xs text-white/70">{t(lang, "loginLegal")}</p>
                 </form>
-
               </div>
 
-              <p className="mt-6 text-center text-sm text-gray-600">
+              <p className="mt-6 text-center text-sm text-white/70">
                 {t(lang, "loginNoAccount")}{" "}
-                <Link href="/register" className="font-semibold text-ew-primary hover:underline">
+                <Link href="/register" className="font-semibold text-white hover:underline">
                   {t(lang, "loginRegisterLink")}
                 </Link>
               </p>
 
-              <p className="mt-3 text-center text-xs text-gray-500">
+              <p className="mt-3 text-center text-xs text-white/60">
                 {t(lang, "loginFooterHint")}
               </p>
             </div>
-
           </div>
         </section>
 
         {/* FOOTER */}
-        <footer className="border-t border-ew-accent/20 bg-ew-bg">
-          <div className="mx-auto max-w-7xl px-4 py-6 text-center text-xs text-gray-500 sm:px-6">
+        <footer className="border-t border-white/10 bg-slate-950/40 backdrop-blur-md">
+          <div className="mx-auto max-w-7xl px-4 py-6 text-center text-xs text-white/60 sm:px-6">
             {t(lang, "footerRights", { year: String(new Date().getFullYear()) })}
           </div>
         </footer>
-
       </main>
     </>
   );
