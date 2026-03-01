@@ -73,22 +73,22 @@ export default function EverybotMap({
     });
 
     m.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
- 
-    const onMove = () => {
-    const z = m.getZoom();
-    const b = m.getBounds();
-    setZoom(z);
-    setBounds(b);
 
-    if (onViewport) {
+    const onMove = () => {
+      const z = m.getZoom();
+      const b = m.getBounds();
+      setZoom(z);
+      setBounds(b);
+
+      if (onViewport) {
         onViewport({
-        minLat: b.getSouth(),
-        minLng: b.getWest(),
-        maxLat: b.getNorth(),
-        maxLng: b.getEast(),
-        zoom: z,
+          minLat: b.getSouth(),
+          minLng: b.getWest(),
+          maxLat: b.getNorth(),
+          maxLng: b.getEast(),
+          zoom: z,
         });
-    }
+      }
     };
 
     m.on("load", onMove);
@@ -132,19 +132,20 @@ export default function EverybotMap({
       } else {
         const p = f.properties as any as Pin;
         el.textContent = "●";
+        el.className =
+          "rounded-full shadow-sm border border-gray-200 bg-white text-ew-primary text-xs font-bold px-2 py-1";
         el.onclick = (ev: any) => {
-        // ✅ nie pozwól mapie “zjeść” klika i zamknąć popup od razu
-        ev?.preventDefault?.();
-        ev?.stopPropagation?.();
+          // ✅ nie pozwól mapie “zjeść” klika i zamknąć popup od razu
+          ev?.preventDefault?.();
+          ev?.stopPropagation?.();
 
-        if (onSelectId) onSelectId(p.id);
+          if (onSelectId) onSelectId(p.id);
 
-        const title = (p.title ?? "Ogłoszenie").slice(0, 80);
-        const price = fmtPrice(p.price_amount, p.currency);
+          const title = (p.title ?? "Ogłoszenie").slice(0, 80);
+          const price = fmtPrice(p.price_amount, p.currency);
 
-        const btnId = `openListing-${p.id}`;
-        const html =
-            `<div style="font-size:12px; line-height:1.2;">
+          const btnId = `openListing-${p.id}`;
+          const html = `<div style="font-size:12px; line-height:1.2;">
             <div style="font-weight:700; margin-bottom:6px;">${title}</div>
             <div style="margin-bottom:8px; color:#333;">${p.source}${price ? " • " + price : ""}</div>
             <button id="${btnId}" style="padding:6px 10px; border-radius:10px; border:1px solid #e5e7eb; font-weight:700; cursor:pointer;">
@@ -152,29 +153,27 @@ export default function EverybotMap({
             </button>
             </div>`;
 
-        const popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true })
+          const popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true })
             .setLngLat([lng, lat])
             .setHTML(html)
             .addTo(m);
 
-        // ✅ przypnij click do buttona W TYM popupie (nie globalnie)
-        setTimeout(() => {
+          // ✅ przypnij click do buttona W TYM popupie (nie globalnie)
+          setTimeout(() => {
             const root = popup.getElement();
             const btn = root?.querySelector(`#${CSS.escape(btnId)}`) as HTMLButtonElement | null;
             if (btn) {
-            btn.onclick = (e) => {
+              btn.onclick = (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 window.open(p.source_url, "_blank", "noopener,noreferrer");
-            };
+              };
             }
-        }, 0);
+          }, 0);
         };
       }
 
-      const mk = new maplibregl.Marker({ element: el })
-        .setLngLat([lng, lat])
-        .addTo(m);
+      const mk = new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(m);
 
       markers.push(mk);
     }
@@ -183,7 +182,7 @@ export default function EverybotMap({
   }, [clustered, cluster]);
 
   return (
-    <div className="h-[70vh] w-full rounded-3xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+    <div className="h-[70vh] w-full rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
       <div ref={containerRef} className="h-full w-full" />
     </div>
   );

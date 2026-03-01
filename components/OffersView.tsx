@@ -738,273 +738,671 @@ function EverybotLoadingGlass({ title, subtitle }: { title: string; subtitle: st
   );
 }
 
-  return (
-        <div className="space-y-6">
-          {/* HEADER */}
-          <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="relative z-20 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-extrabold tracking-tight text-ew-primary">
-                  {t(lang, "offersTitle" as any)}
-                </h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  {t(lang, "offersSub" as any)}
-                </p>
-              </div>
+return (
+  <div className="space-y-4">
+    {/* HEADER */}
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="relative z-20 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-base font-extrabold tracking-tight text-ew-primary">
+            {t(lang, "offersTitle" as any)}
+          </h2>
+          <p className="mt-0.5 text-xs text-gray-500">
+            {t(lang, "offersSub" as any)}
+          </p>
+        </div>
 
-              <div className="relative z-30 flex flex-wrap justify-end gap-2">
+        <div className="relative z-30 flex flex-wrap justify-end gap-1.5">
+          <button
+            type="button"
+            className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-ew-primary shadow-sm transition hover:bg-ew-accent/10"
+            onClick={async () => {
+              if (tab === "office") {
+                await load();
+              } else {
+                // ✅ EveryBOT refresh = tylko Neon
+                setBotSearching(false);
+                setBotSearchSeconds(0);
+
+                if (searchIntervalRef.current) {
+                  window.clearInterval(searchIntervalRef.current);
+                  searchIntervalRef.current = null;
+                }
+
+                searchingRef.current = false;
+                setBotMatchedSince(null);
+
+                await loadEverybot({
+                  filters: botFilters,
+                  cursor: null,
+                  append: false,
+                  matchedSince: null,
+                });
+
+                await loadMapPins().catch(() => null); // 🔥 odśwież mapę
+              }
+            }}
+          >
+            {t(lang, "offersRefresh" as any)}
+          </button>
+
+          {tab === "everybot" && (
+            <>
               <button
                 type="button"
-                className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-ew-primary shadow-sm transition hover:bg-ew-accent/10"
+                disabled={botLoading}
+                className={clsx(
+                  "pointer-events-auto rounded-xl border px-3 py-1.5 text-xs font-semibold shadow-sm transition",
+                  botLoading
+                    ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
+                    : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
+                )}
                 onClick={async () => {
-                  if (tab === "office") {
-                    await load();
-                  } else {
-                    // ✅ EveryBOT refresh = tylko Neon
-                    setBotSearching(false);
-                    setBotSearchSeconds(0);
-
-                    if (searchIntervalRef.current) {
-                      window.clearInterval(searchIntervalRef.current);
-                      searchIntervalRef.current = null;
-                    }
-
-                    searchingRef.current = false;
-                    setBotMatchedSince(null);
-
-                    await loadEverybot({
-                      filters: botFilters,
-                      cursor: null,
-                      append: false,
-                      matchedSince: null,
-                    });
-
-                    await loadMapPins().catch(() => null); // 🔥 odśwież mapę
+                  try {
+                    await runGeocodeBatch();
+                  } catch (e: any) {
+                    alert(`Geocode failed: ${e?.message ?? e}`);
                   }
                 }}
               >
-                {t(lang, "offersRefresh" as any)}
+                🌍 Geocode 50
               </button>
-                {tab === "everybot" && (
-                  <>
-                    <button
-                      type="button"
-                      disabled={botLoading}
-                      className={clsx(
-                        "pointer-events-auto rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm transition",
-                        botLoading
-                          ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
-                          : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
-                      )}
-                      onClick={async () => {
-                        try { await runGeocodeBatch(); }
-                        catch (e: any) { alert(`Geocode failed: ${e?.message ?? e}`); }
-                      }}
-                    >
-                      🌍 Geocode 50
-                    </button>
 
-                    <button
-                      type="button"
-                      disabled={botLoading}
-                      className={clsx(
-                        "pointer-events-auto rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm transition"
-    ,
-                        botLoading
-                          ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
-                          : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
-                      )}
-                      onClick={async () => {
-                        try { await runRcnBatch(); }
-                        catch (e: any) { alert(`RCN failed: ${e?.message ?? e}`); }
-                      }}
-                    >
-                      🧾 RCN 50
-                    </button>
-                  </>
+              <button
+                type="button"
+                disabled={botLoading}
+                className={clsx(
+                  "pointer-events-auto rounded-xl border px-3 py-1.5 text-xs font-semibold shadow-sm transition",
+                  botLoading
+                    ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
+                    : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
                 )}
+                onClick={async () => {
+                  try {
+                    await runRcnBatch();
+                  } catch (e: any) {
+                    alert(`RCN failed: ${e?.message ?? e}`);
+                  }
+                }}
+              >
+                🧾 RCN 50
+              </button>
+            </>
+          )}
 
-                <button
-                  type="button"
-                  className="rounded-2xl bg-ew-accent px-4 py-2 text-sm font-extrabold text-ew-primary shadow-sm transition hover:opacity-95"
-                  onClick={async () => {
-                    try {
-                      const r = await fetch("/api/offers/create", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          recordType: "offer",
-                          transactionType: "sale",
-                          status: "draft",
-                        }),
-                      });
+          <button
+            type="button"
+            className="rounded-xl bg-ew-accent px-3 py-1.5 text-xs font-extrabold text-ew-primary shadow-sm transition hover:opacity-95"
+            onClick={async () => {
+              try {
+                const r = await fetch("/api/offers/create", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    recordType: "offer",
+                    transactionType: "sale",
+                    status: "draft",
+                  }),
+                });
 
-                      if (!r.ok) {
-                        const j = await r.json().catch(() => null);
-                        throw new Error(j?.error ?? `HTTP ${r.status}`);
-                      }
+                if (!r.ok) {
+                  const j = await r.json().catch(() => null);
+                  throw new Error(j?.error ?? `HTTP ${r.status}`);
+                }
 
-                      await load();
-                      setTab("office");
-                    } catch (e: any) {
-                      alert(`Nie udało się utworzyć oferty: ${e?.message ?? "Unknown error"}`);
-                    }
-                  }}
-                >
-                  + {t(lang, "offersNew" as any)}
-                </button>
+                await load();
+                setTab("office");
+              } catch (e: any) {
+                alert(`Nie udało się utworzyć oferty: ${e?.message ?? "Unknown error"}`);
+              }
+            }}
+          >
+            + {t(lang, "offersNew" as any)}
+          </button>
 
-                <button
-                  type="button"
-                  className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-ew-primary shadow-sm transition hover:bg-ew-accent/10"
-                  onClick={() => alert("TODO: import z portali (biuro → portale)")}
-                >
-                  {t(lang, "offersImport" as any)}
-                </button>
+          <button
+            type="button"
+            className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-ew-primary shadow-sm transition hover:bg-ew-accent/10"
+            onClick={() => alert("TODO: import z portali (biuro → portale)")}
+          >
+            {t(lang, "offersImport" as any)}
+          </button>
+        </div>
+      </div>
+
+      {/* TABS */}
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        <button
+          type="button"
+          className={clsx(
+            "rounded-xl border px-3 py-1.5 text-xs font-semibold transition",
+            tab === "office"
+              ? "border-ew-accent bg-ew-accent/10 text-ew-primary"
+              : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
+          )}
+          onClick={() => setTab("office")}
+        >
+          {t(lang, "offersTabOffice" as any)}
+        </button>
+
+        <button
+          type="button"
+          className={clsx(
+            "rounded-xl border px-3 py-1.5 text-xs font-semibold transition",
+            tab === "everybot"
+              ? "border-ew-accent bg-ew-accent/10 text-ew-primary"
+              : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
+          )}
+          onClick={() => {
+            setTab("everybot");
+            setBotCursor(null);
+            setBotHasMore(false);
+
+            // 🔴 zatrzymaj pasek wyszukiwania
+            setBotSearching(false);
+            setBotSearchSeconds(0);
+
+            if (searchIntervalRef.current) {
+              window.clearInterval(searchIntervalRef.current);
+              searchIntervalRef.current = null;
+            }
+            searchingRef.current = false;
+
+            // 🟢 tylko Neon (bez live)
+            setBotMatchedSince(null);
+            loadEverybot({
+              filters: botFilters,
+              cursor: null,
+              append: false,
+              matchedSince: null,
+            });
+            loadMapPins().catch(() => null);
+          }}
+        >
+          🤖 {t(lang, "offersTabEverybot" as any)}
+        </button>
+      </div>
+    </div>
+
+    {/* CONTENT */}
+    {tab === "office" ? (
+      <>
+        {/* LISTA OFERT */}
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+          {loading ? (
+            <div className="text-xs text-gray-500">{t(lang, "offersLoading" as any)}</div>
+          ) : err ? (
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs text-red-700">
+              {t(lang, "offersLoadError" as any)}: {err}
+            </div>
+          ) : empty ? (
+            <div className="flex h-44 items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-ew-accent/5">
+              <p className="text-xs text-gray-500">{t(lang, "offersEmpty" as any)}</p>
+            </div>
+          ) : (
+            <div ref={officeTableRef} className="w-full">
+              <div className="divide-y divide-gray-100">
+                {rows.map((r) => {
+                  const title =
+                    r.record_type === "offer"
+                      ? `${t(lang, "offersTabOffice" as any)}`
+                      : `${t(lang, "offersTabOffice" as any)}`;
+
+                  const metaLeft = [
+                    r.record_type === "offer" ? "offer" : "search",
+                    r.transaction_type,
+                    r.status,
+                  ].filter(Boolean) as string[];
+
+                  const created = r.created_at ? new Date(r.created_at).toLocaleDateString() : null;
+
+                  return (
+                    <div key={r.listing_id} className={clsx("p-2.5 md:p-3", "transition")}>
+                      <div className="flex gap-3">
+                        {/* thumb (placeholder) */}
+                        <div className="shrink-0">
+                          <div className="h-14 w-20 rounded-lg bg-gray-100 ring-1 ring-gray-200" />
+
+                          <div className="mt-1 flex items-center gap-1.5 text-[10px] text-gray-500">
+                            <span className="rounded bg-gray-100 px-2 py-0.5">
+                              {r.record_type}
+                            </span>
+                            {created ? <span>{created}</span> : null}
+                          </div>
+                        </div>
+
+                        {/* content */}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-semibold text-ew-primary">
+                                {title}
+                              </div>
+
+                              {r.case_owner_name || r.parties_summary ? (
+                                <div className="truncate text-[11px] text-gray-600">
+                                  {r.case_owner_name ?? "-"}
+                                  {r.parties_summary ? ` • ${r.parties_summary}` : ""}
+                                </div>
+                              ) : null}
+                            </div>
+
+                            <div className="text-right">
+                              <div className="text-sm font-extrabold text-ew-primary">
+                                {r.transaction_type}
+                              </div>
+                              <div className="text-[11px] text-gray-500">{r.status}</div>
+                            </div>
+                          </div>
+
+                          {/* meta */}
+                          {metaLeft.length ? (
+                            <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-gray-700">
+                              {metaLeft.map((x, i) => (
+                                <span
+                                  key={i}
+                                  className="rounded bg-gray-50 px-1.5 py-0.5 ring-1 ring-gray-200"
+                                >
+                                  {x}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
+          )}
+        </div>
 
-            {/* TABS */}
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                type="button"
-                className={clsx(
-                  "rounded-2xl border px-4 py-2 text-sm font-semibold transition",
-                  tab === "office"
-                    ? "border-ew-accent bg-ew-accent/10 text-ew-primary"
-                    : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
-                )}
-                onClick={() => setTab("office")}
-              >
-                {t(lang, "offersTabOffice" as any)}
-              </button>
+        {/* IMPORT INFO */}
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+          <h3 className="text-sm font-extrabold text-ew-primary">
+            {t(lang, "offersImportTitle" as any)}
+          </h3>
+          <p className="mt-0.5 text-xs text-gray-500">
+            {t(lang, "offersImportDesc" as any)}
+          </p>
+          <ul className="mt-3 list-disc space-y-2 pl-5 text-xs text-gray-600">
+            <li>{t(lang, "offersImportHint1" as any)}</li>
+            <li>{t(lang, "offersImportHint2" as any)}</li>
+            <li>{t(lang, "offersImportHint3" as any)}</li>
+          </ul>
+        </div>
+      </>
+    ) : (
+      <>
+        {/* EVERYBOT */}
+        <div className="space-y-3">
+          {/* ===== MAPA + AGENT (2/3 + 1/3) ===== */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <div className="lg:col-span-2">
+              <EverybotMap
+                pins={mapPins}
+                onSelectId={(id) => {
+                  setSelectedExternalId(id);
 
-              <button
-                type="button"
-                className={clsx(
-                  "rounded-2xl border px-4 py-2 text-sm font-semibold transition",
-                  tab === "everybot"
-                    ? "border-ew-accent bg-ew-accent/10 text-ew-primary"
-                    : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
-                )}
-                  onClick={() => {
-                    setTab("everybot");
-                    setBotCursor(null);
-                    setBotHasMore(false);
+                  requestAnimationFrame(() => {
+                    const el = rowRefs.current[id];
+                    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+                  });
+                }}
+                onViewport={(v) => {
+                  setMapViewport(v);
+                  scheduleMapPinsReload();
+                }}
+              />
+            </div>
+            <div className="lg:col-span-1">
+              <EverybotAgentPanel
+                contextFilters={botFilters}
+                onAgentResult={async ({ actions }) => {
+                  // ✅ lokalny “stan filtrów” na potrzeby sekwencji akcji
+                  let currentFilters = botFilters;
 
-                    // 🔴 zatrzymaj pasek wyszukiwania
-                    setBotSearching(false);
-                    setBotSearchSeconds(0);
+                  for (const a of actions ?? []) {
+                    if (a?.type === "set_filters" && a.filters && typeof a.filters === "object") {
+                      currentFilters = { ...currentFilters, ...a.filters };
+                      setBotFilters(currentFilters);
 
-                    if (searchIntervalRef.current) {
-                      window.clearInterval(searchIntervalRef.current);
-                      searchIntervalRef.current = null;
+                      setBotMatchedSince(null);
+                      setBotSearching(false);
+                      setBotSearchSeconds(0);
+
+                      const { rows } = await loadEverybot({
+                        filters: currentFilters,
+                        cursor: null,
+                        append: false,
+                        matchedSince: null,
+                      });
+                      setHighlightFromRows(rows, 10);
+                      await loadMapPins().catch(() => null);
+                      continue;
                     }
-                    searchingRef.current = false;
 
-                    // 🟢 tylko Neon (bez live)
-                    setBotMatchedSince(null);
-                    loadEverybot({
-                      filters: botFilters,
-                      cursor: null,
-                      append: false,
-                      matchedSince: null,
-                    });
-                    loadMapPins().catch(() => null);
-                  }}
-                    >
-                🤖 {t(lang, "offersTabEverybot" as any)}
-              </button>
+                    if (a?.type === "run_live") {
+                      // traktuj jak klik "Szukaj" na aktualnych filtrach
+                      await (async () => {
+                        const local = await loadEverybot({
+                          filters: currentFilters,
+                          cursor: null,
+                          append: false,
+                          matchedSince: null,
+                        });
+                        if (local.rows.length === 0) {
+                          const runTs = typeof a.runTs === "string" ? a.runTs : new Date().toISOString();
+                          await runLiveHunter(currentFilters, runTs);
+                          await loadEverybot({
+                            filters: currentFilters,
+                            cursor: null,
+                            append: false,
+                            matchedSince: null,
+                          });
+                        }
+                      })();
+                      continue;
+                    }
+
+                    if (a?.type === "load_neon") {
+                      setBotMatchedSince(null);
+
+                      const { rows } = await loadEverybot({
+                        filters: currentFilters,
+                        cursor: null,
+                        append: false,
+                        matchedSince: null,
+                      });
+                      setHighlightFromRows(rows, 10);
+                      await loadMapPins().catch(() => null);
+                      continue;
+                    }
+
+                    if (a?.type === "refresh_map") {
+                      await loadMapPins().catch(() => null);
+                      continue;
+                    }
+
+                    if (a?.type === "geocode") {
+                      const limit = Number(a.limit ?? 50);
+                      await fetch("/api/everybot/geocode", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ limit: Number.isFinite(limit) ? limit : 50 }),
+                      });
+                      await refreshEverybotList();
+                      await loadMapPins().catch(() => null);
+                      continue;
+                    }
+
+                    if (a?.type === "open_listing" && typeof a.url === "string") {
+                      window.open(a.url, "_blank", "noopener,noreferrer");
+                      continue;
+                    }
+                  }
+                }}
+              />
             </div>
           </div>
 
-          {/* CONTENT */}
-          {tab === "office" ? (
-            <>
-             {/* LISTA OFERT */}
-              <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-                {loading ? (
-                  <div className="text-sm text-gray-500">{t(lang, "offersLoading" as any)}</div>
-                ) : err ? (
-                  <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                    {t(lang, "offersLoadError" as any)}: {err}
+          {/* ===== FILTR + TABELA ===== */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <EverybotSearchPanel
+              lang={lang}
+              loading={botLoading}
+              importUrl={importUrl}
+              setImportUrl={setImportUrl}
+              importing={importing}
+              onImportLink={importLink}
+              saveMode={saveMode}
+              setSaveMode={setSaveMode}
+              filters={botFilters}
+              setFilters={(next) => setBotFilters(next)}
+              onSearch={async (filters) => {
+                setBotFilters(filters);
+                // 0) jeśli brak filtrów -> tylko Neon
+                if (!hasAnyFilters(filters)) {
+                  setBotMatchedSince(null);
+                  setBotCursor(null);
+                  setBotHasMore(false);
+
+                  const { rows } = await loadEverybot({
+                    filters,
+                    cursor: null,
+                    append: false,
+                    matchedSince: null,
+                  });
+
+                  setHighlightFromRows(rows, 10);
+                  await loadMapPins().catch(() => null);
+                  return;
+                }
+
+                // 1) sprawdź Neon najpierw
+                setBotMatchedSince(null);
+                setBotCursor(null);
+                setBotHasMore(false);
+
+                const local = await loadEverybot({
+                  filters,
+                  cursor: null,
+                  append: false,
+                  matchedSince: null,
+                });
+
+                setHighlightFromRows(local.rows, 10);
+                await loadMapPins().catch(() => null);
+
+                // 2) jeśli NIC nie ma w Neon -> dopiero wtedy run portali
+                if (local.rows.length === 0) {
+                  const runTs = new Date().toISOString();
+                  setBotMatchedSince(runTs);
+
+                  setBotSearching(true);
+                  setBotSearchSeconds(0);
+
+                  await runLiveHunter(filters, runTs);
+
+                  // po runLiveHunter: odśwież Neon (bez matchedSince — bo i tak zapisane)
+                  const after = await loadEverybot({
+                    filters,
+                    cursor: null,
+                    append: false,
+                    matchedSince: null,
+                  });
+
+                  setHighlightFromRows(after.rows, 10);
+                  await loadMapPins().catch(() => null);
+
+                  setBotSearching(false);
+                }
+              }}
+            />
+
+            {/* ===== WYNIKI ===== */}
+            {botSearching && (
+              <div className="mb-3">
+                <div className="mb-1.5 text-xs font-semibold text-ew-primary">
+                  🔄 {t(lang, "everybotSearching" as any)}
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-ew-accent/20">
+                  <div className="h-full w-full animate-pulse bg-ew-accent transition-all duration-300" />
+                </div>
+              </div>
+            )}
+
+            <div className="mt-4 relative rounded-2xl border border-gray-200 bg-white">
+              {/* ✅ Kolejne ładowania: mały overlay nad listą (nie dotyka row, nie blokuje klików) */}
+              {botLoading && botRows.length > 0 && (
+                <div className="pointer-events-none absolute inset-0 z-20 flex items-start justify-center rounded-2xl">
+                  <div className="mt-3 rounded-2xl border border-white/40 bg-white/60 px-4 py-3 shadow-[0_10px_30px_rgba(0,0,0,0.08)] backdrop-blur-xl">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src="/brand/everyapp-logo.svg"
+                        alt="EveryAPP"
+                        className="h-5 w-5 animate-[spinSlow_1.8s_linear_infinite]"
+                        draggable={false}
+                      />
+                      <div className="text-xs font-semibold text-ew-primary">
+                        {t(lang, "everybotSearching" as any)}
+                      </div>
+                      <div className="h-2 w-28 overflow-hidden rounded-full bg-ew-accent/15">
+                        <div className="h-full w-1/2 animate-[bar_1.1s_ease-in-out_infinite] rounded-full bg-ew-accent" />
+                      </div>
+                    </div>
+
+                    <style jsx>{`
+                      @keyframes bar {
+                        0% { transform: translateX(-20%); opacity: .55; }
+                        50% { transform: translateX(110%); opacity: 1; }
+                        100% { transform: translateX(-20%); opacity: .55; }
+                      }
+                      @keyframes spinSlow {
+                        from { transform: rotate(0deg); }
+                        to { transform: rotate(360deg); }
+                      }
+                    `}</style>
                   </div>
-                ) : empty ? (
-                  <div className="flex h-56 items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-ew-accent/5">
-                    <p className="text-sm text-gray-500">{t(lang, "offersEmpty" as any)}</p>
-                  </div>
-                ) : (
-                  <div ref={officeTableRef} className="w-full">
+                </div>
+              )}
+
+              {/* ✅ Pierwsze ładowanie: pełny glass z logo + info */}
+              {botLoading && botRows.length === 0 ? (
+                <EverybotLoadingGlass
+                  title={t(lang, "everybotLoading" as any)}
+                  subtitle={t(lang, "everybotSearching" as any)}
+                />
+              ) : botErr ? (
+                <div className="p-4 text-xs text-red-700">
+                  {t(lang, "everybotLoadError" as any)}: {botErr}
+                </div>
+              ) : botRows.length === 0 ? (
+                <div className="flex h-32 items-center justify-center rounded-2xl bg-ew-accent/5">
+                  <p className="text-xs text-gray-500">
+                    {t(lang, "everybotEmpty" as any)}
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div ref={everybotTableRef} className="w-full">
                     <div className="divide-y divide-gray-100">
-                      {rows.map((r) => {
-                        const title =
-                          r.record_type === "offer"
-                            ? `${t(lang, "offersTabOffice" as any)}`
-                            : `${t(lang, "offersTabOffice" as any)}`;
+                      {botRows.map((r) => {
+                        const selected = selectedExternalId === r.id;
+                        const highlighted = highlightIds.includes(r.id);
 
-                        const metaLeft = [
-                          r.record_type === "offer" ? "offer" : "search",
-                          r.transaction_type,
-                          r.status,
-                        ].filter(Boolean) as string[];
+                        const title = r.title ?? "-";
+                        const price = fmtPrice(r.price_amount, r.currency);
+                        const area = r.area_m2 != null ? `${r.area_m2} m²` : null;
+                        const rooms = r.rooms != null ? `${r.rooms} pokoje` : null;
+                        const floor = r.floor ? `${r.floor} piętro` : null;
+                        const ppm2 =
+                          r.price_per_m2 != null
+                            ? `${Math.round(r.price_per_m2).toLocaleString()} zł/m²`
+                            : null;
 
-                        const created = r.created_at ? new Date(r.created_at).toLocaleDateString() : null;
+                        const locLine =
+                          [r.street, r.district, r.city, r.voivodeship].filter(Boolean).join(", ") ||
+                          (r.location_text ?? "");
 
                         return (
                           <div
-                            key={r.listing_id}
-                            className={clsx("p-3 md:p-4", "transition")}
+                            key={r.id}
+                            ref={(el) => {
+                              rowRefs.current[r.id] = el;
+                            }}
+                            className={clsx(
+                              "p-2.5 md:p-3",
+                              highlighted && "bg-green-50",
+                              selected && "bg-ew-accent/10 ring-1 ring-ew-accent"
+                            )}
                           >
                             <div className="flex gap-3">
-                              {/* thumb (placeholder) */}
+                              {/* zdjęcie */}
                               <div className="shrink-0">
-                                <div className="h-16 w-24 rounded-xl bg-gray-100 ring-1 ring-gray-200" />
-
-                                <div className="mt-1 flex items-center gap-2 text-[11px] text-gray-500">
-                                  <span className="rounded-md bg-gray-100 px-2 py-0.5">
-                                    {r.record_type}
-                                  </span>
-                                  {created ? <span>{created}</span> : null}
+                                {r.thumb_url ? (
+                                  <img
+                                    src={r.thumb_url}
+                                    alt=""
+                                    className="h-14 w-20 rounded-lg object-cover ring-1 ring-gray-200"
+                                    loading="lazy"
+                                  />
+                                ) : (
+                                  <div className="h-14 w-20 rounded-lg bg-gray-100 ring-1 ring-gray-200" />
+                                )}
+                                <div className="mt-1 text-[10px] text-gray-500">
+                                  {r.source}
+                                  {r.matched_at ? ` • ${new Date(r.matched_at).toLocaleDateString()}` : ""}
                                 </div>
                               </div>
 
-                              {/* content */}
+                              {/* treść */}
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-start justify-between gap-3">
                                   <div className="min-w-0">
-                                    <div className="truncate text-sm font-extrabold text-ew-primary">
-                                      {title}
-                                    </div>
-
-                                    {(r.case_owner_name || r.parties_summary) ? (
-                                      <div className="truncate text-xs text-gray-600">
-                                        {r.case_owner_name ?? "-"}
-                                        {r.parties_summary ? ` • ${r.parties_summary}` : ""}
-                                      </div>
+                                    <div className="truncate text-sm font-semibold text-ew-primary">{title}</div>
+                                    {locLine ? (
+                                      <div className="truncate text-[11px] text-gray-600">{locLine}</div>
                                     ) : null}
                                   </div>
 
+                                  {/* cena */}
                                   <div className="text-right">
-                                    <div className="text-base font-extrabold text-ew-primary">
-                                      {r.transaction_type}
-                                    </div>
-                                    <div className="text-xs text-gray-500">{r.status}</div>
+                                    <div className="text-sm font-extrabold text-ew-primary">{price}</div>
+                                    {ppm2 ? <div className="text-[11px] text-gray-500">{ppm2}</div> : null}
                                   </div>
                                 </div>
 
                                 {/* meta */}
-                                {metaLeft.length ? (
-                                  <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-700">
-                                    {metaLeft.map((x, i) => (
-                                      <span
-                                        key={i}
-                                        className="rounded-md bg-gray-50 px-2 py-1 ring-1 ring-gray-200"
-                                      >
-                                        {x}
+                                <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-gray-700">
+                                  {r.transaction_type ? <span>{r.transaction_type}</span> : null}
+                                  {r.property_type ? <span>{r.property_type}</span> : null}
+                                  {area ? <span>{area}</span> : null}
+                                  {rooms ? <span>{rooms}</span> : null}
+                                  {floor ? <span>{floor}</span> : null}
+                                  {r.year_built ? <span>{r.year_built}</span> : null}
+                                </div>
+
+                                {/* RCN + telefon + akcje */}
+                                <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
+                                  <div className="text-[11px] text-gray-600">
+                                    {r.owner_phone ? <span className="mr-3">📞 {r.owner_phone}</span> : null}
+
+                                    {r.rcn_last_price != null ? (
+                                      <span className="mr-3">
+                                        🧾 RCN: {Math.round(r.rcn_last_price).toLocaleString()} zł
+                                        {r.rcn_last_date ? ` (${new Date(r.rcn_last_date).toLocaleDateString()})` : ""}
+                                        {r.rcn_link ? (
+                                          <>
+                                            {" "}
+                                            <a
+                                              href={r.rcn_link}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="text-ew-accent underline"
+                                            >
+                                              źródło
+                                            </a>
+                                          </>
+                                        ) : null}
                                       </span>
-                                    ))}
+                                    ) : null}
                                   </div>
-                                ) : null}
+
+                                  <div className="flex items-center gap-3">
+                                    {r.source_url ? (
+                                      <a
+                                        href={r.source_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-ew-accent underline text-[11px] font-semibold"
+                                      >
+                                        {t(lang, "everybotOpen" as any)}
+                                      </a>
+                                    ) : null}
+                                  </div>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -1012,416 +1410,33 @@ function EverybotLoadingGlass({ title, subtitle }: { title: string; subtitle: st
                       })}
                     </div>
                   </div>
-                )}
-              </div>
 
-              {/* IMPORT INFO */}
-              <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-                <h3 className="text-sm font-extrabold text-ew-primary">{t(lang, "offersImportTitle" as any)}</h3>
-                <p className="mt-1 text-sm text-gray-500">{t(lang, "offersImportDesc" as any)}</p>
-                <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-gray-600">
-                  <li>{t(lang, "offersImportHint1" as any)}</li>
-                  <li>{t(lang, "offersImportHint2" as any)}</li>
-                  <li>{t(lang, "offersImportHint3" as any)}</li>
-                </ul>
-              </div>
-            </>
-          ) : (
-            <>
-            {/* EVERYBOT */}
-    <div className="space-y-4">
-
-      {/* ===== MAPA + AGENT (2/3 + 1/3) ===== */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2">
-          <EverybotMap
-              pins={mapPins}
-              onSelectId={(id) => {
-                setSelectedExternalId(id);
-
-                requestAnimationFrame(() => {
-                  const el = rowRefs.current[id];
-                  if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
-                });
-              }}
-              onViewport={(v) => {
-                setMapViewport(v);
-                scheduleMapPinsReload();
-              }}
-            />
-        </div>
-        <div className="lg:col-span-1">
-          <EverybotAgentPanel
-            contextFilters={botFilters}
-            onAgentResult={async ({ actions }) => {
-              // ✅ lokalny “stan filtrów” na potrzeby sekwencji akcji
-              let currentFilters = botFilters;
-
-              for (const a of actions ?? []) {
-                if (a?.type === "set_filters" && a.filters && typeof a.filters === "object") {
-                  currentFilters = { ...currentFilters, ...a.filters };
-                  setBotFilters(currentFilters);
-
-                  setBotMatchedSince(null);
-                  setBotSearching(false);
-                  setBotSearchSeconds(0);
-
-                  const { rows } = await loadEverybot({
-                    filters: currentFilters,
-                    cursor: null,
-                    append: false,
-                    matchedSince: null,
-                  });
-                  setHighlightFromRows(rows, 10);
-                  await loadMapPins().catch(() => null);
-                  continue;
-                }
-
-                  if (a?.type === "run_live") {
-                  // traktuj jak klik "Szukaj" na aktualnych filtrach
-                  await (async () => {
-                    const local = await loadEverybot({ filters: currentFilters, cursor: null, append: false, matchedSince: null });
-                    if (local.rows.length === 0) {
-                      const runTs = typeof a.runTs === "string" ? a.runTs : new Date().toISOString();
-                      await runLiveHunter(currentFilters, runTs);
-                      await loadEverybot({ filters: currentFilters, cursor: null, append: false, matchedSince: null });
-                    }
-                  })();
-                  continue;
-                }
-
-                if (a?.type === "load_neon") {
-                  setBotMatchedSince(null);
-
-                  const { rows } = await loadEverybot({
-                    filters: currentFilters,
-                    cursor: null,
-                    append: false,
-                    matchedSince: null,
-                  });
-                  setHighlightFromRows(rows, 10);
-                  await loadMapPins().catch(() => null);
-                  continue;
-                }
-
-                if (a?.type === "refresh_map") {
-                  await loadMapPins().catch(() => null);
-                  continue;
-                }
-
-                if (a?.type === "geocode") {
-                  const limit = Number(a.limit ?? 50);
-                  await fetch("/api/everybot/geocode", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ limit: Number.isFinite(limit) ? limit : 50 }),
-                  });
-                  await refreshEverybotList();
-                  await loadMapPins().catch(() => null);
-                  continue;
-                }
-
-                if (a?.type === "open_listing" && typeof a.url === "string") {
-                  window.open(a.url, "_blank", "noopener,noreferrer");
-                  continue;
-                }
-              }
-            }}
-          />
-        </div>
-      </div>
-
-      {/* ===== FILTR + TABELA ===== */}
-      <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-        <EverybotSearchPanel
-          lang={lang}
-          loading={botLoading}
-          importUrl={importUrl}
-          setImportUrl={setImportUrl}
-          importing={importing}
-          onImportLink={importLink}
-          saveMode={saveMode}
-          setSaveMode={setSaveMode}
-          filters={botFilters}
-          setFilters={(next) => setBotFilters(next)}
-          onSearch={async (filters) => {
-            setBotFilters(filters);
-            // 0) jeśli brak filtrów -> tylko Neon
-            if (!hasAnyFilters(filters)) {
-              setBotMatchedSince(null);
-              setBotCursor(null);
-              setBotHasMore(false);
-
-              const { rows } = await loadEverybot({
-                filters,
-                cursor: null,
-                append: false,
-                matchedSince: null,
-              });
-
-              setHighlightFromRows(rows, 10);
-              await loadMapPins().catch(() => null);
-              return;
-            }
-
-            // 1) sprawdź Neon najpierw
-            setBotMatchedSince(null);
-            setBotCursor(null);
-            setBotHasMore(false);
-
-            const local = await loadEverybot({
-              filters,
-              cursor: null,
-              append: false,
-              matchedSince: null,
-            });
-
-            setHighlightFromRows(local.rows, 10);
-            await loadMapPins().catch(() => null);
-
-            // 2) jeśli NIC nie ma w Neon -> dopiero wtedy run portali
-            if (local.rows.length === 0) {
-              const runTs = new Date().toISOString();
-              setBotMatchedSince(runTs);
-
-              setBotSearching(true);
-              setBotSearchSeconds(0);
-
-              await runLiveHunter(filters, runTs);
-
-              // po runLiveHunter: odśwież Neon (bez matchedSince — bo i tak zapisane)
-              const after = await loadEverybot({
-                filters,
-                cursor: null,
-                append: false,
-                matchedSince: null,
-              });
-
-              setHighlightFromRows(after.rows, 10);
-              await loadMapPins().catch(() => null);
-
-              setBotSearching(false);
-            }
-          }}
-        />
-
-        {/* ===== WYNIKI ===== */}
-        {botSearching && (
-          <div className="mb-4">
-            <div className="mb-2 text-sm font-semibold text-ew-primary">
-              🔄 {t(lang, "everybotSearching" as any)}
-            </div>
-            <div className="h-2 w-full overflow-hidden rounded-full bg-ew-accent/20">
-              <div className="h-full w-full animate-pulse bg-ew-accent transition-all duration-300" />
+                  {botHasMore && (
+                    <div className="flex justify-center border-t border-gray-100 p-4">
+                      <button
+                        type="button"
+                        disabled={botLoading}
+                        onClick={() =>
+                          loadEverybot({
+                            filters: botFilters,
+                            cursor: botCursor,
+                            append: true,
+                            matchedSince: botMatchedSince,
+                          })
+                        }
+                        className="rounded-xl border px-3 py-1.5 text-xs font-semibold shadow-sm border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
+                      >
+                        {t(lang, "everybotLoadMore" as any)}
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
-        )}
-
-          <div className="mt-6 relative rounded-2xl border border-gray-200 bg-white">
-
-          {/* ✅ Kolejne ładowania: mały overlay nad listą (nie dotyka row, nie blokuje klików) */}
-          {botLoading && botRows.length > 0 && (
-            <div className="pointer-events-none absolute inset-0 z-20 flex items-start justify-center rounded-2xl">
-              <div className="mt-3 rounded-2xl border border-white/40 bg-white/60 px-4 py-3 shadow-[0_10px_30px_rgba(0,0,0,0.08)] backdrop-blur-xl">
-                <div className="flex items-center gap-3">
-                  <img
-                    src="/brand/everyapp-logo.svg"
-                    alt="EveryAPP"
-                    className="h-5 w-5 animate-[spinSlow_1.8s_linear_infinite]"
-                    draggable={false}
-                  />
-                  <div className="text-xs font-semibold text-ew-primary">
-                    {t(lang, "everybotSearching" as any)}
-                  </div>
-                  <div className="h-2 w-28 overflow-hidden rounded-full bg-ew-accent/15">
-                    <div className="h-full w-1/2 animate-[bar_1.1s_ease-in-out_infinite] rounded-full bg-ew-accent" />
-                  </div>
-                </div>
-
-                <style jsx>{`
-                  @keyframes bar {
-                    0% { transform: translateX(-20%); opacity: .55; }
-                    50% { transform: translateX(110%); opacity: 1; }
-                    100% { transform: translateX(-20%); opacity: .55; }
-                  }
-                  @keyframes spinSlow {
-                    from { transform: rotate(0deg); }
-                    to { transform: rotate(360deg); }
-                  }
-                `}</style>
-              </div>
-            </div>
-          )}
-
-          {/* ✅ Pierwsze ładowanie: pełny glass z logo + info */}
-          {botLoading && botRows.length === 0 ? (
-            <EverybotLoadingGlass
-              title={t(lang, "everybotLoading" as any)}
-              subtitle={t(lang, "everybotSearching" as any)}
-            />
-          ) : botErr ? (
-            <div className="p-4 text-sm text-red-700">
-              {t(lang, "everybotLoadError" as any)}: {botErr}
-            </div>
-          ) : botRows.length === 0 ? (
-            <div className="flex h-40 items-center justify-center rounded-2xl bg-ew-accent/5">
-              <p className="text-sm text-gray-500">
-                {t(lang, "everybotEmpty" as any)}
-              </p>
-            </div>
-          ) : (
-            <>
-              <div ref={everybotTableRef} className="w-full">
-                <div className="divide-y divide-gray-100">
-                  {botRows.map((r) => {
-                    const selected = selectedExternalId === r.id;
-                    const highlighted = highlightIds.includes(r.id);
-
-                    const title = r.title ?? "-";
-                    const price = fmtPrice(r.price_amount, r.currency);
-                    const area = r.area_m2 != null ? `${r.area_m2} m²` : null;
-                    const rooms = r.rooms != null ? `${r.rooms} pokoje` : null;
-                    const floor = r.floor ? `${r.floor} piętro` : null;
-                    const ppm2 =
-                      r.price_per_m2 != null
-                        ? `${Math.round(r.price_per_m2).toLocaleString()} zł/m²`
-                        : null;
-
-                    const locLine =
-                      [r.street, r.district, r.city, r.voivodeship].filter(Boolean).join(", ") ||
-                      (r.location_text ?? "");
-
-                    return (
-                      <div
-                        key={r.id}
-                        ref={(el) => {
-                          rowRefs.current[r.id] = el;
-                        }}
-                        className={clsx(
-                          "p-3 md:p-4",
-                          highlighted && "bg-green-50",
-                          selected && "bg-ew-accent/10 ring-1 ring-ew-accent"
-                        )}
-                      >
-                        <div className="flex gap-3">
-                          {/* zdjęcie */}
-                          <div className="shrink-0">
-                            {r.thumb_url ? (
-                              <img
-                                src={r.thumb_url}
-                                alt=""
-                                className="h-16 w-24 rounded-xl object-cover ring-1 ring-gray-200"
-                                loading="lazy"
-                              />
-                            ) : (
-                              <div className="h-16 w-24 rounded-xl bg-gray-100 ring-1 ring-gray-200" />
-                            )}
-                            <div className="mt-1 text-[11px] text-gray-500">
-                              {r.source}
-                              {r.matched_at ? ` • ${new Date(r.matched_at).toLocaleDateString()}` : ""}
-                            </div>
-                          </div>
-
-                          {/* treść */}
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="truncate font-extrabold text-ew-primary">{title}</div>
-                                {locLine ? (
-                                  <div className="truncate text-xs text-gray-600">{locLine}</div>
-                                ) : null}
-                              </div>
-
-                              {/* cena */}
-                              <div className="text-right">
-                                <div className="text-base font-extrabold text-ew-primary">{price}</div>
-                                {ppm2 ? <div className="text-xs text-gray-500">{ppm2}</div> : null}
-                              </div>
-                            </div>
-
-                            {/* meta */}
-                            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-700">
-                              {r.transaction_type ? <span>{r.transaction_type}</span> : null}
-                              {r.property_type ? <span>{r.property_type}</span> : null}
-                              {area ? <span>{area}</span> : null}
-                              {rooms ? <span>{rooms}</span> : null}
-                              {floor ? <span>{floor}</span> : null}
-                              {r.year_built ? <span>{r.year_built}</span> : null}
-                            </div>
-
-                            {/* RCN + telefon + akcje */}
-                            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                              <div className="text-xs text-gray-600">
-                                {r.owner_phone ? <span className="mr-3">📞 {r.owner_phone}</span> : null}
-
-                                {r.rcn_last_price != null ? (
-                                  <span className="mr-3">
-                                    🧾 RCN: {Math.round(r.rcn_last_price).toLocaleString()} zł
-                                    {r.rcn_last_date ? ` (${new Date(r.rcn_last_date).toLocaleDateString()})` : ""}
-                                    {r.rcn_link ? (
-                                      <>
-                                        {" "}
-                                        <a
-                                          href={r.rcn_link}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="text-ew-accent underline"
-                                        >
-                                          źródło
-                                        </a>
-                                      </>
-                                    ) : null}
-                                  </span>
-                                ) : null}
-                              </div>
-
-                              <div className="flex items-center gap-3">
-                                {r.source_url ? (
-                                  <a
-                                    href={r.source_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-ew-accent underline text-xs font-semibold"
-                                  >
-                                    {t(lang, "everybotOpen" as any)}
-                                  </a>
-                                ) : null}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {botHasMore && (
-                <div className="flex justify-center border-t border-gray-100 p-4">
-                  <button
-                    type="button"
-                    disabled={botLoading}
-                    onClick={() =>
-                      loadEverybot({
-                        filters: botFilters,
-                        cursor: botCursor,
-                        append: true,
-                        matchedSince: botMatchedSince,
-                      })
-                    }
-                    className="rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
-                  >
-                    {t(lang, "everybotLoadMore" as any)}
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-         </div>
         </div>
-       </div>
-     </>
+      </>
     )}
-    </div>
-  );
+  </div>
+);
 }

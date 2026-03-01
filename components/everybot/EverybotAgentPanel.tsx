@@ -39,25 +39,25 @@ export default function EverybotAgentPanel({
     setText("");
 
     try {
-    const history = [...messages, ...(msg ? [{ role: "user", text: msg } as Msg] : [])]
-    .filter((m) => m.role === "user" || m.role === "assistant")
-    .slice(-10);;
+      const history = [...messages, ...(msg ? [{ role: "user", text: msg } as Msg] : [])]
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .slice(-10);
 
-    const r = await fetch("/api/everybot/agent", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message: msg, attachments, contextFilters, history }),
-    });
+      const r = await fetch("/api/everybot/agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: msg, attachments, contextFilters, history }),
+      });
       const j = await r.json().catch(() => null);
       if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
-     setMessages((prev) => [...prev, { role: "assistant", text: String(j?.reply ?? "OK") }]);
+      setMessages((prev) => [...prev, { role: "assistant", text: String(j?.reply ?? "OK") }]);
 
-    if (j?.reply && onAgentResult) {
-    onAgentResult({
-        reply: String(j.reply),
-        actions: Array.isArray(j.actions) ? j.actions : [],
-    });
-    }
+      if (j?.reply && onAgentResult) {
+        onAgentResult({
+          reply: String(j.reply),
+          actions: Array.isArray(j.actions) ? j.actions : [],
+        });
+      }
       setAttachments([]);
     } catch (e: any) {
       setMessages((prev) => [
@@ -83,18 +83,18 @@ export default function EverybotAgentPanel({
   }
 
   return (
-    <div className="h-[70vh] rounded-3xl border border-gray-200 bg-white shadow-sm flex flex-col overflow-hidden">
+    <div className="h-[70vh] rounded-2xl border border-gray-200 bg-white shadow-sm flex flex-col overflow-hidden">
       <div className="p-4 border-b border-gray-100">
         <div className="text-sm font-extrabold text-ew-primary">Agent EveryBOT</div>
         <div className="text-xs text-gray-500">Tekst • głos • pliki</div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto p-4 space-y-2">
         {messages.map((m, idx) => (
           <div key={idx} className={m.role === "user" ? "text-right" : "text-left"}>
             <div
               className={[
-                "inline-block max-w-[92%] rounded-2xl px-3 py-2 text-sm",
+                "inline-block max-w-[92%] rounded-2xl px-3 py-2 text-[13px] leading-snug",
                 m.role === "user"
                   ? "bg-ew-accent/20 text-ew-primary"
                   : "bg-gray-100 text-gray-800",
@@ -107,7 +107,7 @@ export default function EverybotAgentPanel({
       </div>
 
       {attachments.length > 0 && (
-        <div className="px-4 pb-2 text-xs text-gray-600">
+        <div className="px-4 pb-2 text-[11px] text-gray-600">
           Załączniki: {attachments.map((a) => a.name).join(", ")}
         </div>
       )}
@@ -115,7 +115,7 @@ export default function EverybotAgentPanel({
       <div className="p-3 border-t border-gray-100 flex gap-2 items-center">
         <button
           type="button"
-          className="rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-ew-primary hover:bg-ew-accent/10"
+          className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-ew-primary hover:bg-ew-accent/10"
           onClick={() => fileRef.current?.click()}
           disabled={sending}
         >
@@ -133,7 +133,7 @@ export default function EverybotAgentPanel({
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Napisz do agenta…"
-          className="flex-1 rounded-2xl border border-gray-200 px-3 py-2 text-sm outline-none"
+          className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none"
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
@@ -146,7 +146,7 @@ export default function EverybotAgentPanel({
         <button
           type="button"
           className={[
-            "rounded-2xl px-4 py-2 text-xs font-extrabold shadow-sm",
+            "rounded-xl px-4 py-2 text-xs font-extrabold shadow-sm",
             canSend && !sending
               ? "bg-ew-accent text-ew-primary hover:opacity-95"
               : "bg-gray-100 text-gray-400 cursor-not-allowed",

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
 import { DEFAULT_LANG, isLangKey, t } from "@/utils/i18n";
@@ -55,13 +55,7 @@ function PanelCard({
   );
 }
 
-function StatPill({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function StatPill({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-gray-200 bg-ew-accent/10 px-4 py-3">
       <p className="text-xs text-gray-500">{label}</p>
@@ -69,29 +63,23 @@ function StatPill({
     </div>
   );
 }
-    export default function PanelPage() {
-      // -------------------- i18n --------------------
-    const [lang, setLang] = useState<LangKey>(DEFAULT_LANG);
 
-    // -------------------- routing --------------------
-    const router = useRouter();
+export default function PanelPage() {
+  // -------------------- i18n --------------------
+  const [lang, setLang] = useState<LangKey>(DEFAULT_LANG);
 
-    // -------------------- responsive / sidebar --------------------
-    const [isMobile, setIsMobile] = useState(false);          // < lg
-    const [sidebarOpen, setSidebarOpen] = useState(false);    // mobile/tablet drawer
-    const [sidebarPinned, setSidebarPinned] = useState(false); // desktop pin
-    const [sidebarHover, setSidebarHover] = useState(false);   // desktop hover state
+  // -------------------- routing --------------------
+  const router = useRouter();
 
-    // hover delays (prevents "too sensitive" menu)
-    const hoverEnterRef = useRef<number | null>(null);
-    const hoverLeaveRef = useRef<number | null>(null);
+  // -------------------- responsive / sidebar --------------------
+  const [isMobile, setIsMobile] = useState(false); // < lg
+  const [sidebarOpen, setSidebarOpen] = useState(false); // mobile drawer
 
-    // computed visibility
-    const sidebarVisible = isMobile ? sidebarOpen : (sidebarPinned || sidebarHover);
+  // desktop: sidebar zawsze widoczny
+  const sidebarVisible = isMobile ? sidebarOpen : true;
 
-    // -------------------- active view --------------------
-    const [activeView, setActiveView] = useState<PanelView>("dashboard");
-
+  // -------------------- active view --------------------
+  const [activeView, setActiveView] = useState<PanelView>("dashboard");
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 1024); // <lg
@@ -100,39 +88,38 @@ function StatPill({
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-
   useEffect(() => {
     const c = getCookie("lang");
     if (isLangKey(c)) setLang(c);
   }, []);
 
-const nav = useMemo<NavItem[]>(
-  () => [
-    { key: "panelNavDashboard", view: "dashboard", subKey: "panelHeaderSub" },
-    { key: "panelNavCalendar", view: "calendar", subKey: "panelCalendarSub" },
+  const nav = useMemo<NavItem[]>(
+    () => [
+      { key: "panelNavDashboard", view: "dashboard", subKey: "panelHeaderSub" },
+      { key: "panelNavCalendar", view: "calendar", subKey: "panelCalendarSub" },
 
-    // widoczne, ale jeszcze nieaktywne moduły
-    { key: "panelNavListings", view: "offers", subKey: "offersSubtitle" },
-    { key: "panelNavBuyers", disabled: true },
-    { key: "panelNavClients", disabled: true },
-    { key: "panelNavTeam", view: "team", subKey: "teamSubtitle" },
-    { key: "panelNavOfficeDeals", disabled: true },
-    { key: "panelNavEmployees", disabled: true },
-    { key: "panelNavPrimaryMarket", disabled: true },
-    { key: "panelNavBoard", disabled: true },
-    { key: "panelNavUsers", disabled: true },
-    { key: "panelNavLeaderboard", disabled: true },
-    { key: "panelNavDownloads", disabled: true },
-    { key: "panelNavQueries", disabled: true },
-    { key: "panelNavReports", disabled: true },
-    { key: "panelNavMenuSettings", disabled: true },
-  ],
-  []
-);
+      // widoczne, ale jeszcze nieaktywne moduły
+      { key: "panelNavListings", view: "offers", subKey: "offersSubtitle" },
+      { key: "panelNavBuyers", disabled: true },
+      { key: "panelNavClients", disabled: true },
+      { key: "panelNavTeam", view: "team", subKey: "teamSubtitle" },
+      { key: "panelNavOfficeDeals", disabled: true },
+      { key: "panelNavEmployees", disabled: true },
+      { key: "panelNavPrimaryMarket", disabled: true },
+      { key: "panelNavBoard", disabled: true },
+      { key: "panelNavUsers", disabled: true },
+      { key: "panelNavLeaderboard", disabled: true },
+      { key: "panelNavDownloads", disabled: true },
+      { key: "panelNavQueries", disabled: true },
+      { key: "panelNavReports", disabled: true },
+      { key: "panelNavMenuSettings", disabled: true },
+    ],
+    []
+  );
 
-const activeNavItem = useMemo(() => {
-  return nav.find((x) => x.view === activeView) ?? nav[0];
-}, [nav, activeView]);
+  const activeNavItem = useMemo(() => {
+    return nav.find((x) => x.view === activeView) ?? nav[0];
+  }, [nav, activeView]);
 
   return (
     <>
@@ -143,207 +130,162 @@ const activeNavItem = useMemo(() => {
 
       <main className="min-h-screen bg-ew-bg text-ew-primary">
         <div className="flex min-h-screen">
+          {/* SIDEBAR */}
+          <aside
+            className={clsx(
+              "fixed left-0 top-0 z-50 h-screen",
+              "transition-all duration-200",
+              // mobile: when closed, don't block taps on content
+              isMobile && !sidebarVisible && "pointer-events-none"
+            )}
+          >
+            {/* MOBILE OVERLAY (klik poza menu zamyka) */}
+            {isMobile && sidebarVisible ? (
+              <button
+                type="button"
+                aria-label="Close sidebar overlay"
+                className="fixed inset-0 z-40 bg-black/30 pointer-events-auto"
+                onClick={() => setSidebarOpen(false)}
+              />
+            ) : null}
 
-        {/* SIDEBAR */}
-            <aside
+            {/* Właściwy panel */}
+            <div
               className={clsx(
-                "fixed left-0 top-0 z-50 h-screen",
-                "transition-all duration-200",
-                // desktop: show from md. mobile: always present but non-interactive when closed
-                isMobile ? "block" : "hidden md:block",
-                // mobile: when closed, don't block taps on content
-                isMobile && !sidebarVisible && "pointer-events-none"
+                "h-full border-r border-white/10 bg-ew-primary text-white",
+                "transition-transform duration-200 will-change-transform",
+                // ✅ węższy sidebar (stały)
+                "w-56",
+                // ensure panel is above overlay
+                "relative z-50",
+                // mobile: slide in/out; desktop: always visible
+                isMobile ? (sidebarVisible ? "translate-x-0" : "-translate-x-full") : "translate-x-0",
+                // mobile: interactive even if aside pointer-events-none
+                isMobile && "pointer-events-auto",
+                // safe area for notch
+                isMobile && "pt-[env(safe-area-inset-top)]"
               )}
-              onMouseEnter={() => {
-                if (isMobile) return;
-
-                if (hoverLeaveRef.current) window.clearTimeout(hoverLeaveRef.current);
-                if (hoverEnterRef.current) window.clearTimeout(hoverEnterRef.current);
-
-                // ENTER DELAY – mniej czułe
-                hoverEnterRef.current = window.setTimeout(() => setSidebarHover(true), 220);
-              }}
-              onMouseLeave={() => {
-                if (isMobile) return;
-
-                if (hoverEnterRef.current) window.clearTimeout(hoverEnterRef.current);
-                if (hoverLeaveRef.current) window.clearTimeout(hoverLeaveRef.current);
-
-                // LEAVE DELAY – nie znika agresywnie
-                hoverLeaveRef.current = window.setTimeout(() => setSidebarHover(false), 260);
-              }}
             >
-              {/* MOBILE OVERLAY (klik poza menu zamyka) */}
-              {isMobile && sidebarVisible ? (
-                <button
-                  type="button"
-                  aria-label="Close sidebar overlay"
-                  className="fixed inset-0 z-40 bg-black/30 pointer-events-auto"
-                  onClick={() => setSidebarOpen(false)}
-                />
-              ) : null}
-
-              {/* Hot-zone: jeszcze mniejszy + tylko na desktop */}
-              {!isMobile && !sidebarVisible ? (
-                <div
-                  className="absolute left-0 top-0 h-full w-1.5"
-                  onMouseEnter={() => {
-                    if (hoverEnterRef.current) window.clearTimeout(hoverEnterRef.current);
-                    hoverEnterRef.current = window.setTimeout(() => setSidebarHover(true), 220);
-                  }}
-                />
-              ) : null}
-
-              {/* Właściwy panel */}
-              <div
-                className={clsx(
-                  "h-full border-r border-white/10 bg-ew-primary text-white",
-                  "transition-transform duration-200 will-change-transform",
-                  "w-72",
-                  // ensure panel is above overlay
-                  "relative z-50",
-                  // mobile: slide in/out full
-                  isMobile
-                    ? (sidebarVisible ? "translate-x-0" : "-translate-x-full")
-                    : (sidebarVisible ? "translate-x-0" : "-translate-x-[calc(100%-0.5rem)]"),
-                  // mobile: interactive even if aside pointer-events-none
-                  isMobile && "pointer-events-auto",
-                  // safe area for notch
-                  isMobile && "pt-[env(safe-area-inset-top)]"
-                )}
-              >
-                {/* HEADER */}
-                <div className="flex h-16 items-center justify-between px-5">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/25 backdrop-blur ring-1 ring-white/30">
-                      <img src="/everyapp-logo.svg" alt="EveryAPP" className="h-7 w-auto" />
-                    </div>
-
-                    <div className="leading-tight">
-                      <div className="text-sm font-extrabold tracking-tight">EveryAPP</div>
-                      <div className="text-xs text-white/70">{t(lang, "panelSidebarSub")}</div>
-                    </div>
+              {/* HEADER */}
+              <div className="flex h-16 items-center justify-between px-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/25 backdrop-blur ring-1 ring-white/30">
+                    <img src="/everyapp-logo.svg" alt="EveryAPP" className="h-7 w-auto" />
                   </div>
 
-                  {/* Mobile close button */}
-                  {isMobile ? (
-                    <button
-                      type="button"
-                      onClick={() => setSidebarOpen(false)}
-                      className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-white/90 transition hover:bg-white/10"
-                      aria-label="Close"
-                      title="Close"
-                    >
-                      ✕
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setSidebarPinned((v) => !v)}
-                      className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-white/90 transition hover:bg-white/10"
-                      aria-label={t(lang, "panelToggleSidebar")}
-                      title={t(lang, "panelToggleSidebar")}
-                    >
-                      {sidebarPinned ? "📌" : "📍"}
-                    </button>
-                  )}
+                  <div className="leading-tight">
+                    <div className="text-sm font-extrabold tracking-tight">EveryAPP</div>
+                    <div className="text-xs text-white/70">{t(lang, "panelSidebarSub")}</div>
+                  </div>
                 </div>
 
-                {/* NAV */}
-                <nav className="px-3 pb-6 pt-2">
-                  {nav.map((it) => {
-                    const isActive = it.view ? activeView === it.view : false;
-                    const isDisabled = !!it.disabled;
+                {/* Mobile close button */}
+                {isMobile ? (
+                  <button
+                    type="button"
+                    onClick={() => setSidebarOpen(false)}
+                    className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-white/90 transition hover:bg-white/10"
+                    aria-label="Close"
+                    title="Close"
+                  >
+                    ✕
+                  </button>
+                ) : null}
+              </div>
 
-                    const rowClass = clsx(
-                      "mt-1 flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm transition",
-                      isActive && "bg-white/10 text-white",
-                      !isActive && !isDisabled && "text-white/85 hover:bg-white/10 hover:text-white",
-                      isDisabled && "cursor-not-allowed opacity-50"
-                    );
+              {/* NAV */}
+              <nav className="px-2 pb-6 pt-2">
+                {nav.map((it) => {
+                  const isActive = it.view ? activeView === it.view : false;
+                  const isDisabled = !!it.disabled;
 
-                    return (
-                      <button
-                        key={it.key}
-                        type="button"
-                        className={rowClass}
-                        title={t(lang, it.key as any)}
-                        disabled={isDisabled}
-                        onClick={() => {
-                          if (it.disabled) return;
+                  const rowClass = clsx(
+                    "mt-1 flex w-full items-center justify-between rounded-2xl px-3 py-3 text-left text-sm transition",
+                    isActive && "bg-white/10 text-white",
+                    !isActive && !isDisabled && "text-white/85 hover:bg-white/10 hover:text-white",
+                    isDisabled && "cursor-not-allowed opacity-50"
+                  );
 
-                          if (it.href) {
-                            router.push(it.href);
-                          } else if (it.view) {
-                            setActiveView(it.view);
-                          }
+                  return (
+                    <button
+                      key={it.key}
+                      type="button"
+                      className={rowClass}
+                      title={t(lang, it.key as any)}
+                      disabled={isDisabled}
+                      onClick={() => {
+                        if (it.disabled) return;
 
-                          // mobile: close after selecting item
-                          if (isMobile) setSidebarOpen(false);
-                        }}
-                      >
-                        <span className="truncate">{t(lang, it.key as any)}</span>
-                        {it.badge ? (
-                          <span className="rounded-full bg-ew-accent/20 px-2 py-0.5 text-[11px] font-semibold text-ew-accent">
-                            {it.badge}
-                          </span>
-                        ) : null}
-                      </button>
-                    );
-                  })}
-                </nav>
+                        if (it.href) {
+                          router.push(it.href);
+                        } else if (it.view) {
+                          setActiveView(it.view);
+                        }
 
-                {/* FOOTER */}
-                <div className="mt-auto px-4 pb-5">
-                  <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
-                    <p className="text-xs font-semibold text-white/80">{t(lang, "panelSidebarHintTitle")}</p>
-                    <p className="mt-1 text-xs text-white/65">{t(lang, "panelSidebarHintDesc")}</p>
+                        // mobile: close after selecting item
+                        if (isMobile) setSidebarOpen(false);
+                      }}
+                    >
+                      <span className="truncate">{t(lang, it.key as any)}</span>
+                      {it.badge ? (
+                        <span className="rounded-full bg-ew-accent/20 px-2 py-0.5 text-[11px] font-semibold text-ew-accent">
+                          {it.badge}
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </nav>
 
-                    <div className="mt-3 flex gap-2">
-                      <Link
-                        href="/"
-                        className="inline-flex flex-1 items-center justify-center rounded-2xl bg-ew-accent px-3 py-2 text-xs font-bold text-ew-primary transition hover:opacity-95"
-                      >
-                        {t(lang, "panelGoHome")}
-                      </Link>
-                      <Link
-                        href="/login"
-                        className="inline-flex flex-1 items-center justify-center rounded-2xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-white/90 transition hover:bg-white/10"
-                      >
-                        {t(lang, "panelLogout")}
-                      </Link>
-                    </div>
+              {/* FOOTER */}
+              <div className="mt-auto px-3 pb-5">
+                <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-xs font-semibold text-white/80">{t(lang, "panelSidebarHintTitle")}</p>
+                  <p className="mt-1 text-xs text-white/65">{t(lang, "panelSidebarHintDesc")}</p>
+
+                  <div className="mt-3 flex gap-2">
+                    <Link
+                      href="/"
+                      className="inline-flex flex-1 items-center justify-center rounded-2xl bg-ew-accent px-3 py-2 text-xs font-bold text-ew-primary transition hover:opacity-95"
+                    >
+                      {t(lang, "panelGoHome")}
+                    </Link>
+                    <Link
+                      href="/login"
+                      className="inline-flex flex-1 items-center justify-center rounded-2xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-white/90 transition hover:bg-white/10"
+                    >
+                      {t(lang, "panelLogout")}
+                    </Link>
                   </div>
                 </div>
               </div>
-            </aside>
+            </div>
+          </aside>
 
           {/* CONTENT */}
-                   <section className="flex min-w-0 flex-1 flex-col md:pl-3">
-
+          <section className="flex min-w-0 flex-1 flex-col lg:pl-56">
             {/* TOPBAR */}
             <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/80 backdrop-blur">
               <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
                 <div className="flex min-w-0 items-center gap-3">
-                    {/* Mobile menu button */}
-                    <button
-                      type="button"
-                      onClick={() => setSidebarOpen(true)}
-                      className="md:hidden inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-200 bg-white text-ew-primary shadow-sm transition hover:bg-ew-accent/10"
-                      aria-label="Open menu"
-                      title="Open menu"
-                    >
-                      ☰
-                    </button>
+                  {/* Mobile menu button */}
+                  <button
+                    type="button"
+                    onClick={() => setSidebarOpen(true)}
+                    className="lg:hidden inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-200 bg-white text-ew-primary shadow-sm transition hover:bg-ew-accent/10"
+                    aria-label="Open menu"
+                    title="Open menu"
+                  >
+                    ☰
+                  </button>
+
                   <div className="min-w-0">
                     <h1 className="truncate text-lg font-extrabold tracking-tight text-ew-primary">
-                    {t(lang, activeNavItem.key as any)}
+                      {t(lang, activeNavItem.key as any)}
                     </h1>
 
                     <p className="truncate text-xs text-gray-500">
-                    {activeNavItem.subKey
-                        ? t(lang, activeNavItem.subKey as any)
-                        : t(lang, "panelHeaderSub")}
+                      {activeNavItem.subKey ? t(lang, activeNavItem.subKey as any) : t(lang, "panelHeaderSub")}
                     </p>
                   </div>
                 </div>
@@ -382,182 +324,154 @@ const activeNavItem = useMemo(() => {
               </div>
             </header>
 
-                {/* MAIN GRID */}
-                {activeView === "dashboard" ? (
-                <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
+            {/* MAIN GRID */}
+            {activeView === "dashboard" ? (
+              <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
                 {/* KPI row */}
                 <div className="grid gap-4 md:grid-cols-4">
-                <StatPill label={t(lang, "panelKpiCalls")} value="0" />
-                <StatPill label={t(lang, "panelKpiMeetings")} value="0" />
-                <StatPill label={t(lang, "panelKpiExports")} value="0" />
-                <StatPill label={t(lang, "panelKpiNotes")} value="0" />
+                  <StatPill label={t(lang, "panelKpiCalls")} value="0" />
+                  <StatPill label={t(lang, "panelKpiMeetings")} value="0" />
+                  <StatPill label={t(lang, "panelKpiExports")} value="0" />
+                  <StatPill label={t(lang, "panelKpiNotes")} value="0" />
                 </div>
 
                 {/* Widgets grid (jak EstiCRM) */}
                 <div className="mt-6 grid gap-6 md:grid-cols-12">
-                <div className="md:col-span-7">
+                  <div className="md:col-span-7">
                     <PanelCard
-                    title={t(lang, "panelWidgetListingsInProgressTitle")}
-                    subtitle={t(lang, "panelWidgetListingsInProgressSub")}
-                    right={
+                      title={t(lang, "panelWidgetListingsInProgressTitle")}
+                      subtitle={t(lang, "panelWidgetListingsInProgressSub")}
+                      right={
                         <button
-                        type="button"
-                        className="rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-ew-primary transition hover:bg-ew-accent/10"
+                          type="button"
+                          className="rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-ew-primary transition hover:bg-ew-accent/10"
                         >
-                        {t(lang, "panelWidgetManage")}
+                          {t(lang, "panelWidgetManage")}
                         </button>
-                    }
+                      }
                     >
-                    <div className="flex h-56 items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-ew-accent/5">
+                      <div className="flex h-56 items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-ew-accent/5">
                         <p className="text-sm text-gray-500">{t(lang, "panelEmpty")}</p>
-                    </div>
+                      </div>
                     </PanelCard>
-                </div>
+                  </div>
 
-                <div className="md:col-span-5">
-                    <PanelCard
-                    title={t(lang, "panelWidgetTopBuyersTitle")}
-                    subtitle={t(lang, "panelWidgetTopBuyersSub")}
-                    >
-                    <div className="flex h-56 items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-ew-accent/5">
+                  <div className="md:col-span-5">
+                    <PanelCard title={t(lang, "panelWidgetTopBuyersTitle")} subtitle={t(lang, "panelWidgetTopBuyersSub")}>
+                      <div className="flex h-56 items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-ew-accent/5">
                         <p className="text-sm text-gray-500">{t(lang, "panelEmpty")}</p>
-                    </div>
+                      </div>
                     </PanelCard>
-                </div>
+                  </div>
 
-                <div className="md:col-span-7">
-                    <PanelCard
-                    title={t(lang, "panelWidgetNewOffersTitle")}
-                    subtitle={t(lang, "panelWidgetNewOffersSub")}
-                    >
-                    <div className="flex h-64 items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-ew-accent/5">
+                  <div className="md:col-span-7">
+                    <PanelCard title={t(lang, "panelWidgetNewOffersTitle")} subtitle={t(lang, "panelWidgetNewOffersSub")}>
+                      <div className="flex h-64 items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-ew-accent/5">
                         <p className="text-sm text-gray-500">{t(lang, "panelEmpty")}</p>
-                    </div>
+                      </div>
                     </PanelCard>
-                </div>
+                  </div>
 
-                <div className="md:col-span-5">
-                    <PanelCard
-                    title={t(lang, "panelWidgetTodayTitle")}
-                    subtitle={t(lang, "panelWidgetTodaySub")}
-                    >
-                    <div className="flex h-64 items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-ew-accent/5">
+                  <div className="md:col-span-5">
+                    <PanelCard title={t(lang, "panelWidgetTodayTitle")} subtitle={t(lang, "panelWidgetTodaySub")}>
+                      <div className="flex h-64 items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-ew-accent/5">
                         <p className="text-sm text-gray-500">{t(lang, "panelEmpty")}</p>
-                    </div>
+                      </div>
                     </PanelCard>
-                </div>
+                  </div>
 
-                {/* Recent changes / recent activated */}
-                <div className="md:col-span-7">
-                    <PanelCard
-                    title={t(lang, "panelWidgetRecentPriceChangesTitle")}
-                    subtitle={t(lang, "panelWidgetRecent7Days")}
-                    >
-                    <div className="space-y-3">
+                  {/* Recent changes / recent activated */}
+                  <div className="md:col-span-7">
+                    <PanelCard title={t(lang, "panelWidgetRecentPriceChangesTitle")} subtitle={t(lang, "panelWidgetRecent7Days")}>
+                      <div className="space-y-3">
                         {[1, 2, 3].map((i) => (
-                        <div
+                          <div
                             key={i}
                             className="flex items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white px-4 py-3"
-                        >
+                          >
                             <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-ew-primary">
-                                {t(lang, "panelRowPlaceholderTitle")}
-                            </p>
-                            <p className="truncate text-xs text-gray-500">
-                                {t(lang, "panelRowPlaceholderMeta")}
-                            </p>
+                              <p className="truncate text-sm font-semibold text-ew-primary">{t(lang, "panelRowPlaceholderTitle")}</p>
+                              <p className="truncate text-xs text-gray-500">{t(lang, "panelRowPlaceholderMeta")}</p>
                             </div>
                             <div className="text-right">
-                            <p className="text-sm font-extrabold text-emerald-600">0 PLN</p>
-                            <p className="text-xs text-gray-500">{t(lang, "panelRowPlaceholderDate")}</p>
+                              <p className="text-sm font-extrabold text-emerald-600">0 PLN</p>
+                              <p className="text-xs text-gray-500">{t(lang, "panelRowPlaceholderDate")}</p>
                             </div>
-                        </div>
+                          </div>
                         ))}
-                    </div>
+                      </div>
                     </PanelCard>
-                </div>
+                  </div>
 
-                <div className="md:col-span-5">
-                    <PanelCard
-                    title={t(lang, "panelWidgetRecentActivatedTitle")}
-                    subtitle={t(lang, "panelWidgetRecent7Days")}
-                    >
-                    <div className="space-y-3">
+                  <div className="md:col-span-5">
+                    <PanelCard title={t(lang, "panelWidgetRecentActivatedTitle")} subtitle={t(lang, "panelWidgetRecent7Days")}>
+                      <div className="space-y-3">
                         {[1, 2, 3].map((i) => (
-                        <div
+                          <div
                             key={i}
                             className="flex items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white px-4 py-3"
-                        >
+                          >
                             <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-ew-primary">
-                                {t(lang, "panelRowPlaceholderTitle")}
-                            </p>
-                            <p className="truncate text-xs text-gray-500">
-                                {t(lang, "panelRowPlaceholderMeta")}
-                            </p>
+                              <p className="truncate text-sm font-semibold text-ew-primary">{t(lang, "panelRowPlaceholderTitle")}</p>
+                              <p className="truncate text-xs text-gray-500">{t(lang, "panelRowPlaceholderMeta")}</p>
                             </div>
                             <span className="rounded-full bg-ew-accent/15 px-3 py-1 text-xs font-semibold text-ew-accent">
-                            {t(lang, "panelStatusActive")}
+                              {t(lang, "panelStatusActive")}
                             </span>
-                        </div>
+                          </div>
                         ))}
-                    </div>
+                      </div>
                     </PanelCard>
-                </div>
+                  </div>
 
-                {/* Bottom widgets */}
-                <div className="md:col-span-7">
-                    <PanelCard
-                    title={t(lang, "panelWidgetMetricsTitle")}
-                    subtitle={t(lang, "panelWidgetMetricsSub")}
-                    >
-                    <div className="grid gap-4 sm:grid-cols-2">
+                  {/* Bottom widgets */}
+                  <div className="md:col-span-7">
+                    <PanelCard title={t(lang, "panelWidgetMetricsTitle")} subtitle={t(lang, "panelWidgetMetricsSub")}>
+                      <div className="grid gap-4 sm:grid-cols-2">
                         <div className="rounded-3xl border border-gray-200 bg-white p-5">
-                        <p className="text-xs text-gray-500">{t(lang, "panelMetricDeals")}</p>
-                        <p className="mt-2 text-4xl font-extrabold text-ew-primary">0</p>
+                          <p className="text-xs text-gray-500">{t(lang, "panelMetricDeals")}</p>
+                          <p className="mt-2 text-4xl font-extrabold text-ew-primary">0</p>
                         </div>
                         <div className="rounded-3xl border border-gray-200 bg-white p-5">
-                        <p className="text-xs text-gray-500">{t(lang, "panelMetricRevenue")}</p>
-                        <p className="mt-2 text-4xl font-extrabold text-ew-primary">0</p>
+                          <p className="text-xs text-gray-500">{t(lang, "panelMetricRevenue")}</p>
+                          <p className="mt-2 text-4xl font-extrabold text-ew-primary">0</p>
                         </div>
                         <div className="rounded-3xl border border-gray-200 bg-white p-5">
-                        <p className="text-xs text-gray-500">{t(lang, "panelMetricNewListings")}</p>
-                        <p className="mt-2 text-4xl font-extrabold text-ew-primary">0</p>
+                          <p className="text-xs text-gray-500">{t(lang, "panelMetricNewListings")}</p>
+                          <p className="mt-2 text-4xl font-extrabold text-ew-primary">0</p>
                         </div>
                         <div className="rounded-3xl border border-gray-200 bg-white p-5">
-                        <p className="text-xs text-gray-500">{t(lang, "panelMetricPresentations")}</p>
-                        <p className="mt-2 text-4xl font-extrabold text-ew-primary">0</p>
+                          <p className="text-xs text-gray-500">{t(lang, "panelMetricPresentations")}</p>
+                          <p className="mt-2 text-4xl font-extrabold text-ew-primary">0</p>
                         </div>
-                    </div>
+                      </div>
                     </PanelCard>
-                </div>
+                  </div>
 
-                <div className="md:col-span-5">
-                    <PanelCard
-                    title={t(lang, "panelWidgetExportErrorsTitle")}
-                    subtitle={t(lang, "panelWidgetExportErrorsSub")}
-                    >
-                    <div className="flex h-56 items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-ew-accent/5">
+                  <div className="md:col-span-5">
+                    <PanelCard title={t(lang, "panelWidgetExportErrorsTitle")} subtitle={t(lang, "panelWidgetExportErrorsSub")}>
+                      <div className="flex h-56 items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-ew-accent/5">
                         <p className="text-sm text-gray-500">{t(lang, "panelNoMessages")}</p>
-                    </div>
+                      </div>
                     </PanelCard>
+                  </div>
                 </div>
-                </div>
+
                 <footer className="mt-10 pb-6 text-xs text-gray-500">{t(lang, "panelFooter")}</footer>
-                </div>
-                ) : activeView === "calendar" ? (
-                <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
-                    <CalendarPage />
-                </div>
-                ) : activeView === "offers" ? (
-                <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
-                  <OffersView lang={lang} />
-                </div>
-              ) : activeView === "team" ? (
-                <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
-                  <TeamView />
-                </div>
-              ) : null}
+              </div>
+            ) : activeView === "calendar" ? (
+              <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
+                <CalendarPage />
+              </div>
+            ) : activeView === "offers" ? (
+              <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
+                <OffersView lang={lang} />
+              </div>
+            ) : activeView === "team" ? (
+              <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
+                <TeamView />
+              </div>
+            ) : null}
           </section>
         </div>
       </main>
