@@ -298,7 +298,7 @@ Zasady:
     const pick = (k: string) => (typeof src[k] === "string" ? src[k] : (src[k] == null ? "" : String(src[k])));
     return {
         q: pick("q"),
-        source: pick("source"),
+        source: pick("source") || "all",
         transactionType: pick("transactionType"),
         propertyType: pick("propertyType"),
         locationText: pick("locationText"),

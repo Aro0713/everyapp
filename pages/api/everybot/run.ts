@@ -49,7 +49,7 @@ type IncomingFilters = {
   transactionType?: unknown;
   propertyType?: unknown;
   locationText?: unknown;
-  voivodeship?: unknown; // ✅ DODAJ
+  voivodeship?: unknown; // ✅
   city?: unknown;
   district?: unknown;
   minPrice?: unknown;
@@ -60,14 +60,22 @@ type IncomingFilters = {
   runTs?: unknown;
 };
 
+type RunSource = "all" | "otodom" | "olx" | "morizon" | "gratka" | "odwlasciciela";
+type PortalSource = Exclude<RunSource, "all">;
+
+const ALL_SOURCES: PortalSource[] = ["otodom", "olx", "morizon", "gratka", "odwlasciciela"];
+
 function pickString(v: unknown, fallback: string) {
   return typeof v === "string" ? v : fallback;
 }
 
-function normalizeSource(v: string): "all" | "otodom" | "olx" {
+function normalizeSource(v: string): RunSource {
   const s = (v ?? "").toLowerCase().trim();
   if (s === "otodom") return "otodom";
   if (s === "olx") return "olx";
+  if (s === "morizon") return "morizon";
+  if (s === "gratka") return "gratka";
+  if (s === "odwlasciciela") return "odwlasciciela";
   return "all";
 }
 
@@ -121,9 +129,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const harvestPages = 2;
       const harvestLimit = 30;
 
-      // ✅ tylko whitelisted źródła dla run (all => otodom+olx)
-      const sourcesToRun: Array<"otodom" | "olx"> =
-        source === "all" ? ["otodom", "olx"] : [source];
+      // ✅ tylko whitelisted źródła dla run (all => wszystkie portale)
+      const sourcesToRun: PortalSource[] = source === "all" ? ALL_SOURCES : [source];
 
       let harvestedTotal = 0;
       const harvestBySource: Record<string, any> = {};
