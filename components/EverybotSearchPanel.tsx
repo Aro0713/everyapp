@@ -2,9 +2,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { t } from "@/utils/i18n";
 import type { LangKey } from "@/utils/translations";
-import type { SourceKey } from "@/lib/everybot/enrichers/types";
 
-export type EverybotSource = "all" | SourceKey;
+export type EverybotSource = "all" | "otodom" | "olx" | "morizon" | "gratka" | "odwlasciciela";
 
 export type EverybotFilters = {
   q: string;
@@ -216,17 +215,15 @@ function onClickSearch() {
 const inputCls =
     "w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20";
 
-  // ✅ backend realnie obsługuje tylko te źródła w harvest
+ // ✅ backend realnie obsługuje te źródła w harvest
 const supportedSources = useMemo(
   () => [
     { v: "all" as const, label: t(lang, "everybotSourceAll" as any) },
     { v: "otodom" as const, label: "Otodom" },
     { v: "olx" as const, label: "OLX" },
-    // dopisuj dopiero jak backend realnie obsługuje:
-    // { v: "gratka" as const, label: "Gratka" },
-    // { v: "morizon" as const, label: "Morizon" },
-    // { v: "odwlasciciela" as const, label: "OdWlasciciela" },
-    // { v: "nieruchomosci_online" as const, label: "Nieruchomosci-Online" },
+    { v: "morizon" as const, label: "Morizon" },
+    { v: "gratka" as const, label: "Gratka" },
+    { v: "odwlasciciela" as const, label: "OdWłaściciela" },
   ],
   [lang]
 );
