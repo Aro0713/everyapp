@@ -607,6 +607,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         FROM external_listings
         WHERE ${where.join(" AND ")}
       `;
+      console.log("EXTERNAL_LISTINGS_COUNT_SQL", {
+        sql: countSql,
+        params,
+      });
       const countRes = await pool.query<{ cnt: string }>(countSql, params);
       const total = Number(countRes.rows?.[0]?.cnt ?? "0");
       const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
@@ -618,6 +622,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const listParams = [...params, overfetch, offset];
 
       let relaxed: RelaxedFlags = {};
+      console.log("EXTERNAL_LISTINGS_LIST_SQL", {
+        sql,
+        params: listParams,
+      });
       let { rows } = await pool.query<Row>(sql, listParams);
 
       if (rows.length === 0 && !strict && (city || district)) {
@@ -693,6 +701,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const sql = buildListSql(where.join(" AND "), orderBy, p);
     let relaxed: RelaxedFlags = {};
+    console.log("EXTERNAL_LISTINGS_LIST_SQL_CURSOR", {
+      sql,
+      params,
+    });
     let { rows } = await pool.query<Row>(sql, params);
 
     if (rows.length === 0 && !strict && (city || district)) {
