@@ -133,6 +133,10 @@ const [botFilters, setBotFilters] = useState<EverybotFilters>({
   const [botLoading, setBotLoading] = useState(false);
   const [botErr, setBotErr] = useState<string | null>(null);
   const [botRows, setBotRows] = useState<ExternalRow[]>([]);
+  const botReqSeqRef = useRef(0);
+  const botAbortRef = useRef<AbortController | null>(null);
+  const refreshReqSeqRef = useRef(0);
+  const refreshAbortRef = useRef<AbortController | null>(null);
   const [mapPins, setMapPins] = useState<any[]>([]);
   const [botMatchedSince, setBotMatchedSince] = useState<string | null>(null);
   const [selectedExternalId, setSelectedExternalId] = useState<string | null>(null);
@@ -208,6 +212,13 @@ async function loadEverybot(opts?: {
   matchedSince?: string | null;
 }): Promise<{ rows: ExternalRow[]; nextCursor: { updated_at: string; id: string } | null }> {
 
+  const reqId = ++botReqSeqRef.current;
+
+  // ✅ abort poprzedniego requestu listy
+  botAbortRef.current?.abort();
+  const ac = new AbortController();
+  botAbortRef.current = ac;
+
   const f = opts?.filters ?? botFilters;
   const matchedSince = opts?.matchedSince ?? null;
   const q = (f.q ?? "").trim();
@@ -235,22 +246,18 @@ async function loadEverybot(opts?: {
     }
 
     if (source && source !== "all") qs.set("source", String(source));
-      if (matchedSince) qs.set("matchedSince", matchedSince);
+    if (matchedSince) qs.set("matchedSince", matchedSince);
 
-    // ✅ NOWE FILTRY (z panelu)
     if (f.transactionType) qs.set("transactionType", f.transactionType);
 
     const rawPt = (f.propertyType ?? "").trim().toLowerCase();
-    if (rawPt) {
-      // wysyłamy to co user wpisał (dom/mieszkanie/działka/lokal)
-      qs.set("propertyType", rawPt);
-    }
+    if (rawPt) qs.set("propertyType", rawPt);
+
     const vNorm = normalizeVoivodeshipInput(f.voivodeship);
     if (vNorm) qs.set("voivodeship", vNorm);
     if (f.city.trim()) qs.set("city", f.city.trim());
     if (f.district.trim()) qs.set("district", f.district.trim());
 
-    // locationText tylko gdy user nie podał city/district (żeby nie zabijać wyników)
     const hasCityOrDistrict = !!(f.city.trim() || f.district.trim());
     if (!hasCityOrDistrict && f.locationText.trim()) {
       qs.set("locationText", f.locationText.trim());
@@ -262,13 +269,15 @@ async function loadEverybot(opts?: {
     if (f.maxArea.trim()) qs.set("maxArea", f.maxArea.trim());
     if (f.rooms.trim()) qs.set("rooms", f.rooms.trim());
 
-    // cursor
     if (cursor) {
       qs.set("cursorUpdatedAt", cursor.updated_at);
       qs.set("cursorId", cursor.id);
     }
 
-    const r = await fetch(`/api/external_listings/list?${qs.toString()}`);
+    const r = await fetch(`/api/external_listings/list?${qs.toString()}`, {
+      signal: ac.signal,
+    });
+
     const j = await r.json().catch(() => null);
     if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
 
@@ -276,20 +285,34 @@ async function loadEverybot(opts?: {
     const nextCursor =
       (j?.nextCursor ?? null) as { updated_at: string; id: string } | null;
 
+    // ✅ jeśli to nie jest najnowszy request – IGNORUJ odpowiedź
+    if (reqId !== botReqSeqRef.current) return { rows: [], nextCursor: null };
+
     setBotRows((prev) => (append ? [...prev, ...newRows] : newRows));
     if (!append) setSelectedExternalId(null);
     setBotCursor(nextCursor);
     setBotHasMore(Boolean(nextCursor) && newRows.length > 0);
-        return { rows: newRows, nextCursor };
-  } 
-  catch (e: any) {
-    setBotErr(e?.message ?? "Failed to load");
+
+    return { rows: newRows, nextCursor };
+  } catch (e: any) {
+    if (e?.name === "AbortError") return { rows: [], nextCursor: null };
+
+    // ✅ tylko najnowszy request może ustawić błąd
+    if (reqId === botReqSeqRef.current) setBotErr(e?.message ?? "Failed to load");
+
     return { rows: [], nextCursor: null };
   } finally {
-    setBotLoading(false);
+    // ✅ tylko najnowszy request zdejmuje loading
+    if (reqId === botReqSeqRef.current) setBotLoading(false);
   }
 }
  async function refreshEverybotList() {
+  const reqId = ++refreshReqSeqRef.current;
+
+  refreshAbortRef.current?.abort();
+  const ac = new AbortController();
+  refreshAbortRef.current = ac;
+
   try {
     const f = botFilters;
 
@@ -299,10 +322,8 @@ async function loadEverybot(opts?: {
     qs.set("includePreview", "1");
     qs.set("onlyEnriched", "0");
 
-    // source
     if (f.source && f.source !== "all") qs.set("source", String(f.source));
 
-    // q tylko bez structured
     const hasStructuredFilters =
       !!f.propertyType?.trim() ||
       !!f.city?.trim() ||
@@ -311,35 +332,31 @@ async function loadEverybot(opts?: {
     const q = (f.q ?? "").trim();
     if (q && !hasStructuredFilters) qs.set("q", q);
 
-    // transaction
     if (f.transactionType?.trim()) qs.set("transactionType", f.transactionType.trim());
 
-    // propertyType lowercase
     const rawPt = (f.propertyType ?? "").trim().toLowerCase();
     if (rawPt) qs.set("propertyType", rawPt);
 
-    // region/city/district
     const vNorm = normalizeVoivodeshipInput(f.voivodeship);
     if (vNorm) qs.set("voivodeship", vNorm);
     if (f.city?.trim()) qs.set("city", f.city.trim());
     if (f.district?.trim()) qs.set("district", f.district.trim());
 
-    // locationText tylko gdy brak city/district
     const hasCityOrDistrict = !!(f.city?.trim() || f.district?.trim());
-    if (!hasCityOrDistrict && f.locationText?.trim()) {
-      qs.set("locationText", f.locationText.trim());
-    }
+    if (!hasCityOrDistrict && f.locationText?.trim()) qs.set("locationText", f.locationText.trim());
 
-    // numeric – tylko gdy niepuste
     if (f.minPrice?.trim()) qs.set("minPrice", f.minPrice.trim());
     if (f.maxPrice?.trim()) qs.set("maxPrice", f.maxPrice.trim());
     if (f.minArea?.trim()) qs.set("minArea", f.minArea.trim());
     if (f.maxArea?.trim()) qs.set("maxArea", f.maxArea.trim());
     if (f.rooms?.trim()) qs.set("rooms", f.rooms.trim());
 
-    const r = await fetch(`/api/external_listings/list?${qs.toString()}`);
+    const r = await fetch(`/api/external_listings/list?${qs.toString()}`, { signal: ac.signal });
     const j = await r.json().catch(() => null);
     if (!r.ok) throw new Error(j?.error ?? "List error");
+
+    // ✅ ignoruj jeśli to nie jest najnowszy refresh
+    if (reqId !== refreshReqSeqRef.current) return;
 
     const scrollLeft = everybotTableRef.current?.scrollLeft ?? 0;
 
@@ -351,6 +368,7 @@ async function loadEverybot(opts?: {
       if (everybotTableRef.current) everybotTableRef.current.scrollLeft = scrollLeft;
     });
   } catch (e: any) {
+    if (e?.name === "AbortError") return;
     console.warn("everybot refresh failed:", e?.message ?? e);
   }
 }
@@ -479,6 +497,7 @@ useEffect(() => {
   const tick = async () => {
     if (botSearching) return;
     if (botMatchedSince) return; // 🔥 nie dotykaj Neon listy, gdy aktywny LIVE run
+    if (botLoading) return;
     if (document.visibilityState !== "visible") return;
 
     await refreshEverybotList();
@@ -1165,8 +1184,44 @@ function EverybotLoadingGlass({ title, subtitle }: { title: string; subtitle: st
           </div>
         )}
 
-        <div className="mt-6 rounded-2xl border border-gray-200 bg-white">
-         {botLoading && botRows.length === 0 ? (
+          <div className="mt-6 relative rounded-2xl border border-gray-200 bg-white">
+
+          {/* ✅ Kolejne ładowania: mały overlay nad listą (nie dotyka row, nie blokuje klików) */}
+          {botLoading && botRows.length > 0 && (
+            <div className="pointer-events-none absolute inset-0 z-20 flex items-start justify-center rounded-2xl">
+              <div className="mt-3 rounded-2xl border border-white/40 bg-white/60 px-4 py-3 shadow-[0_10px_30px_rgba(0,0,0,0.08)] backdrop-blur-xl">
+                <div className="flex items-center gap-3">
+                  <img
+                    src="/brand/everyapp-logo.svg"
+                    alt="EveryAPP"
+                    className="h-5 w-5 animate-[spinSlow_1.8s_linear_infinite]"
+                    draggable={false}
+                  />
+                  <div className="text-xs font-semibold text-ew-primary">
+                    {t(lang, "everybotSearching" as any)}
+                  </div>
+                  <div className="h-2 w-28 overflow-hidden rounded-full bg-ew-accent/15">
+                    <div className="h-full w-1/2 animate-[bar_1.1s_ease-in-out_infinite] rounded-full bg-ew-accent" />
+                  </div>
+                </div>
+
+                <style jsx>{`
+                  @keyframes bar {
+                    0% { transform: translateX(-20%); opacity: .55; }
+                    50% { transform: translateX(110%); opacity: 1; }
+                    100% { transform: translateX(-20%); opacity: .55; }
+                  }
+                  @keyframes spinSlow {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                  }
+                `}</style>
+              </div>
+            </div>
+          )}
+
+          {/* ✅ Pierwsze ładowanie: pełny glass z logo + info */}
+          {botLoading && botRows.length === 0 ? (
             <EverybotLoadingGlass
               title={t(lang, "everybotLoading" as any)}
               subtitle={t(lang, "everybotSearching" as any)}
@@ -1183,154 +1238,157 @@ function EverybotLoadingGlass({ title, subtitle }: { title: string; subtitle: st
             </div>
           ) : (
             <>
-            <div ref={everybotTableRef} className="w-full">
-              <div className="divide-y divide-gray-100">
-                {botRows.map((r) => {
-                  const selected = selectedExternalId === r.id;
-                  const highlighted = highlightIds.includes(r.id);
+              <div ref={everybotTableRef} className="w-full">
+                <div className="divide-y divide-gray-100">
+                  {botRows.map((r) => {
+                    const selected = selectedExternalId === r.id;
+                    const highlighted = highlightIds.includes(r.id);
 
-                  const title = r.title ?? "-";
-                  const price = fmtPrice(r.price_amount, r.currency);
-                  const area = r.area_m2 != null ? `${r.area_m2} m²` : null;
-                  const rooms = r.rooms != null ? `${r.rooms} pokoje` : null;
-                  const floor = r.floor ? `${r.floor} piętro` : null;
-                  const ppm2 = r.price_per_m2 != null ? `${Math.round(r.price_per_m2).toLocaleString()} zł/m²` : null;
+                    const title = r.title ?? "-";
+                    const price = fmtPrice(r.price_amount, r.currency);
+                    const area = r.area_m2 != null ? `${r.area_m2} m²` : null;
+                    const rooms = r.rooms != null ? `${r.rooms} pokoje` : null;
+                    const floor = r.floor ? `${r.floor} piętro` : null;
+                    const ppm2 =
+                      r.price_per_m2 != null
+                        ? `${Math.round(r.price_per_m2).toLocaleString()} zł/m²`
+                        : null;
 
-                  const locLine = [r.street, r.district, r.city, r.voivodeship].filter(Boolean).join(", ")
-                    || (r.location_text ?? "");
+                    const locLine =
+                      [r.street, r.district, r.city, r.voivodeship].filter(Boolean).join(", ") ||
+                      (r.location_text ?? "");
 
-                  return (
-                    <div
-                      key={r.id}
-                      ref={(el) => {
-                        rowRefs.current[r.id] = el;
-                      }}
-                      className={clsx(
-                        "p-3 md:p-4",
-                        highlighted && "bg-green-50",
-                        selected && "bg-ew-accent/10 ring-1 ring-ew-accent"
-                      )}
-                    >
-                      <div className="flex gap-3">
-                        {/* zdjęcie */}
-                        <div className="shrink-0">
-                          {r.thumb_url ? (
-                            <img
-                              src={r.thumb_url}
-                              alt=""
-                              className="h-16 w-24 rounded-xl object-cover ring-1 ring-gray-200"
-                              loading="lazy"
-                            />
-                          ) : (
-                            <div className="h-16 w-24 rounded-xl bg-gray-100 ring-1 ring-gray-200" />
-                          )}
-                          <div className="mt-1 text-[11px] text-gray-500">
-                            {r.source}
-                            {r.matched_at ? ` • ${new Date(r.matched_at).toLocaleDateString()}` : ""}
-                          </div>
-                        </div>
-
-                        {/* treść */}
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="truncate font-extrabold text-ew-primary">{title}</div>
-                              {locLine ? (
-                                <div className="truncate text-xs text-gray-600">{locLine}</div>
-                              ) : null}
-                            </div>
-
-                            {/* cena */}
-                            <div className="text-right">
-                              <div className="text-base font-extrabold text-ew-primary">{price}</div>
-                              {ppm2 ? <div className="text-xs text-gray-500">{ppm2}</div> : null}
+                    return (
+                      <div
+                        key={r.id}
+                        ref={(el) => {
+                          rowRefs.current[r.id] = el;
+                        }}
+                        className={clsx(
+                          "p-3 md:p-4",
+                          highlighted && "bg-green-50",
+                          selected && "bg-ew-accent/10 ring-1 ring-ew-accent"
+                        )}
+                      >
+                        <div className="flex gap-3">
+                          {/* zdjęcie */}
+                          <div className="shrink-0">
+                            {r.thumb_url ? (
+                              <img
+                                src={r.thumb_url}
+                                alt=""
+                                className="h-16 w-24 rounded-xl object-cover ring-1 ring-gray-200"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="h-16 w-24 rounded-xl bg-gray-100 ring-1 ring-gray-200" />
+                            )}
+                            <div className="mt-1 text-[11px] text-gray-500">
+                              {r.source}
+                              {r.matched_at ? ` • ${new Date(r.matched_at).toLocaleDateString()}` : ""}
                             </div>
                           </div>
 
-                          {/* meta */}
-                          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-700">
-                            {r.transaction_type ? <span>{r.transaction_type}</span> : null}
-                            {r.property_type ? <span>{r.property_type}</span> : null}
-                            {area ? <span>{area}</span> : null}
-                            {rooms ? <span>{rooms}</span> : null}
-                            {floor ? <span>{floor}</span> : null}
-                            {r.year_built ? <span>{r.year_built}</span> : null}
-                          </div>
+                          {/* treść */}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="truncate font-extrabold text-ew-primary">{title}</div>
+                                {locLine ? (
+                                  <div className="truncate text-xs text-gray-600">{locLine}</div>
+                                ) : null}
+                              </div>
 
-                          {/* RCN + telefon + akcje */}
-                          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                            <div className="text-xs text-gray-600">
-                              {r.owner_phone ? (
-                                <span className="mr-3">📞 {r.owner_phone}</span>
-                              ) : null}
-
-                              {r.rcn_last_price != null ? (
-                                <span className="mr-3">
-                                  🧾 RCN: {Math.round(r.rcn_last_price).toLocaleString()} zł
-                                  {r.rcn_last_date ? ` (${new Date(r.rcn_last_date).toLocaleDateString()})` : ""}
-                                  {r.rcn_link ? (
-                                    <>
-                                      {" "}
-                                      <a
-                                        href={r.rcn_link}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-ew-accent underline"
-                                      >
-                                        źródło
-                                      </a>
-                                    </>
-                                  ) : null}
-                                </span>
-                              ) : null}
+                              {/* cena */}
+                              <div className="text-right">
+                                <div className="text-base font-extrabold text-ew-primary">{price}</div>
+                                {ppm2 ? <div className="text-xs text-gray-500">{ppm2}</div> : null}
+                              </div>
                             </div>
 
-                            <div className="flex items-center gap-3">
-                              {r.source_url ? (
-                                <a
-                                  href={r.source_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-ew-accent underline text-xs font-semibold"
-                                >
-                                  {t(lang, "everybotOpen" as any)}
-                                </a>
-                              ) : null}
+                            {/* meta */}
+                            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-700">
+                              {r.transaction_type ? <span>{r.transaction_type}</span> : null}
+                              {r.property_type ? <span>{r.property_type}</span> : null}
+                              {area ? <span>{area}</span> : null}
+                              {rooms ? <span>{rooms}</span> : null}
+                              {floor ? <span>{floor}</span> : null}
+                              {r.year_built ? <span>{r.year_built}</span> : null}
+                            </div>
+
+                            {/* RCN + telefon + akcje */}
+                            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                              <div className="text-xs text-gray-600">
+                                {r.owner_phone ? <span className="mr-3">📞 {r.owner_phone}</span> : null}
+
+                                {r.rcn_last_price != null ? (
+                                  <span className="mr-3">
+                                    🧾 RCN: {Math.round(r.rcn_last_price).toLocaleString()} zł
+                                    {r.rcn_last_date ? ` (${new Date(r.rcn_last_date).toLocaleDateString()})` : ""}
+                                    {r.rcn_link ? (
+                                      <>
+                                        {" "}
+                                        <a
+                                          href={r.rcn_link}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-ew-accent underline"
+                                        >
+                                          źródło
+                                        </a>
+                                      </>
+                                    ) : null}
+                                  </span>
+                                ) : null}
+                              </div>
+
+                              <div className="flex items-center gap-3">
+                                {r.source_url ? (
+                                  <a
+                                    href={r.source_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-ew-accent underline text-xs font-semibold"
+                                  >
+                                    {t(lang, "everybotOpen" as any)}
+                                  </a>
+                                ) : null}
+                              </div>
                             </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-                  {botHasMore && (
-                    <div className="flex justify-center border-t border-gray-100 p-4">
-                      <button
-                        type="button"
-                        disabled={botLoading}
-                        onClick={() =>
-                          loadEverybot({
-                            filters: botFilters,
-                            cursor: botCursor,
-                            append: true,
-                            matchedSince: botMatchedSince,
-                          })
-                        }
-                        className="rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
-                      >
-                        {t(lang, "everybotLoadMore" as any)}
-                      </button>
-                    </div>
-                  )}
-                </>
+
+              {botHasMore && (
+                <div className="flex justify-center border-t border-gray-100 p-4">
+                  <button
+                    type="button"
+                    disabled={botLoading}
+                    onClick={() =>
+                      loadEverybot({
+                        filters: botFilters,
+                        cursor: botCursor,
+                        append: true,
+                        matchedSince: botMatchedSince,
+                      })
+                    }
+                    className="rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
+                  >
+                    {t(lang, "everybotLoadMore" as any)}
+                  </button>
+                </div>
               )}
-            </div>
-          </div>
+            </>
+          )}
+         </div>
         </div>
-        </>
-      )}
+       </div>
+     </>
+    )}
     </div>
   );
 }
