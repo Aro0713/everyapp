@@ -607,7 +607,13 @@ function parseOtodomResults(pageUrl: string, html: string, limit: number): Exter
       priceText?.toLowerCase().includes("zł") ? "PLN" :
       null;
 
-    const priceAmount = parseNumberLoose(priceText);
+    const priceAmountRaw = parseNumberLoose(priceText);
+    const priceAmount =
+      priceAmountRaw != null &&
+      priceAmountRaw > 0 &&
+      priceAmountRaw <= 100_000_000
+        ? priceAmountRaw
+        : null;
     const cardText = card.text().replace(/\s+/g, " ");
 
     const area_m2 = parseNumberLoose(cardText.match(/(\d+(?:[.,]\d+)?)\s*m²/i)?.[0]);
@@ -828,7 +834,11 @@ function parseOlxResults(pageUrl: string, html: string, limit: number): External
       priceText?.toLowerCase().includes("zł") ? "PLN" :
       null;
 
-    const priceAmount = parseNumberLoose(priceText);
+    const priceAmountRaw = parseNumberLoose(priceText);
+    const priceAmount =
+      priceAmountRaw != null && priceAmountRaw > 0 && priceAmountRaw <= 100_000_000
+        ? priceAmountRaw
+        : null;
 
     rows.push({
       external_id: canon,
@@ -888,7 +898,21 @@ function isMorizonOfferUrl(u: string): boolean {
   if (!/[-_]mzn\d{6,}$/i.test(s.replace(/\.html$/i, ""))) return false;
   return true;
 }
+function parseMorizonLocation(locationText: string | null) {
+  const raw = (locationText ?? "").replace(/\s+/g, " ").trim();
+  if (!raw) return { city: null, district: null };
 
+  const parts = raw.split(",").map((s) => s.trim()).filter(Boolean);
+
+  if (parts.length === 1) {
+    return { city: parts[0], district: null };
+  }
+
+  return {
+    city: parts[parts.length - 1],
+    district: parts.slice(0, -1).join(", "),
+  };
+}
 function parseMorizonResults(pageUrl: string, html: string, limit: number): ExternalRow[] {
   const $ = cheerio.load(html);
   const now = new Date().toISOString();
@@ -926,7 +950,11 @@ function parseMorizonResults(pageUrl: string, html: string, limit: number): Exte
       card.find("[class*='price'], .price, [data-testid*='price']").first().text().trim() ||
       (cardText.match(/(\d[\d\s.,]+)\s*(PLN|zł|€)/i)?.[0] ?? null);
 
-    const priceAmount = parseNumberLoose(priceText);
+    const priceAmountRaw = parseNumberLoose(priceText);
+    const priceAmount =
+      priceAmountRaw != null && priceAmountRaw > 0 && priceAmountRaw <= 100_000_000
+        ? priceAmountRaw
+        : null;
     const currency =
       priceText?.includes("€") ? "EUR" :
       (priceText?.toLowerCase().includes("zł") || priceText?.toUpperCase().includes("PLN")) ? "PLN" :
@@ -944,7 +972,7 @@ function parseMorizonResults(pageUrl: string, html: string, limit: number): Exte
     const roomsRaw = parseNumberLoose(cardText.match(/(\d+(?:[.,]\d+)?)\s*pok/i)?.[0]);
     const rooms = roomsRaw != null ? Math.round(roomsRaw) : null;
 
-    const locParts = parseLocationParts(locationText);
+    const ml = parseMorizonLocation(locationText);
 
     rows.push({
       external_id: canon,
@@ -972,10 +1000,10 @@ function parseMorizonResults(pageUrl: string, html: string, limit: number): Exte
       rooms: rooms ?? null,
       price_per_m2: null,
 
-      voivodeship: locParts.voivodeship,
-      city: locParts.city,
-      district: locParts.district,
-      street: locParts.street,
+      city: ml.city,
+      district: ml.district,
+      voivodeship: null,
+      street: null,
     });
 
     if (rows.length >= limit) return false;
@@ -1016,7 +1044,21 @@ function isGratkaOfferUrl(u: string): boolean {
     return s.includes("gratka.") && s.includes("/nieruchomosci/") && /\/ob\/\d+$/i.test(s);
   }
 }
+function parseGratkaLocation(locationText: string | null) {
+  const raw = (locationText ?? "").replace(/\s+/g, " ").trim();
+  if (!raw) return { city: null as string | null, district: null as string | null, voivodeship: null as string | null };
 
+  const parts = raw.split(",").map((s) => s.trim()).filter(Boolean);
+
+  // Gratka najczęściej: "Dzielnica, Miasto" albo "Ulica, Dzielnica, Miasto"
+  if (parts.length === 1) return { city: parts[0], district: null, voivodeship: null };
+
+  return {
+    city: parts[parts.length - 1],
+    district: parts.slice(0, -1).join(", "),
+    voivodeship: null,
+  };
+}
 function parseGratkaResults(pageUrl: string, html: string, limit: number): ExternalRow[] {
   const $ = cheerio.load(html);
   const now = new Date().toISOString();
@@ -1054,7 +1096,13 @@ function parseGratkaResults(pageUrl: string, html: string, limit: number): Exter
       card.find("[class*='price'], .price, [data-testid*='price']").first().text().trim() ||
       (cardText.match(/(\d[\d\s.,]+)\s*(PLN|zł|€)/i)?.[0] ?? null);
 
-    const priceAmount = parseNumberLoose(priceText);
+    const priceAmountRaw = parseNumberLoose(priceText);
+    const priceAmount =
+      priceAmountRaw != null &&
+      priceAmountRaw > 0 &&
+      priceAmountRaw <= 100_000_000
+        ? priceAmountRaw
+        : null;
     const currency =
       priceText?.includes("€") ? "EUR" :
       (priceText?.toLowerCase().includes("zł") || priceText?.toUpperCase().includes("PLN")) ? "PLN" :
@@ -1072,7 +1120,7 @@ function parseGratkaResults(pageUrl: string, html: string, limit: number): Exter
     const roomsRaw = parseNumberLoose(cardText.match(/(\d+(?:[.,]\d+)?)\s*pok/i)?.[0]);
     const rooms = roomsRaw != null ? Math.round(roomsRaw) : null;
 
-    const locParts = parseLocationParts(locationText);
+    const gl = parseGratkaLocation(locationText);
 
     // transakcja i typ z URL (bez zgadywania selektorów)
     const low = canon.toLowerCase();
@@ -1113,10 +1161,10 @@ function parseGratkaResults(pageUrl: string, html: string, limit: number): Exter
       rooms: rooms ?? null,
       price_per_m2: null,
 
-      voivodeship: locParts.voivodeship,
-      city: locParts.city,
-      district: locParts.district,
-      street: locParts.street,
+      voivodeship: gl.voivodeship,
+      city: gl.city,
+      district: gl.district,
+      street: null,
     });
 
     if (rows.length >= limit) return false;
@@ -1158,6 +1206,29 @@ function parseOdwlasciCielaResults(pageUrl: string, html: string, limit: number)
   const rows: ExternalRow[] = [];
   const seen = new Set<string>();
 
+  const cleanLoc = (s: string | null) =>
+    (s ?? "")
+      .replace(/\s+/g, " ")
+      .replace(/super oferta/gi, "")
+      .trim() || null;
+
+  const parseAreaM2Strict = (text: string): number | null => {
+    // preferuj dokładne "xx m2/m²"
+    const m =
+      text.match(/\b(\d{1,4}(?:[.,]\d{1,2})?)\s*m2\b/i) ||
+      text.match(/\b(\d{1,4}(?:[.,]\d{1,2})?)\s*m²\b/i);
+
+    if (!m?.[1]) return null;
+
+    const n = Number(m[1].replace(",", "."));
+    if (!Number.isFinite(n)) return null;
+
+    // sanity: mieszkania/biura/domy (nie wyklucza działek, ale odcina błędy x10/x100)
+    if (n < 10 || n > 20000) return null;
+
+    return n;
+  };
+
   $("a[href]").each((_, el) => {
     const href = $(el).attr("href");
     const full = absUrl(pageUrl, href);
@@ -1180,10 +1251,10 @@ function parseOdwlasciCielaResults(pageUrl: string, html: string, limit: number)
     let title =
       cleanTitle(
         card.find("h1,h2,h3,.title,[class*='title']").first().text().trim() ||
-        $(el).attr("aria-label")?.trim() ||
-        $(el).attr("title")?.trim() ||
-        $(el).text().trim() ||
-        null
+          $(el).attr("aria-label")?.trim() ||
+          $(el).attr("title")?.trim() ||
+          $(el).text().trim() ||
+          null
       ) ?? null;
 
     if (!title && cardText) title = cleanTitle(cardText.slice(0, 140));
@@ -1191,32 +1262,61 @@ function parseOdwlasciCielaResults(pageUrl: string, html: string, limit: number)
     // cena
     const priceText =
       card.find("[class*='price'], .price, [data-testid*='price']").first().text().trim() ||
-      (cardText.match(/(\d[\d\s.,]+)\s*(PLN|zł)/i)?.[0] ?? null);
+      (cardText.match(/(\d[\d\s.,]+)\s*(PLN|zł|€)/i)?.[0] ?? null);
 
-    const priceAmount = parseNumberLoose(priceText);
+    const priceAmountRaw = parseNumberLoose(priceText);
+    const priceAmount =
+      priceAmountRaw != null && priceAmountRaw > 0 && priceAmountRaw <= 100_000_000
+        ? priceAmountRaw
+        : null;
 
     const currency =
       priceText?.includes("€") ? "EUR" :
       (priceText?.toLowerCase().includes("zł") || priceText?.toUpperCase().includes("PLN")) ? "PLN" :
       null;
 
-    // lokalizacja (konserwatywnie)
-    const locationText =
+    // lokalizacja (czyścimy śmieci typu "Super oferta" i nowe linie)
+    const locationTextRaw =
       card.find("[class*='location'], .location, [data-testid*='location']").first().text().trim() ||
       null;
 
+    const locationText = cleanLoc(locationTextRaw);
+
     // metraż / pokoje (z tekstu karty)
-    const area_m2 = parseNumberLoose(cardText.match(/(\d+(?:[.,]\d+)?)\s*m2\b/i)?.[0] || cardText.match(/(\d+(?:[.,]\d+)?)\s*m²\b/i)?.[0]);
+    const area_m2 = parseAreaM2Strict(cardText);
     const roomsRaw = parseNumberLoose(cardText.match(/(\d+(?:[.,]\d+)?)\s*pok/i)?.[0]);
     const rooms = roomsRaw != null ? Math.round(roomsRaw) : null;
 
-    const price_per_m2 = parseNumberLoose(cardText.match(/(\d[\d\s.,]+)\s*(PLN|zł)\/m2/i)?.[0] || cardText.match(/(\d[\d\s.,]+)\s*(PLN|zł)\/m²/i)?.[0]);
+    const ppm2Raw = parseNumberLoose(
+      cardText.match(/(\d[\d\s.,]+)\s*(PLN|zł)\/m2/i)?.[0] ||
+      cardText.match(/(\d[\d\s.,]+)\s*(PLN|zł)\/m²/i)?.[0]
+    );
+    const price_per_m2 =
+      ppm2Raw != null && ppm2Raw > 0 && ppm2Raw <= 500_000 ? ppm2Raw : null;
 
-    const tx = inferTxFromOdwlasciCielaUrlOrText(canon, cardText) ?? inferTransactionTypeFromPriceText(priceText);
-    const pt = inferPropertyTypeFromOdwlasciCielaUrlOrText(canon, cardText) ?? inferPropertyTypeFromText(cardText);
+    const tx =
+      inferTxFromOdwlasciCielaUrlOrText(canon, cardText) ??
+      inferTransactionTypeFromPriceText(priceText);
 
-    // rozbij locationText jeśli jest
-    const locParts = parseLocationParts(locationText);
+    const pt =
+      inferPropertyTypeFromOdwlasciCielaUrlOrText(canon, cardText) ??
+      inferPropertyTypeFromText(cardText);
+
+    // ✅ OdWłaściciela: locationText często jest w formie "Miasto [dzielnica], Ulica..."
+    // Nie próbujemy robić "województwa" — to w tej liście nie jest stabilne.
+    const locParts = (() => {
+      const raw = (locationText ?? "").replace(/\s+/g, " ").trim();
+      if (!raw) return { city: null as string | null, district: null as string | null };
+
+      const parts = raw.split(",").map((s) => s.trim()).filter(Boolean);
+      if (!parts.length) return { city: null, district: null };
+
+      // pierwszy człon najczęściej jest miastem (czasem z dzielnicą)
+      return {
+        city: parts[0] ?? null,
+        district: parts.length > 1 ? parts.slice(1).join(", ") : null,
+      };
+    })();
 
     rows.push({
       external_id: canon,
@@ -1243,10 +1343,11 @@ function parseOdwlasciCielaResults(pageUrl: string, html: string, limit: number)
       rooms: rooms ?? null,
       price_per_m2: price_per_m2 ?? null,
 
-      voivodeship: locParts.voivodeship,
+      // ✅ nie zgadujemy województwa z tej listy
+      voivodeship: null,
       city: locParts.city,
       district: locParts.district,
-      street: locParts.street,
+      street: null,
     });
 
     if (rows.length >= limit) return false;
