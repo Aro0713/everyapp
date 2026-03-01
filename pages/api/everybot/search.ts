@@ -944,7 +944,9 @@ function parseMorizonResults(pageUrl: string, html: string, limit: number): Exte
       ) ?? null;
 
     if (!title && cardText) title = cleanTitle(cardText.slice(0, 140));
-
+    if (title && title.length < 10 && cardText.length > 20) {
+      title = cleanTitle(cardText.slice(0, 140));
+    }
     // cena (konserwatywnie: PLN/€)
     const priceText =
       card.find("[class*='price'], .price, [data-testid*='price']").first().text().trim() ||
@@ -1305,18 +1307,33 @@ function parseOdwlasciCielaResults(pageUrl: string, html: string, limit: number)
     // ✅ OdWłaściciela: locationText często jest w formie "Miasto [dzielnica], Ulica..."
     // Nie próbujemy robić "województwa" — to w tej liście nie jest stabilne.
     const locParts = (() => {
-      const raw = (locationText ?? "").replace(/\s+/g, " ").trim();
-      if (!raw) return { city: null as string | null, district: null as string | null };
+    const raw = (locationText ?? "").replace(/\s+/g, " ").trim();
+    if (!raw) return { city: null as string | null, district: null as string | null, street: null as string | null };
 
-      const parts = raw.split(",").map((s) => s.trim()).filter(Boolean);
-      if (!parts.length) return { city: null, district: null };
+    // przykład: "Warszawa Wawer Korkowa 45"
+    const tokens = raw.split(" ").filter(Boolean);
 
-      // pierwszy człon najczęściej jest miastem (czasem z dzielnicą)
-      return {
-        city: parts[0] ?? null,
-        district: parts.length > 1 ? parts.slice(1).join(", ") : null,
-      };
-    })();
+    if (tokens.length === 1) {
+      return { city: tokens[0], district: null, street: null };
+    }
+
+    // Miasto = pierwszy token
+    const city = tokens[0];
+
+    // Jeśli są >=3 elementy → ostatnie 2 traktuj jako ulicę
+    if (tokens.length >= 3) {
+      const street = tokens.slice(-2).join(" ");
+      const district = tokens.slice(1, -2).join(" ") || null;
+      return { city, district, street };
+    }
+
+    // fallback
+    return {
+      city,
+      district: tokens.slice(1).join(" ") || null,
+      street: null,
+    };
+  })();
 
     rows.push({
       external_id: canon,
@@ -1347,7 +1364,7 @@ function parseOdwlasciCielaResults(pageUrl: string, html: string, limit: number)
       voivodeship: null,
       city: locParts.city,
       district: locParts.district,
-      street: null,
+      street: locParts.street ?? null,
     });
 
     if (rows.length >= limit) return false;
