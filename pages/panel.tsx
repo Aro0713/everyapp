@@ -8,6 +8,7 @@ import CalendarPage from "./calendar";
 import { useRouter } from "next/router";
 import TeamView from "@/components/TeamView";
 import OffersView from "@/components/OffersView";
+import Image from "next/image";
 
 function getCookie(name: string) {
   if (typeof document === "undefined") return null;
@@ -42,11 +43,11 @@ function PanelCard({
   right?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
+    <div className="rounded-3xl border border-white/10 bg-slate-950/55 p-6 shadow-2xl backdrop-blur-xl">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-lg font-extrabold tracking-tight text-ew-primary">{title}</h3>
-          {subtitle ? <p className="mt-1 text-sm text-gray-500">{subtitle}</p> : null}
+          <h3 className="text-lg font-extrabold tracking-tight text-white">{title}</h3>
+          {subtitle ? <p className="mt-1 text-sm text-white/60">{subtitle}</p> : null}
         </div>
         {right ? <div className="shrink-0">{right}</div> : null}
       </div>
@@ -57,9 +58,9 @@ function PanelCard({
 
 function StatPill({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-ew-accent/10 px-4 py-3">
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className="mt-1 text-sm font-extrabold text-ew-primary">{value}</p>
+    <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 shadow-lg backdrop-blur-md">
+      <p className="text-xs text-white/60">{label}</p>
+      <p className="mt-1 text-sm font-extrabold text-white">{value}</p>
     </div>
   );
 }
@@ -128,8 +129,21 @@ export default function PanelPage() {
         <meta name="description" content={t(lang, "panelDesc")} />
       </Head>
 
-      <main className="min-h-screen bg-ew-bg text-ew-primary">
-        <div className="flex min-h-screen">
+      <main className="relative min-h-screen overflow-hidden text-white">
+        {/* BACKGROUND – Katowice (jak login) */}
+        <div className="absolute inset-0">
+          <Image
+            src="/katowice-panorama.jpg"
+            alt="Panorama Katowic"
+            fill
+            priority
+            className="object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-900/70 to-slate-900/40" />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-slate-950/75" />
+        </div>
+
+        <div className="relative flex min-h-screen">
           {/* SIDEBAR */}
           <aside
             className={clsx(
@@ -152,7 +166,7 @@ export default function PanelPage() {
             {/* Właściwy panel */}
             <div
               className={clsx(
-                "h-full border-r border-white/10 bg-ew-primary text-white",
+                "h-full border-r border-white/10 bg-ew-primary/80 text-white backdrop-blur-md",
                 "transition-transform duration-200 will-change-transform",
                 // ✅ węższy sidebar (stały)
                 "w-56",
@@ -169,8 +183,8 @@ export default function PanelPage() {
               {/* HEADER */}
               <div className="flex h-16 items-center justify-between px-4">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/25 backdrop-blur ring-1 ring-white/30">
-                    <img src="/everyapp-logo.svg" alt="EveryAPP" className="h-7 w-auto" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/15 backdrop-blur ring-1 ring-white/20">
+                    <img src="/everyapp-logo.svg" alt="EveryAPP" className="h-7 w-auto brightness-0 invert" />
                   </div>
 
                   <div className="leading-tight">
@@ -265,14 +279,14 @@ export default function PanelPage() {
           {/* CONTENT */}
           <section className="flex min-w-0 flex-1 flex-col lg:pl-56">
             {/* TOPBAR */}
-            <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/80 backdrop-blur">
+            <header className="sticky top-0 z-40 border-b border-white/10 bg-slate-950/45 backdrop-blur-md">
               <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
                 <div className="flex min-w-0 items-center gap-3">
                   {/* Mobile menu button */}
                   <button
                     type="button"
                     onClick={() => setSidebarOpen(true)}
-                    className="lg:hidden inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-200 bg-white text-ew-primary shadow-sm transition hover:bg-ew-accent/10"
+                    className="lg:hidden inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-white shadow-sm transition hover:bg-white/15"
                     aria-label="Open menu"
                     title="Open menu"
                   >
@@ -280,11 +294,11 @@ export default function PanelPage() {
                   </button>
 
                   <div className="min-w-0">
-                    <h1 className="truncate text-lg font-extrabold tracking-tight text-ew-primary">
+                    <h1 className="truncate text-lg font-extrabold tracking-tight text-white">
                       {t(lang, activeNavItem.key as any)}
                     </h1>
 
-                    <p className="truncate text-xs text-gray-500">
+                    <p className="truncate text-xs text-white/60">
                       {activeNavItem.subKey ? t(lang, activeNavItem.subKey as any) : t(lang, "panelHeaderSub")}
                     </p>
                   </div>
@@ -295,28 +309,28 @@ export default function PanelPage() {
                     <div className="relative">
                       <input
                         placeholder={t(lang, "panelSearchPlaceholder")}
-                        className="w-72 rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20"
+                        className="w-72 rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white placeholder:text-white/40 outline-none transition focus:border-white/40 focus:ring-2 focus:ring-white/20"
                       />
-                      <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-400">
+                      <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs text-white/40">
                         ⌘K
                       </span>
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-gray-200 bg-white px-2 py-1 shadow-sm">
+                  <div className="rounded-2xl border border-white/10 bg-white/10 px-2 py-1 shadow-sm backdrop-blur-md">
                     <LanguageSwitcher currentLang={lang} />
                   </div>
 
                   <button
                     type="button"
-                    className="inline-flex items-center justify-center rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-ew-primary shadow-sm transition hover:bg-ew-accent/10"
+                    className="inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-white/15"
                   >
                     + {t(lang, "panelAdd")}
                   </button>
 
                   <button
                     type="button"
-                    className="inline-flex items-center justify-center rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-ew-primary shadow-sm transition hover:bg-ew-accent/10"
+                    className="inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-white/15"
                   >
                     {t(lang, "panelCustomize")}
                   </button>
@@ -335,7 +349,7 @@ export default function PanelPage() {
                   <StatPill label={t(lang, "panelKpiNotes")} value="0" />
                 </div>
 
-                {/* Widgets grid (jak EstiCRM) */}
+                {/* Widgets grid */}
                 <div className="mt-6 grid gap-6 md:grid-cols-12">
                   <div className="md:col-span-7">
                     <PanelCard
@@ -344,38 +358,38 @@ export default function PanelPage() {
                       right={
                         <button
                           type="button"
-                          className="rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-ew-primary transition hover:bg-ew-accent/10"
+                          className="rounded-2xl border border-white/10 bg-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/15"
                         >
                           {t(lang, "panelWidgetManage")}
                         </button>
                       }
                     >
-                      <div className="flex h-56 items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-ew-accent/5">
-                        <p className="text-sm text-gray-500">{t(lang, "panelEmpty")}</p>
+                      <div className="flex h-56 items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/5">
+                        <p className="text-sm text-white/60">{t(lang, "panelEmpty")}</p>
                       </div>
                     </PanelCard>
                   </div>
 
                   <div className="md:col-span-5">
                     <PanelCard title={t(lang, "panelWidgetTopBuyersTitle")} subtitle={t(lang, "panelWidgetTopBuyersSub")}>
-                      <div className="flex h-56 items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-ew-accent/5">
-                        <p className="text-sm text-gray-500">{t(lang, "panelEmpty")}</p>
+                      <div className="flex h-56 items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/5">
+                        <p className="text-sm text-white/60">{t(lang, "panelEmpty")}</p>
                       </div>
                     </PanelCard>
                   </div>
 
                   <div className="md:col-span-7">
                     <PanelCard title={t(lang, "panelWidgetNewOffersTitle")} subtitle={t(lang, "panelWidgetNewOffersSub")}>
-                      <div className="flex h-64 items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-ew-accent/5">
-                        <p className="text-sm text-gray-500">{t(lang, "panelEmpty")}</p>
+                      <div className="flex h-64 items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/5">
+                        <p className="text-sm text-white/60">{t(lang, "panelEmpty")}</p>
                       </div>
                     </PanelCard>
                   </div>
 
                   <div className="md:col-span-5">
                     <PanelCard title={t(lang, "panelWidgetTodayTitle")} subtitle={t(lang, "panelWidgetTodaySub")}>
-                      <div className="flex h-64 items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-ew-accent/5">
-                        <p className="text-sm text-gray-500">{t(lang, "panelEmpty")}</p>
+                      <div className="flex h-64 items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/5">
+                        <p className="text-sm text-white/60">{t(lang, "panelEmpty")}</p>
                       </div>
                     </PanelCard>
                   </div>
@@ -387,15 +401,15 @@ export default function PanelPage() {
                         {[1, 2, 3].map((i) => (
                           <div
                             key={i}
-                            className="flex items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white px-4 py-3"
+                            className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur-md"
                           >
                             <div className="min-w-0">
-                              <p className="truncate text-sm font-semibold text-ew-primary">{t(lang, "panelRowPlaceholderTitle")}</p>
-                              <p className="truncate text-xs text-gray-500">{t(lang, "panelRowPlaceholderMeta")}</p>
+                              <p className="truncate text-sm font-semibold text-white">{t(lang, "panelRowPlaceholderTitle")}</p>
+                              <p className="truncate text-xs text-white/60">{t(lang, "panelRowPlaceholderMeta")}</p>
                             </div>
                             <div className="text-right">
-                              <p className="text-sm font-extrabold text-emerald-600">0 PLN</p>
-                              <p className="text-xs text-gray-500">{t(lang, "panelRowPlaceholderDate")}</p>
+                              <p className="text-sm font-extrabold text-emerald-300">0 PLN</p>
+                              <p className="text-xs text-white/60">{t(lang, "panelRowPlaceholderDate")}</p>
                             </div>
                           </div>
                         ))}
@@ -409,13 +423,13 @@ export default function PanelPage() {
                         {[1, 2, 3].map((i) => (
                           <div
                             key={i}
-                            className="flex items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white px-4 py-3"
+                            className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur-md"
                           >
                             <div className="min-w-0">
-                              <p className="truncate text-sm font-semibold text-ew-primary">{t(lang, "panelRowPlaceholderTitle")}</p>
-                              <p className="truncate text-xs text-gray-500">{t(lang, "panelRowPlaceholderMeta")}</p>
+                              <p className="truncate text-sm font-semibold text-white">{t(lang, "panelRowPlaceholderTitle")}</p>
+                              <p className="truncate text-xs text-white/60">{t(lang, "panelRowPlaceholderMeta")}</p>
                             </div>
-                            <span className="rounded-full bg-ew-accent/15 px-3 py-1 text-xs font-semibold text-ew-accent">
+                            <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white/85">
                               {t(lang, "panelStatusActive")}
                             </span>
                           </div>
@@ -428,21 +442,21 @@ export default function PanelPage() {
                   <div className="md:col-span-7">
                     <PanelCard title={t(lang, "panelWidgetMetricsTitle")} subtitle={t(lang, "panelWidgetMetricsSub")}>
                       <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="rounded-3xl border border-gray-200 bg-white p-5">
-                          <p className="text-xs text-gray-500">{t(lang, "panelMetricDeals")}</p>
-                          <p className="mt-2 text-4xl font-extrabold text-ew-primary">0</p>
+                        <div className="rounded-3xl border border-white/10 bg-white/10 p-5 shadow-lg backdrop-blur-md">
+                          <p className="text-xs text-white/60">{t(lang, "panelMetricDeals")}</p>
+                          <p className="mt-2 text-4xl font-extrabold text-white">0</p>
                         </div>
-                        <div className="rounded-3xl border border-gray-200 bg-white p-5">
-                          <p className="text-xs text-gray-500">{t(lang, "panelMetricRevenue")}</p>
-                          <p className="mt-2 text-4xl font-extrabold text-ew-primary">0</p>
+                        <div className="rounded-3xl border border-white/10 bg-white/10 p-5 shadow-lg backdrop-blur-md">
+                          <p className="text-xs text-white/60">{t(lang, "panelMetricRevenue")}</p>
+                          <p className="mt-2 text-4xl font-extrabold text-white">0</p>
                         </div>
-                        <div className="rounded-3xl border border-gray-200 bg-white p-5">
-                          <p className="text-xs text-gray-500">{t(lang, "panelMetricNewListings")}</p>
-                          <p className="mt-2 text-4xl font-extrabold text-ew-primary">0</p>
+                        <div className="rounded-3xl border border-white/10 bg-white/10 p-5 shadow-lg backdrop-blur-md">
+                          <p className="text-xs text-white/60">{t(lang, "panelMetricNewListings")}</p>
+                          <p className="mt-2 text-4xl font-extrabold text-white">0</p>
                         </div>
-                        <div className="rounded-3xl border border-gray-200 bg-white p-5">
-                          <p className="text-xs text-gray-500">{t(lang, "panelMetricPresentations")}</p>
-                          <p className="mt-2 text-4xl font-extrabold text-ew-primary">0</p>
+                        <div className="rounded-3xl border border-white/10 bg-white/10 p-5 shadow-lg backdrop-blur-md">
+                          <p className="text-xs text-white/60">{t(lang, "panelMetricPresentations")}</p>
+                          <p className="mt-2 text-4xl font-extrabold text-white">0</p>
                         </div>
                       </div>
                     </PanelCard>
@@ -450,14 +464,14 @@ export default function PanelPage() {
 
                   <div className="md:col-span-5">
                     <PanelCard title={t(lang, "panelWidgetExportErrorsTitle")} subtitle={t(lang, "panelWidgetExportErrorsSub")}>
-                      <div className="flex h-56 items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-ew-accent/5">
-                        <p className="text-sm text-gray-500">{t(lang, "panelNoMessages")}</p>
+                      <div className="flex h-56 items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/5">
+                        <p className="text-sm text-white/60">{t(lang, "panelNoMessages")}</p>
                       </div>
                     </PanelCard>
                   </div>
                 </div>
 
-                <footer className="mt-10 pb-6 text-xs text-gray-500">{t(lang, "panelFooter")}</footer>
+                <footer className="mt-10 pb-6 text-xs text-white/55">{t(lang, "panelFooter")}</footer>
               </div>
             ) : activeView === "calendar" ? (
               <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
