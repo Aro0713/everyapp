@@ -448,6 +448,26 @@ useEffect(() => {
       load();
     }, []);
     useEffect(() => {
+      if (tab !== "everybot") return;
+
+      // 🔥 pierwsze ładowanie po wejściu na ekran (bo default tab = everybot)
+      (async () => {
+        setBotMatchedSince(null);
+        setBotCursor(null);
+        setBotHasMore(false);
+
+        await loadEverybot({
+          filters: botFiltersRef.current ?? botFilters,
+          cursor: null,
+          append: false,
+          matchedSince: null,
+        });
+
+        await loadMapPins().catch(() => null);
+      })();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [tab]);
+    useEffect(() => {
     return () => {
       if (searchIntervalRef.current) {
         window.clearInterval(searchIntervalRef.current);
