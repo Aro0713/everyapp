@@ -93,10 +93,16 @@ export default function EverybotMap({
 
     m.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
     m.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
-    m.setMinZoom(6);
+    m.setMinZoom(4);
     m.setMaxZoom(18);
 
     mapRef.current = m;
+    
+    m.on("load", () => {
+      requestAnimationFrame(() => {
+        try { m.resize(); } catch {}
+      });
+    });
 
     return () => {
       try {
