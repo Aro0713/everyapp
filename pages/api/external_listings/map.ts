@@ -93,10 +93,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const propertyTypeRaw = optString(req.query.propertyType);
     const propertyType = propertyTypeRaw ? mapPropertyFilterToCanonical(propertyTypeRaw) : null;
 
-    // ✅ budujemy WHERE i paramy bez ruszania list.ts
     const where: string[] = [];
     const params: any[] = [officeId, limit];
     let p = 3;
+
+    // ✅ zawsze Polska (geofence)
+    where.push(`el.lat BETWEEN 49.0 AND 55.1`);
+    where.push(`el.lng BETWEEN 14.0 AND 24.2`);
 
     // bbox
     if (hasBbox) {
