@@ -280,7 +280,7 @@ export default function PanelPage() {
           <section className="flex min-w-0 flex-1 flex-col lg:pl-56">
             {/* TOPBAR */}
             <header className="sticky top-0 z-40 border-b border-white/10 bg-slate-950/45 backdrop-blur-md">
-              <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
+              <div className="mx-auto flex h-16 w-full max-w-[1600px] items-center justify-between gap-3 px-3 sm:px-4 lg:px-6">
                 <div className="flex min-w-0 items-center gap-3">
                   {/* Mobile menu button */}
                   <button
@@ -340,7 +340,7 @@ export default function PanelPage() {
 
             {/* MAIN GRID */}
             {activeView === "dashboard" ? (
-              <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
+              <div className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-4 sm:px-4 lg:px-6">
                 {/* KPI row */}
                 <div className="grid gap-4 md:grid-cols-4">
                   <StatPill label={t(lang, "panelKpiCalls")} value="0" />
@@ -474,15 +474,15 @@ export default function PanelPage() {
                 <footer className="mt-10 pb-6 text-xs text-white/55">{t(lang, "panelFooter")}</footer>
               </div>
             ) : activeView === "calendar" ? (
-              <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
+              <div className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-4 sm:px-4 lg:px-6">
                 <CalendarPage />
               </div>
             ) : activeView === "offers" ? (
-              <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
+              <div className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-4 sm:px-4 lg:px-6">
                 <OffersView lang={lang} />
               </div>
             ) : activeView === "team" ? (
-              <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
+              <div className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-4 sm:px-4 lg:px-6">
                 <TeamView />
               </div>
             ) : null}
