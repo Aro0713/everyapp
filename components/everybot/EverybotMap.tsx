@@ -121,14 +121,14 @@ useEffect(() => {
     container: containerRef.current,
     style: styleUrl,
     center: [19.0, 52.0],
-    zoom: 6.3,
+    zoom: 7.1,
     attributionControl: false,
   });
 
   m.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
   m.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
 
-  m.setMinZoom(4);
+  m.setMinZoom(6);
   m.setMaxZoom(18);
 
 const onMove = () => {
