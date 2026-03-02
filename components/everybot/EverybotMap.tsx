@@ -204,8 +204,21 @@ export default function EverybotMap({
           `;
 
           el.onclick = () => {
-            const expZoom = Math.min(cluster.getClusterExpansionZoom(f.properties.cluster_id), 18);
-            m.easeTo({ center: [lng, lat], zoom: expZoom, duration: 380 });
+            const clusterId = f.properties.cluster_id;
+            const leaves = cluster.getLeaves(clusterId, Infinity) as any[];
+
+            if (leaves.length) {
+              const first = leaves[0];
+              const [leafLng, leafLat] = first.geometry.coordinates;
+
+              const expZoom = Math.min(cluster.getClusterExpansionZoom(clusterId), 18);
+
+              m.easeTo({
+                center: [leafLng, leafLat], // 🔥 lecisz do realnego punktu
+                zoom: expZoom,
+                duration: 380,
+              });
+            }
           };
 
           markers.push(new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([lng, lat]).addTo(m));
