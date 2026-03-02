@@ -64,6 +64,9 @@ export default function EverybotMap({
   const mapRef = useRef<maplibregl.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const roRef = useRef<ResizeObserver | null>(null);
+
+  const rafRef = useRef<number | null>(null); // ✅ DODANE
+  const lastSizeRef = useRef<{ w: number; h: number } | null>(null); // ✅ DODANE
   const [zoom, setZoom] = useState(6);
   const [bounds, setBounds] = useState<maplibregl.LngLatBoundsLike | null>(null);
 
@@ -139,9 +142,6 @@ export default function EverybotMap({
 
       m.on("load", () => {
         onMove();
-
-        // ✅ pierwszy stabilny resize po mount
-        requestAnimationFrame(() => m.resize());
       });
 
       m.on("moveend", onMove);
@@ -150,23 +150,44 @@ export default function EverybotMap({
       mapRef.current = m;
 
       // ✅ STABILIZACJA ROZMIARU (to naprawia "skakanie")
-      if (containerRef.current) {
-        roRef.current = new ResizeObserver(() => {
-          requestAnimationFrame(() => {
-            m.resize();
-          });
+    if (containerRef.current) {
+      roRef.current = new ResizeObserver((entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+
+        const cr = entry.contentRect;
+        const w = Math.round(cr.width);
+        const h = Math.round(cr.height);
+
+        // ✅ resize tylko jeśli realnie zmienił się rozmiar
+        const last = lastSizeRef.current;
+        if (last && last.w === w && last.h === h) return;
+        lastSizeRef.current = { w, h };
+
+        // ✅ throttle do 1 resize per frame (bez pętli)
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
+        rafRef.current = requestAnimationFrame(() => {
+          rafRef.current = null;
+          m.resize();
         });
+      });
 
-        roRef.current.observe(containerRef.current);
+      roRef.current.observe(containerRef.current);
+    }
+
+     return () => {
+      roRef.current?.disconnect();
+      roRef.current = null;
+
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
       }
+      lastSizeRef.current = null;
 
-      return () => {
-        roRef.current?.disconnect();   // ✅ WAŻNE
-        roRef.current = null;
-
-        m.remove();
-        mapRef.current = null;
-      };
+      m.remove();
+      mapRef.current = null;
+    };
     }, [onViewport]);
 
   // render markers (DOM markers)
