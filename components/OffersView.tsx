@@ -1040,7 +1040,7 @@ return (
           {/* ===== MAPA + AGENT (2/3 + 1/3) ===== */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
             <div className="lg:col-span-2">
-                <div className="h-full rounded-3xl border border-white/10 bg-slate-950/45 shadow-2xl backdrop-blur-xl overflow-hidden">
+                <div className="h-full min-h-[560px] rounded-3xl border border-white/10 bg-slate-950/45 shadow-2xl backdrop-blur-xl overflow-hidden">
                   <EverybotMap
                     pins={mapPins}
                     onSelectId={(id) => {
@@ -1058,7 +1058,7 @@ return (
                 </div>
               </div>
              <div className="lg:col-span-1">
-            <div className="rounded-3xl border border-white/10 bg-slate-950/55 shadow-2xl backdrop-blur-xl overflow-hidden">
+            <div className="h-full min-h-[560px] rounded-3xl border border-white/10 bg-slate-950/55 shadow-2xl backdrop-blur-xl overflow-hidden">
               <div className="border-b border-white/10 bg-white/5 px-4 py-3">
                 <div className="text-sm font-extrabold text-white/90">EveryBOT</div>
                 <div className="mt-0.5 text-xs text-white/55">Agent i decyzje</div>

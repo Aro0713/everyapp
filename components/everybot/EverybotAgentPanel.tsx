@@ -60,10 +60,7 @@ export default function EverybotAgentPanel({
       }
       setAttachments([]);
     } catch (e: any) {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", text: `Błąd: ${e?.message ?? "unknown"}` },
-      ]);
+      setMessages((prev) => [...prev, { role: "assistant", text: `Błąd: ${e?.message ?? "unknown"}` }]);
     } finally {
       setSending(false);
     }
@@ -74,7 +71,6 @@ export default function EverybotAgentPanel({
 
     const next: Attachment[] = [];
     for (const f of Array.from(files).slice(0, 5)) {
-      // limit 8MB na plik (MVP)
       if (f.size > 8 * 1024 * 1024) continue;
       const b64 = await fileToBase64(f);
       next.push({ name: f.name, mime: f.type || "application/octet-stream", dataBase64: b64 });
@@ -83,10 +79,10 @@ export default function EverybotAgentPanel({
   }
 
   return (
-    <div className="h-[70vh] rounded-2xl border border-gray-200 bg-white/5 shadow-sm flex flex-col overflow-hidden">
-      <div className="p-4 border-b border-gray-100">
-        <div className="text-sm font-extrabold text-ew-primary">Agent EveryBOT</div>
-        <div className="text-xs text-gray-500">Tekst • głos • pliki</div>
+    <div className="h-[70vh] rounded-2xl border border-white/10 bg-slate-950/45 shadow-2xl backdrop-blur-xl flex flex-col overflow-hidden">
+      <div className="p-4 border-b border-white/10 bg-white/5">
+        <div className="text-sm font-extrabold text-white/90">Agent EveryBOT</div>
+        <div className="text-xs text-white/55">Tekst • głos • pliki</div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
@@ -96,8 +92,8 @@ export default function EverybotAgentPanel({
               className={[
                 "inline-block max-w-[92%] rounded-2xl px-3 py-2 text-[13px] leading-snug",
                 m.role === "user"
-                  ? "bg-ew-accent/20 text-ew-primary"
-                  : "bg-gray-100 text-gray-800",
+                  ? "bg-white/10 text-white border border-white/10"
+                  : "bg-white/5 text-white/85 border border-white/10",
               ].join(" ")}
             >
               {m.text}
@@ -107,17 +103,18 @@ export default function EverybotAgentPanel({
       </div>
 
       {attachments.length > 0 && (
-        <div className="px-4 pb-2 text-[11px] text-gray-600">
+        <div className="px-4 pb-2 text-[11px] text-white/60">
           Załączniki: {attachments.map((a) => a.name).join(", ")}
         </div>
       )}
 
-      <div className="p-3 border-t border-gray-100 flex gap-2 items-center">
+      <div className="p-3 border-t border-white/10 bg-white/5 flex gap-2 items-center">
         <button
           type="button"
-          className="rounded-xl border border-gray-200 bg-white/5 px-3 py-2 text-xs font-semibold text-ew-primary hover:bg-ew-accent/10"
+          className="rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15 disabled:opacity-60"
           onClick={() => fileRef.current?.click()}
           disabled={sending}
+          title="Dodaj załącznik"
         >
           📎
         </button>
@@ -133,7 +130,7 @@ export default function EverybotAgentPanel({
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Napisz do agenta…"
-          className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none"
+          className="flex-1 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/40 outline-none focus:border-white/40 focus:ring-2 focus:ring-white/20"
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
@@ -146,10 +143,10 @@ export default function EverybotAgentPanel({
         <button
           type="button"
           className={[
-            "rounded-xl px-4 py-2 text-xs font-extrabold shadow-sm",
+            "rounded-xl px-4 py-2 text-xs font-extrabold shadow-sm transition",
             canSend && !sending
-              ? "bg-ew-accent text-ew-primary hover:opacity-95"
-              : "bg-gray-100 text-gray-400 cursor-not-allowed",
+              ? "border border-white/10 bg-white/15 text-white hover:bg-white/20"
+              : "border border-white/10 bg-white/5 text-white/35 cursor-not-allowed",
           ].join(" ")}
           onClick={send}
           disabled={!canSend || sending}

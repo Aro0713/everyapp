@@ -335,7 +335,7 @@ useEffect(() => {
   return (
     <div className="relative h-full w-full overflow-hidden">
       {/* Map */}
-      <div ref={containerRef} className="h-[520px] lg:h-[560px] w-full" />
+      <div ref={containerRef} className="h-full w-full" />
 
       {/* Premium overlay (vignette + glass) */}
       <div className="pointer-events-none absolute inset-0">
