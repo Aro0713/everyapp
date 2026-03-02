@@ -1038,7 +1038,6 @@ return (
                     if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
                   });
                 }}
-                resizeKey={`${tab}:${mapPins.length}`}
               />
           </div>
         </div>
