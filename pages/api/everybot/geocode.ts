@@ -25,7 +25,17 @@ function optNumber(v: unknown): number | null {
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
+// ✅ PL bounding box (minLon, minLat, maxLon, maxLat)
+const PL_BBOX = { minLon: 13.5, minLat: 48.8, maxLon: 24.3, maxLat: 55.2 };
 
+function isInPoland(lat: number, lng: number) {
+  return (
+    lat >= PL_BBOX.minLat &&
+    lat <= PL_BBOX.maxLat &&
+    lng >= PL_BBOX.minLon &&
+    lng <= PL_BBOX.maxLon
+  );
+}
 function buildQuery(r: Row): string | null {
   const street = (r.street ?? "").trim();
   const district = (r.district ?? "").trim();
@@ -104,6 +114,12 @@ async function geocodePhoton(q: string): Promise<{ lat: number; lng: number; con
   u.searchParams.set("lang", "default");
   u.searchParams.set("limit", "1");
 
+  // ✅ ogranicz geokodowanie do PL (Photon bbox: minLon,minLat,maxLon,maxLat)
+  u.searchParams.set(
+    "bbox",
+    `${PL_BBOX.minLon},${PL_BBOX.minLat},${PL_BBOX.maxLon},${PL_BBOX.maxLat}`
+  );
+
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 10000);
 
@@ -128,6 +144,13 @@ async function geocodePhoton(q: string): Promise<{ lat: number; lng: number; con
   if (lat == null || lon == null) return null;
 
   const p = f?.properties ?? {};
+
+  // ✅ twarda walidacja kraju / bbox
+  const cc = typeof p.countrycode === "string" ? p.countrycode.toLowerCase() : "";
+  if (cc && cc !== "pl") return null;
+
+  if (!isInPoland(lat, lon)) return null;
+
   const hasHouse = typeof p.housenumber === "string" && p.housenumber.trim();
   const hasStreet = typeof p.street === "string" && p.street.trim();
   const hasCity = typeof p.city === "string" && p.city.trim();
@@ -140,7 +163,6 @@ async function geocodePhoton(q: string): Promise<{ lat: number; lng: number; con
   if (hasHouse) conf += 0.40;
 
   if (conf > 0.95) conf = 0.95;
-
   if (conf < 0.20) return null;
 
   return { lat, lng: lon, confidence: conf };
@@ -210,12 +232,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       SELECT id, office_id, location_text, street, city, district, voivodeship
       FROM external_listings
       WHERE office_id = $1
-        AND (lat IS NULL OR lng IS NULL)
-        AND (
-          geocoded_at IS NULL
-          OR geocode_confidence = 0
-        )
-        AND (city IS NOT NULL OR (location_text IS NOT NULL AND btrim(location_text) <> ''))
+      AND (
+        lat IS NULL OR lng IS NULL
+        OR lat < 48.8 OR lat > 55.2
+        OR lng < 13.5 OR lng > 24.3
+        OR geocode_confidence = 0
+      )
+      AND (city IS NOT NULL OR (location_text IS NOT NULL AND btrim(location_text) <> ''))
       ORDER BY
         (street IS NOT NULL AND btrim(street) <> '') DESC,
         (city IS NOT NULL AND btrim(city) <> '') DESC,
@@ -251,16 +274,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       if (!geo) {
-        await pool.query(
-          `UPDATE external_listings
-           SET geocoded_at = now(),
-               geocode_source = 'photon_low_conf',
-               geocode_confidence = 0,
-               updated_at = now()
-           WHERE office_id = $1 AND id = $2`,
-          [officeId, r0.id]
-        );
-
+      await pool.query(
+      `UPDATE external_listings
+      SET lat = NULL,
+          lng = NULL,
+          geocoded_at = now(),
+          geocode_source = 'photon_low_conf',
+          geocode_confidence = 0,
+          updated_at = now()
+      WHERE office_id = $1 AND id = $2`,
+      [officeId, r0.id]
+    );
         processed += 1;
         await sleep(250);
         continue;
