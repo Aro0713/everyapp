@@ -18,8 +18,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     res.setHeader("Cache-Control", "no-store");
-    res.setHeader("Pragma", "no-cache");
-    res.setHeader("Expires", "0");
 
     const userId = getUserIdFromRequest(req);
     if (!userId) return res.status(401).json({ error: "UNAUTHORIZED" });
@@ -42,8 +40,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         el.updated_at,
         el.lat::double precision AS lat,
         el.lng::double precision AS lng,
-
-        -- ostatni tryb (mode) z actions dla tej oferty i tego biura
         COALESCE(last_action.payload->>'mode', NULL) AS saved_mode
       FROM external_listings el
       LEFT JOIN LATERAL (
@@ -55,19 +51,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         LIMIT 1
       ) last_action ON true
       WHERE el.office_id = $1::uuid
-        AND el.lat IS NOT NULL AND el.lng IS NOT NULL
-
-        -- ✅ reguła biznesowa: PL-only (to nie filtr UI)
-        AND el.lat BETWEEN 49.0 AND 55.1
-        AND el.lng BETWEEN 14.0 AND 24.2
-
+        AND el.lat IS NOT NULL
+        AND el.lng IS NOT NULL
       ORDER BY el.updated_at DESC, el.id DESC
       LIMIT $2::int
       `,
       [officeId, limit]
     );
 
-    return res.status(200).json({ ok: true, officeId, pins: rows });
+    return res.status(200).json({
+      ok: true,
+      officeId,
+      pins: rows,
+    });
   } catch (e: any) {
     console.error("EXTERNAL_LISTINGS_MAP_ERROR", e);
     return res.status(400).json({ error: e?.message ?? "Bad request" });
