@@ -691,7 +691,7 @@ async function runRcnBatch() {
   }
 function EverybotLoadingGlass({ title, subtitle }: { title: string; subtitle: string }) {
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-white/40 bg-white/55 p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)] backdrop-blur-xl">
+    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-slate-950/55 p-6 shadow-2xl backdrop-blur-xl">
       {/* shimmer */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -left-1/2 top-0 h-full w-[200%] animate-[shimmer_1.6s_linear_infinite] bg-gradient-to-r from-transparent via-white/40 to-transparent" />
@@ -700,7 +700,7 @@ function EverybotLoadingGlass({ title, subtitle }: { title: string; subtitle: st
       <div className="relative flex items-center gap-4">
         {/* rotating logo */}
         <div className="relative h-14 w-14">
-          <div className="absolute inset-0 rounded-full border border-ew-accent/25 bg-white/60 shadow-inner" />
+          <div className="absolute inset-0 rounded-full border border-white/10 bg-white/10 shadow-inner" />
           <img
             src="/brand/everyapp-logo.svg"
             alt="EveryAPP"
@@ -710,8 +710,8 @@ function EverybotLoadingGlass({ title, subtitle }: { title: string; subtitle: st
         </div>
 
         <div className="min-w-0">
-          <div className="text-sm font-extrabold text-ew-primary">{title}</div>
-          <div className="mt-1 text-xs text-gray-600">{subtitle}</div>
+          <div className="text-sm font-extrabold text-white">{title}</div>
+          <div className="mt-1 text-xs text-white/60">{subtitle}</div>
 
           <div className="mt-4 h-2 w-64 overflow-hidden rounded-full bg-ew-accent/15">
             <div className="h-full w-1/2 animate-[bar_1.1s_ease-in-out_infinite] rounded-full bg-ew-accent" />
@@ -741,13 +741,13 @@ function EverybotLoadingGlass({ title, subtitle }: { title: string; subtitle: st
 return (
   <div className="space-y-4">
     {/* HEADER */}
-    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+    <div className="rounded-3xl border border-white/10 bg-slate-950/45 p-4 shadow-2xl backdrop-blur-xl">
       <div className="relative z-20 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-extrabold tracking-tight text-ew-primary">
+          <h2 className="text-base font-extrabold tracking-tight text-white">
             {t(lang, "offersTitle" as any)}
           </h2>
-          <p className="mt-0.5 text-xs text-gray-500">
+          <p className="mt-0.5 text-xs text-white/50">
             {t(lang, "offersSub" as any)}
           </p>
         </div>
@@ -755,7 +755,7 @@ return (
         <div className="relative z-30 flex flex-wrap justify-end gap-1.5">
           <button
             type="button"
-            className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-ew-primary shadow-sm transition hover:bg-ew-accent/10"
+            className="rounded-xl border border-white/10 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-white/15"
             onClick={async () => {
               if (tab === "office") {
                 await load();
@@ -794,8 +794,8 @@ return (
                 className={clsx(
                   "pointer-events-auto rounded-xl border px-3 py-1.5 text-xs font-semibold shadow-sm transition",
                   botLoading
-                    ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
-                    : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
+                  ? "cursor-not-allowed border-white/10 bg-white/5 text-white/35"
+                  : "border-white/10 bg-white/10 text-white hover:bg-white/15"
                 )}
                 onClick={async () => {
                   try {
@@ -815,7 +815,7 @@ return (
                   "pointer-events-auto rounded-xl border px-3 py-1.5 text-xs font-semibold shadow-sm transition",
                   botLoading
                     ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
-                    : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
+                    : "border-white/10 bg-white/10 text-white/85 hover:bg-white/15 hover:text-white"
                 )}
                 onClick={async () => {
                   try {
@@ -832,7 +832,7 @@ return (
 
           <button
             type="button"
-            className="rounded-xl bg-ew-accent px-3 py-1.5 text-xs font-extrabold text-ew-primary shadow-sm transition hover:opacity-95"
+            className="rounded-xl bg-ew-accent px-3 py-1.5 text-xs font-extrabold text-white shadow-sm transition hover:opacity-95"
             onClick={async () => {
               try {
                 const r = await fetch("/api/offers/create", {
@@ -862,7 +862,7 @@ return (
 
           <button
             type="button"
-            className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-ew-primary shadow-sm transition hover:bg-ew-accent/10"
+            className="rounded-xl border border-white/10 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-white/15"
             onClick={() => alert("TODO: import z portali (biuro → portale)")}
           >
             {t(lang, "offersImport" as any)}
@@ -877,8 +877,8 @@ return (
           className={clsx(
             "rounded-xl border px-3 py-1.5 text-xs font-semibold transition",
             tab === "office"
-              ? "border-ew-accent bg-ew-accent/10 text-ew-primary"
-              : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
+              ? "border-ew-accent bg-ew-accent/10 text-white"
+              : "border-white/10 bg-white/10 text-white/85 hover:bg-white/15 hover:text-white"
           )}
           onClick={() => setTab("office")}
         >
@@ -890,8 +890,8 @@ return (
           className={clsx(
             "rounded-xl border px-3 py-1.5 text-xs font-semibold transition",
             tab === "everybot"
-              ? "border-ew-accent bg-ew-accent/10 text-ew-primary"
-              : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
+              ? "border-ew-accent bg-ew-accent/10 text-white"
+              : "border-white/10 bg-white/10 text-white/85 hover:bg-white/15 hover:text-white"
           )}
           onClick={() => {
             setTab("everybot");
@@ -928,20 +928,20 @@ return (
     {tab === "office" ? (
       <>
         {/* LISTA OFERT */}
-        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="rounded-3xl border border-white/10 bg-slate-950/45 p-4 shadow-2xl backdrop-blur-xl">
           {loading ? (
-            <div className="text-xs text-gray-500">{t(lang, "offersLoading" as any)}</div>
+            <div className="text-xs text-white/50">{t(lang, "offersLoading" as any)}</div>
           ) : err ? (
-            <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs text-red-700">
+            <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-xs text-red-200">
               {t(lang, "offersLoadError" as any)}: {err}
             </div>
           ) : empty ? (
-            <div className="flex h-44 items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-ew-accent/5">
-              <p className="text-xs text-gray-500">{t(lang, "offersEmpty" as any)}</p>
-            </div>
+            <div className="flex h-44 items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/5">
+            <p className="text-xs text-white/60">{t(lang, "offersEmpty" as any)}</p>
+          </div>
           ) : (
             <div ref={officeTableRef} className="w-full">
-              <div className="divide-y divide-gray-100">
+              <div className="divide-y divide-white/10">
                 {rows.map((r) => {
                   const title =
                     r.record_type === "offer"
@@ -961,10 +961,10 @@ return (
                       <div className="flex gap-3">
                         {/* thumb (placeholder) */}
                         <div className="shrink-0">
-                          <div className="h-14 w-20 rounded-lg bg-gray-100 ring-1 ring-gray-200" />
+                          <div className="h-14 w-20 rounded-lg bg-white/10 ring-1 ring-white/10" />
 
-                          <div className="mt-1 flex items-center gap-1.5 text-[10px] text-gray-500">
-                            <span className="rounded bg-gray-100 px-2 py-0.5">
+                          <div className="mt-1 flex items-center gap-1.5 text-[10px] text-white/50">
+                            <span className="rounded bg-white/10 px-2 py-0.5 ring-1 ring-white/10 text-white/80">
                               {r.record_type}
                             </span>
                             {created ? <span>{created}</span> : null}
@@ -975,12 +975,12 @@ return (
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                              <div className="truncate text-sm font-semibold text-ew-primary">
+                              <div className="truncate text-sm font-semibold text-white">
                                 {title}
                               </div>
 
                               {r.case_owner_name || r.parties_summary ? (
-                                <div className="truncate text-[11px] text-gray-600">
+                                <div className="truncate text-[11px] text-white/60">
                                   {r.case_owner_name ?? "-"}
                                   {r.parties_summary ? ` • ${r.parties_summary}` : ""}
                                 </div>
@@ -988,20 +988,20 @@ return (
                             </div>
 
                             <div className="text-right">
-                              <div className="text-sm font-extrabold text-ew-primary">
+                              <div className="text-sm font-extrabold text-white">
                                 {r.transaction_type}
                               </div>
-                              <div className="text-[11px] text-gray-500">{r.status}</div>
+                              <div className="text-[11px] text-white/50">{r.status}</div>
                             </div>
                           </div>
 
                           {/* meta */}
                           {metaLeft.length ? (
-                            <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-gray-700">
+                            <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-white/70">
                               {metaLeft.map((x, i) => (
                                 <span
                                   key={i}
-                                  className="rounded bg-gray-50 px-1.5 py-0.5 ring-1 ring-gray-200"
+                                  className="rounded bg-white/10 px-1.5 py-0.5 ring-1 ring-white/10 text-white/80"
                                 >
                                   {x}
                                 </span>
@@ -1019,14 +1019,14 @@ return (
         </div>
 
         {/* IMPORT INFO */}
-        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-          <h3 className="text-sm font-extrabold text-ew-primary">
+        <div className="rounded-3xl border border-white/10 bg-slate-950/45 p-4 shadow-2xl backdrop-blur-xl">
+          <h3 className="text-sm font-extrabold text-white">
             {t(lang, "offersImportTitle" as any)}
           </h3>
-          <p className="mt-0.5 text-xs text-gray-500">
+          <p className="mt-0.5 text-xs text-white/50">
             {t(lang, "offersImportDesc" as any)}
           </p>
-          <ul className="mt-3 list-disc space-y-2 pl-5 text-xs text-gray-600">
+          <ul className="mt-3 list-disc space-y-2 pl-5 text-xs text-white/60">
             <li>{t(lang, "offersImportHint1" as any)}</li>
             <li>{t(lang, "offersImportHint2" as any)}</li>
             <li>{t(lang, "offersImportHint3" as any)}</li>
@@ -1056,99 +1056,107 @@ return (
                 }}
               />
             </div>
-            <div className="lg:col-span-1">
-              <EverybotAgentPanel
-                contextFilters={botFilters}
-                onAgentResult={async ({ actions }) => {
-                  // ✅ lokalny “stan filtrów” na potrzeby sekwencji akcji
-                  let currentFilters = botFilters;
+             <div className="lg:col-span-1">
+            <div className="rounded-3xl border border-white/10 bg-slate-950/55 shadow-2xl backdrop-blur-xl overflow-hidden">
+              <div className="border-b border-white/10 bg-white/5 px-4 py-3">
+                <div className="text-sm font-extrabold text-white/90">EveryBOT</div>
+                <div className="mt-0.5 text-xs text-white/55">Agent i decyzje</div>
+              </div>
 
-                  for (const a of actions ?? []) {
-                    if (a?.type === "set_filters" && a.filters && typeof a.filters === "object") {
-                      currentFilters = { ...currentFilters, ...a.filters };
-                      setBotFilters(currentFilters);
+              <div className="p-3">
+                <EverybotAgentPanel
+                  contextFilters={botFilters}
+                  onAgentResult={async ({ actions }) => {
+                    // ... zostaje 1:1 jak masz
+                    let currentFilters = botFilters;
 
-                      setBotMatchedSince(null);
-                      setBotSearching(false);
-                      setBotSearchSeconds(0);
+                    for (const a of actions ?? []) {
+                      if (a?.type === "set_filters" && a.filters && typeof a.filters === "object") {
+                        currentFilters = { ...currentFilters, ...a.filters };
+                        setBotFilters(currentFilters);
 
-                      const { rows } = await loadEverybot({
-                        filters: currentFilters,
-                        cursor: null,
-                        append: false,
-                        matchedSince: null,
-                      });
-                      setHighlightFromRows(rows, 10);
-                      await loadMapPins().catch(() => null);
-                      continue;
-                    }
+                        setBotMatchedSince(null);
+                        setBotSearching(false);
+                        setBotSearchSeconds(0);
 
-                    if (a?.type === "run_live") {
-                      // traktuj jak klik "Szukaj" na aktualnych filtrach
-                      await (async () => {
-                        const local = await loadEverybot({
+                        const { rows } = await loadEverybot({
                           filters: currentFilters,
                           cursor: null,
                           append: false,
                           matchedSince: null,
                         });
-                        if (local.rows.length === 0) {
-                          const runTs = typeof a.runTs === "string" ? a.runTs : new Date().toISOString();
-                          await runLiveHunter(currentFilters, runTs);
-                          await loadEverybot({
+                        setHighlightFromRows(rows, 10);
+                        await loadMapPins().catch(() => null);
+                        continue;
+                      }
+
+                      if (a?.type === "run_live") {
+                        await (async () => {
+                          const local = await loadEverybot({
                             filters: currentFilters,
                             cursor: null,
                             append: false,
                             matchedSince: null,
                           });
-                        }
-                      })();
-                      continue;
-                    }
+                          if (local.rows.length === 0) {
+                            const runTs = typeof a.runTs === "string" ? a.runTs : new Date().toISOString();
+                            await runLiveHunter(currentFilters, runTs);
+                            await loadEverybot({
+                              filters: currentFilters,
+                              cursor: null,
+                              append: false,
+                              matchedSince: null,
+                            });
+                          }
+                        })();
+                        continue;
+                      }
 
-                    if (a?.type === "load_neon") {
-                      setBotMatchedSince(null);
+                      if (a?.type === "load_neon") {
+                        setBotMatchedSince(null);
 
-                      const { rows } = await loadEverybot({
-                        filters: currentFilters,
-                        cursor: null,
-                        append: false,
-                        matchedSince: null,
-                      });
-                      setHighlightFromRows(rows, 10);
-                      await loadMapPins().catch(() => null);
-                      continue;
-                    }
+                        const { rows } = await loadEverybot({
+                          filters: currentFilters,
+                          cursor: null,
+                          append: false,
+                          matchedSince: null,
+                        });
+                        setHighlightFromRows(rows, 10);
+                        await loadMapPins().catch(() => null);
+                        continue;
+                      }
 
-                    if (a?.type === "refresh_map") {
-                      await loadMapPins().catch(() => null);
-                      continue;
-                    }
+                      if (a?.type === "refresh_map") {
+                        await loadMapPins().catch(() => null);
+                        continue;
+                      }
 
-                    if (a?.type === "geocode") {
-                      const limit = Number(a.limit ?? 50);
-                      await fetch("/api/everybot/geocode", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ limit: Number.isFinite(limit) ? limit : 50 }),
-                      });
-                      await refreshEverybotList();
-                      await loadMapPins().catch(() => null);
-                      continue;
-                    }
+                      if (a?.type === "geocode") {
+                        const limit = Number(a.limit ?? 50);
+                        await fetch("/api/everybot/geocode", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ limit: Number.isFinite(limit) ? limit : 50 }),
+                        });
+                        await refreshEverybotList();
+                        await loadMapPins().catch(() => null);
+                        continue;
+                      }
 
-                    if (a?.type === "open_listing" && typeof a.url === "string") {
-                      window.open(a.url, "_blank", "noopener,noreferrer");
-                      continue;
+                      if (a?.type === "open_listing" && typeof a.url === "string") {
+                        window.open(a.url, "_blank", "noopener,noreferrer");
+                        continue;
+                      }
                     }
-                  }
-                }}
-              />
+                  }}
+                />
+              </div>
             </div>
+          </div>
           </div>
 
           {/* ===== FILTR + TABELA ===== */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+          <div className="rounded-3xl border border-white/10 bg-slate-950/45 p-4 shadow-2xl backdrop-blur-xl">
             <EverybotSearchPanel
               lang={lang}
               loading={botLoading}
@@ -1224,20 +1232,20 @@ return (
             {/* ===== WYNIKI ===== */}
             {botSearching && (
               <div className="mb-3">
-                <div className="mb-1.5 text-xs font-semibold text-ew-primary">
+                <div className="mb-1.5 text-xs font-semibold text-white">
                   🔄 {t(lang, "everybotSearching" as any)}
                 </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-ew-accent/20">
-                  <div className="h-full w-full animate-pulse bg-ew-accent transition-all duration-300" />
-                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+                <div className="h-full w-full animate-pulse bg-white/20 transition-all duration-300" />
+              </div>
               </div>
             )}
 
-            <div className="mt-4 relative rounded-2xl border border-gray-200 bg-white">
+            <div className="mt-4 relative rounded-3xl border border-white/10 bg-slate-950/45 shadow-2xl backdrop-blur-xl">
               {/* ✅ Kolejne ładowania: mały overlay nad listą (nie dotyka row, nie blokuje klików) */}
               {botLoading && botRows.length > 0 && (
                 <div className="pointer-events-none absolute inset-0 z-20 flex items-start justify-center rounded-2xl">
-                  <div className="mt-3 rounded-2xl border border-white/40 bg-white/60 px-4 py-3 shadow-[0_10px_30px_rgba(0,0,0,0.08)] backdrop-blur-xl">
+                  <div className="mt-3 rounded-2xl border border-white/10 bg-slate-950/55 px-4 py-3 shadow-2xl backdrop-blur-xl">
                     <div className="flex items-center gap-3">
                       <img
                         src="/brand/everyapp-logo.svg"
@@ -1245,12 +1253,12 @@ return (
                         className="h-5 w-5 animate-[spinSlow_1.8s_linear_infinite]"
                         draggable={false}
                       />
-                      <div className="text-xs font-semibold text-ew-primary">
+                      <div className="text-xs font-semibold text-white">
                         {t(lang, "everybotSearching" as any)}
                       </div>
-                      <div className="h-2 w-28 overflow-hidden rounded-full bg-ew-accent/15">
-                        <div className="h-full w-1/2 animate-[bar_1.1s_ease-in-out_infinite] rounded-full bg-ew-accent" />
-                      </div>
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+                      <div className="h-full w-full animate-pulse bg-white/20 transition-all duration-300" />
+                    </div>
                     </div>
 
                     <style jsx>{`
@@ -1275,19 +1283,19 @@ return (
                   subtitle={t(lang, "everybotSearching" as any)}
                 />
               ) : botErr ? (
-                <div className="p-4 text-xs text-red-700">
+                <div className="p-4 text-xs text-red-200">
                   {t(lang, "everybotLoadError" as any)}: {botErr}
                 </div>
               ) : botRows.length === 0 ? (
-                <div className="flex h-32 items-center justify-center rounded-2xl bg-ew-accent/5">
-                  <p className="text-xs text-gray-500">
+                <div className="flex h-32 items-center justify-center rounded-2xl bg-white/5">
+                  <p className="text-xs text-white/50">
                     {t(lang, "everybotEmpty" as any)}
                   </p>
                 </div>
               ) : (
                 <>
                   <div ref={everybotTableRef} className="w-full">
-                    <div className="divide-y divide-gray-100">
+                    <div className="divide-y divide-white/10">
                       {botRows.map((r) => {
                         const selected = selectedExternalId === r.id;
                         const highlighted = highlightIds.includes(r.id);
@@ -1314,8 +1322,8 @@ return (
                             }}
                             className={clsx(
                               "p-2.5 md:p-3",
-                              highlighted && "bg-green-50",
-                              selected && "bg-ew-accent/10 ring-1 ring-ew-accent"
+                              "bg-white/5 hover:bg-white/7 transition",
+                              selected && "ring-1 ring-white/20 bg-white/10"
                             )}
                           >
                             <div className="flex gap-3">
@@ -1325,13 +1333,13 @@ return (
                                   <img
                                     src={r.thumb_url}
                                     alt=""
-                                    className="h-14 w-20 rounded-lg object-cover ring-1 ring-gray-200"
+                                    className="h-14 w-20 rounded-lg object-cover ring-1 ring-white/10"
                                     loading="lazy"
                                   />
                                 ) : (
-                                  <div className="h-14 w-20 rounded-lg bg-gray-100 ring-1 ring-gray-200" />
+                                  <div className="h-14 w-20 rounded-lg bg-white/10 ring-1 ring-white/10" />
                                 )}
-                                <div className="mt-1 text-[10px] text-gray-500">
+                                <div className="mt-1 text-[10px] text-white/50">
                                   {r.source}
                                   {r.matched_at ? ` • ${new Date(r.matched_at).toLocaleDateString()}` : ""}
                                 </div>
@@ -1341,21 +1349,30 @@ return (
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-start justify-between gap-3">
                                   <div className="min-w-0">
-                                    <div className="truncate text-sm font-semibold text-ew-primary">{title}</div>
+                                    <div className="flex min-w-0 items-center gap-2">
+                                      <span
+                                      className={clsx(
+                                        "h-2.5 w-2.5 rounded-full ring-1 ring-white/15 shrink-0",
+                                        highlighted ? "bg-emerald-400" : "bg-amber-300"
+                                      )}
+                                      title={highlighted ? "Podświetlone" : "Standard"}
+                                    />
+                                    <div className="truncate text-sm font-semibold text-white">{title}</div>
+                                  </div>
                                     {locLine ? (
-                                      <div className="truncate text-[11px] text-gray-600">{locLine}</div>
+                                      <div className="truncate text-[11px] text-white/60">{locLine}</div>
                                     ) : null}
                                   </div>
 
                                   {/* cena */}
                                   <div className="text-right">
-                                    <div className="text-sm font-extrabold text-ew-primary">{price}</div>
-                                    {ppm2 ? <div className="text-[11px] text-gray-500">{ppm2}</div> : null}
+                                    <div className="text-sm font-extrabold text-white">{price}</div>
+                                    {ppm2 ? <div className="text-[11px] text-white/50">{ppm2}</div> : null}
                                   </div>
                                 </div>
 
                                 {/* meta */}
-                                <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-gray-700">
+                                <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-white/70">
                                   {r.transaction_type ? <span>{r.transaction_type}</span> : null}
                                   {r.property_type ? <span>{r.property_type}</span> : null}
                                   {area ? <span>{area}</span> : null}
@@ -1366,7 +1383,7 @@ return (
 
                                 {/* RCN + telefon + akcje */}
                                 <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
-                                  <div className="text-[11px] text-gray-600">
+                                  <div className="text-[11px] text-white/60">
                                     {r.owner_phone ? <span className="mr-3">📞 {r.owner_phone}</span> : null}
 
                                     {r.rcn_last_price != null ? (
@@ -1397,10 +1414,10 @@ return (
                                     className={clsx(
                                       "rounded-xl border px-3 py-1 text-[11px] font-semibold shadow-sm transition",
                                       savedIds.has(r.id)
-                                        ? "border-emerald-200 bg-emerald-50 text-emerald-700 cursor-default"
+                                        ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-200 cursor-default"
                                         : savingId === r.id
-                                          ? "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed"
-                                          : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
+                                          ? "border-white/10 bg-white/5 text-white/35 cursor-not-allowed"
+                                          : "border-white/10 bg-white/10 text-white hover:bg-white/15"
                                     )}
                                     onClick={() => saveExternalListing(r.id, "save")}
                                     title="Zapisz do działań"
@@ -1429,7 +1446,7 @@ return (
                   </div>
 
                   {botHasMore && (
-                    <div className="flex justify-center border-t border-gray-100 p-4">
+                    <div className="flex justify-center border-t border-white/10 p-4">
                       <button
                         type="button"
                         disabled={botLoading}
@@ -1441,7 +1458,7 @@ return (
                             matchedSince: botMatchedSince,
                           })
                         }
-                        className="rounded-xl border px-3 py-1.5 text-xs font-semibold shadow-sm border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
+                        className="rounded-xl border border-white/10 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-white/15 disabled:opacity-60"
                       >
                         {t(lang, "everybotLoadMore" as any)}
                       </button>

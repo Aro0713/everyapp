@@ -213,7 +213,7 @@ function onClickSearch() {
 }
 
 const inputCls =
-    "w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-ew-accent focus:ring-2 focus:ring-ew-accent/20";
+  "w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm text-white placeholder:text-white/40 outline-none transition focus:border-white/40 focus:ring-2 focus:ring-white/20";
 
  // ✅ backend realnie obsługuje te źródła w harvest
 const supportedSources = useMemo(
@@ -229,19 +229,19 @@ const supportedSources = useMemo(
 );
 
   return (
-    <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
+  <div className="rounded-3xl border border-white/10 bg-slate-950/45 p-6 shadow-2xl backdrop-blur-xl">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-extrabold text-ew-primary">
+          <h3 className="text-sm font-extrabold text-white/90">
             {t(lang, "everybotContainerTitle" as any)}
           </h3>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-white/60">
             {t(lang, "everybotContainerSub" as any)}
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500">
+         <span className="text-xs text-white/60">
             {t(lang, "everybotSaveModeLabel" as any)}
           </span>
           <select
@@ -272,33 +272,20 @@ const supportedSources = useMemo(
             disabled={props.importing || !props.importUrl.trim()}
             onClick={props.onImportLink}
             className={clsx(
-              "w-full rounded-2xl px-4 py-3 text-sm font-extrabold shadow-sm transition",
-              props.importing || !props.importUrl.trim()
-                ? "cursor-not-allowed border border-gray-200 bg-gray-100 text-gray-400"
-                : "bg-ew-accent text-ew-primary hover:opacity-95"
-            )}
+            "w-full rounded-2xl px-4 py-3 text-sm font-extrabold shadow-sm transition",
+            props.importing || !props.importUrl.trim()
+              ? "cursor-not-allowed border border-white/10 bg-white/5 text-white/35"
+              : "border border-white/10 bg-white/10 text-white hover:bg-white/15"
+          )}
           >
             {props.importing ? "…" : t(lang, "everybotImportBtn" as any)}
           </button>
         </div>
       </div>
 
-      {/* 2) Search panel */}
-      <div className="md:col-span-3">
-        <label className="mb-1 block text-xs font-semibold text-ew-primary">
-            {t(lang, "everybotVoivodeshipLabel" as any)}
-        </label>
-        <input
-            value={f.voivodeship}
-            onChange={(e) => patch({ voivodeship: e.target.value })}
-            placeholder={t(lang, "everybotVoivodeshipPlaceholder" as any)}
-            className={inputCls}
-        />
-        </div>
-
       <div className="mt-4 grid gap-3 md:grid-cols-12">
         <div className="md:col-span-6">
-          <label className="mb-1 block text-xs font-semibold text-ew-primary">
+          <label className="mb-1 block text-xs font-semibold text-white/70">
             {t(lang, "everybotSearchQueryLabel" as any)}
           </label>
           <input
@@ -308,9 +295,19 @@ const supportedSources = useMemo(
             className={inputCls}
           />
         </div>
-
         <div className="md:col-span-3">
-          <label className="mb-1 block text-xs font-semibold text-ew-primary">
+        <label className="mb-1 block text-xs font-semibold text-white/70">
+          {t(lang, "everybotVoivodeshipLabel" as any)}
+        </label>
+        <input
+          value={f.voivodeship}
+          onChange={(e) => patch({ voivodeship: e.target.value })}
+          placeholder={t(lang, "everybotVoivodeshipPlaceholder" as any)}
+          className={inputCls}
+        />
+      </div>
+        <div className="md:col-span-3">
+          <label className="mb-1 block text-xs font-semibold text-white/70">
             {t(lang, "everybotSourceLabel" as any)}
           </label>
           <select
@@ -327,7 +324,7 @@ const supportedSources = useMemo(
         </div>
 
         <div className="md:col-span-3">
-          <label className="mb-1 block text-xs font-semibold text-ew-primary">
+          <label className="mb-1 block text-xs font-semibold text-white/70">
             {t(lang, "everybotTransactionLabel" as any)}
           </label>
           <select
@@ -342,7 +339,7 @@ const supportedSources = useMemo(
         </div>
 
         <div className="md:col-span-4">
-          <label className="mb-1 block text-xs font-semibold text-ew-primary">
+          <label className="mb-1 block text-xs font-semibold text-white/70">
             {t(lang, "everybotPropertyTypeLabel" as any)}
           </label>
           <input
@@ -354,7 +351,7 @@ const supportedSources = useMemo(
         </div>
 
         <div className="md:col-span-5">
-          <label className="mb-1 block text-xs font-semibold text-ew-primary">
+          <label className="mb-1 block text-xs font-semibold text-white/70">
             {t(lang, "everybotLocationLabel" as any)}
           </label>
           <div className="flex gap-2">
@@ -369,21 +366,21 @@ const supportedSources = useMemo(
               onClick={useMyLocation}
               disabled={geoBusy}
               className={clsx(
-                "shrink-0 rounded-2xl border px-4 py-3 text-sm font-semibold shadow-sm transition",
-                geoBusy
-                  ? "cursor-wait border-gray-200 bg-gray-100 text-gray-400"
-                  : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
-              )}
+              "w-full rounded-2xl px-4 py-3 text-sm font-extrabold shadow-sm transition",
+              props.importing || !props.importUrl.trim()
+                ? "cursor-not-allowed border border-white/10 bg-white/5 text-white/35"
+                : "border border-white/10 bg-white/10 text-white hover:bg-white/15"
+            )}
               title={t(lang, "everybotUseMyLocation" as any)}
             >
               {geoBusy ? "…" : t(lang, "everybotUseMyLocation" as any)}
             </button>
           </div>
-          {geoErr ? <div className="mt-1 text-xs text-red-700">{geoErr}</div> : null}
+          {geoErr ? <div className="mt-1 text-xs text-red-300">{geoErr}</div> : null}
         </div>
 
         <div className="md:col-span-3">
-          <label className="mb-1 block text-xs font-semibold text-ew-primary">
+          <label className="mb-1 block text-xs font-semibold text-white/70">
             {t(lang, "everybotCityLabel" as any)}
           </label>
           <input
@@ -395,7 +392,7 @@ const supportedSources = useMemo(
         </div>
 
         <div className="md:col-span-3">
-          <label className="mb-1 block text-xs font-semibold text-ew-primary">
+          <label className="mb-1 block text-xs font-semibold text-white/70">
             {t(lang, "everybotDistrictLabel" as any)}
           </label>
           <input
@@ -407,7 +404,7 @@ const supportedSources = useMemo(
         </div>
 
         <div className="md:col-span-3">
-          <label className="mb-1 block text-xs font-semibold text-ew-primary">
+          <label className="mb-1 block text-xs font-semibold text-white/70">
             {t(lang, "everybotPriceMinLabel" as any)}
           </label>
           <input
@@ -420,7 +417,7 @@ const supportedSources = useMemo(
         </div>
 
         <div className="md:col-span-3">
-          <label className="mb-1 block text-xs font-semibold text-ew-primary">
+          <label className="mb-1 block text-xs font-semibold text-white/70">
             {t(lang, "everybotPriceMaxLabel" as any)}
           </label>
           <input
@@ -433,7 +430,7 @@ const supportedSources = useMemo(
         </div>
 
         <div className="md:col-span-2">
-          <label className="mb-1 block text-xs font-semibold text-ew-primary">
+          <label className="mb-1 block text-xs font-semibold text-white/70">
             {t(lang, "everybotAreaMinLabel" as any)}
           </label>
           <input
@@ -446,7 +443,7 @@ const supportedSources = useMemo(
         </div>
 
         <div className="md:col-span-2">
-          <label className="mb-1 block text-xs font-semibold text-ew-primary">
+          <label className="mb-1 block text-xs font-semibold text-white/70">
             {t(lang, "everybotAreaMaxLabel" as any)}
           </label>
           <input
@@ -459,7 +456,7 @@ const supportedSources = useMemo(
         </div>
 
         <div className="md:col-span-2">
-          <label className="mb-1 block text-xs font-semibold text-ew-primary">
+          <label className="mb-1 block text-xs font-semibold text-white/70">
             {t(lang, "everybotRoomsLabel" as any)}
           </label>
           <input
@@ -478,11 +475,11 @@ const supportedSources = useMemo(
           disabled={loading}
           onClick={onClickSearch}
           className={clsx(
-            "rounded-2xl border px-4 py-2 text-sm font-semibold shadow-sm transition",
-            loading
-              ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
-              : "border-gray-200 bg-white text-ew-primary hover:bg-ew-accent/10"
-          )}
+          "w-full rounded-2xl px-4 py-3 text-sm font-extrabold shadow-sm transition",
+          props.importing || !props.importUrl.trim()
+            ? "cursor-not-allowed border border-white/10 bg-white/5 text-white/35"
+            : "border border-white/10 bg-white/10 text-white hover:bg-white/15"
+        )}
         >
           {t(lang, "everybotSearchBtn" as any)}
         </button>
