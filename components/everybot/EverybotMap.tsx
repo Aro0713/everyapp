@@ -63,6 +63,7 @@ export default function EverybotMap({
 }) {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const roRef = useRef<ResizeObserver | null>(null);
   const [zoom, setZoom] = useState(6);
   const [bounds, setBounds] = useState<maplibregl.LngLatBoundsLike | null>(null);
 
@@ -95,64 +96,78 @@ export default function EverybotMap({
     return cluster.getClusters(bbox, Math.round(zoom));
   }, [cluster, bounds, zoom]);
 
-  useEffect(() => {
-    if (!containerRef.current) return;
-    if (mapRef.current) return;
+    useEffect(() => {
+      if (!containerRef.current) return;
+      if (mapRef.current) return;
 
-    const key = process.env.NEXT_PUBLIC_MAPTILER_KEY;
-    const styleUrl = key
-      // ✅ nowocześniej niż basic-v2: ciemniejszy i bardziej “premium”
-      ? `https://api.maptiler.com/maps/streets-v2-dark/style.json?key=${key}`
-      : "https://demotiles.maplibre.org/style.json";
+      const key = process.env.NEXT_PUBLIC_MAPTILER_KEY?.trim();
 
-    const m = new maplibregl.Map({
-      container: containerRef.current,
-      style: styleUrl,
-      center: [19.0, 52.0],
-      zoom: 6.3,
-      attributionControl: false,
-    });
+      const styleUrl = key
+        ? `https://api.maptiler.com/maps/streets-v2-dark/style.json?key=${encodeURIComponent(key)}`
+        : "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
-    // minimalistyczne sterowanie (premium UI)
-    m.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
-    m.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
+      const m = new maplibregl.Map({
+        container: containerRef.current,
+        style: styleUrl,
+        center: [19.0, 52.0],
+        zoom: 6.3,
+        attributionControl: false,
+      });
 
-    // subtle zoom limits
-    m.setMinZoom(4);
-    m.setMaxZoom(18);
+      m.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
+      m.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
 
-    const onMove = () => {
-      const z = m.getZoom();
-      const b = m.getBounds();
-      setZoom(z);
-      setBounds(b);
+      m.setMinZoom(4);
+      m.setMaxZoom(18);
 
-      if (onViewport) {
-        onViewport({
-          minLat: b.getSouth(),
-          minLng: b.getWest(),
-          maxLat: b.getNorth(),
-          maxLng: b.getEast(),
-          zoom: z,
+      const onMove = () => {
+        const z = m.getZoom();
+        const b = m.getBounds();
+        setZoom(z);
+        setBounds(b);
+
+        if (onViewport) {
+          onViewport({
+            minLat: b.getSouth(),
+            minLng: b.getWest(),
+            maxLat: b.getNorth(),
+            maxLng: b.getEast(),
+            zoom: z,
+          });
+        }
+      };
+
+      m.on("load", () => {
+        onMove();
+
+        // ✅ pierwszy stabilny resize po mount
+        requestAnimationFrame(() => m.resize());
+      });
+
+      m.on("moveend", onMove);
+      m.on("zoomend", onMove);
+
+      mapRef.current = m;
+
+      // ✅ STABILIZACJA ROZMIARU (to naprawia "skakanie")
+      if (containerRef.current) {
+        roRef.current = new ResizeObserver(() => {
+          requestAnimationFrame(() => {
+            m.resize();
+          });
         });
+
+        roRef.current.observe(containerRef.current);
       }
-    };
 
-    m.on("load", () => {
-      onMove();
-      // dopasuj rozmiar po pierwszym renderze (często potrzebne w gridach)
-      requestAnimationFrame(() => m.resize());
-    });
-    m.on("moveend", onMove);
-    m.on("zoomend", onMove);
+      return () => {
+        roRef.current?.disconnect();   // ✅ WAŻNE
+        roRef.current = null;
 
-    mapRef.current = m;
-
-    return () => {
-      m.remove();
-      mapRef.current = null;
-    };
-  }, [onViewport]);
+        m.remove();
+        mapRef.current = null;
+      };
+    }, [onViewport]);
 
   // render markers (DOM markers)
   useEffect(() => {
@@ -290,7 +305,7 @@ export default function EverybotMap({
   return (
     <div className="relative h-full w-full overflow-hidden">
       {/* Map */}
-      <div ref={containerRef} className="h-[520px] w-full lg:h-full" />
+      <div ref={containerRef} className="h-[520px] lg:h-[560px] w-full" />
 
       {/* Premium overlay (vignette + glass) */}
       <div className="pointer-events-none absolute inset-0">
