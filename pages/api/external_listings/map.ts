@@ -55,12 +55,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         el.price_amount,
         el.currency,
         el.updated_at,
-        el.lat,
-        el.lng,
+        el.lat::double precision as lat,
+        el.lng::double precision as lng,
         el.city,
         el.district,
         el.street,
-        -- ✅ ostatni zapisany tryb z actions: 'agent' | 'office'
         COALESCE(last_action.payload->>'mode', NULL) AS saved_mode
       FROM external_listings el
       LEFT JOIN LATERAL (
