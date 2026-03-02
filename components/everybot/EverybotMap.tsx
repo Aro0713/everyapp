@@ -357,7 +357,20 @@ export default function EverybotMap({
         }
         .ev-pop__btn:hover { background: rgba(255, 255, 255, 0.16); }
 
-        .ev-pin { all: unset; cursor: pointer; position: relative; user-select: none; transform: translateZ(0); }
+        .ev-pin {
+          all: unset;
+          cursor: pointer;
+          position: relative;
+          user-select: none;
+          transform: translateZ(0);
+          pointer-events: auto !important;
+          z-index: 10 !important;
+        }
+
+        .maplibregl-marker {
+          pointer-events: auto !important;
+          z-index: 10 !important;
+        }
 
         .ev-pin--single {
           width: 22px;
