@@ -60,11 +60,14 @@ export default function EverybotMap({
   const points = useMemo(() => {
     return (pins ?? [])
       .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng))
-      .map((p) => ({
-        type: "Feature" as const,
-        properties: { ...p, __kind: pinKind(p) },
-        geometry: { type: "Point" as const, coordinates: [p.lng, p.lat] as [number, number] },
-      }));
+      .map((p) => {
+        const lng = ((((p.lng + 180) % 360) + 360) % 360) - 180;
+        return {
+          type: "Feature" as const,
+          properties: { ...p, __kind: pinKind(p) },
+          geometry: { type: "Point" as const, coordinates: [lng, p.lat] as [number, number] },
+        };
+      });
   }, [pins]);
 
   // Supercluster index
@@ -146,8 +149,21 @@ export default function EverybotMap({
 
       const z = Math.round(m.getZoom());
       const b = m.getBounds();
-      const bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()] as [number, number, number, number];
-      const clustered = cluster.getClusters(bbox, z) as any[];
+
+      const west = b.getWest();
+      const east = b.getEast();
+      const south = b.getSouth();
+      const north = b.getNorth();
+
+      // ✅ jeśli bbox "zawija" (west > east) – dzielimy na 2 bboxy
+      let clustered: any[] = [];
+      if (west <= east) {
+        clustered = cluster.getClusters([west, south, east, north], z) as any[];
+      } else {
+        const left = cluster.getClusters([west, south, 180, north], z) as any[];
+        const right = cluster.getClusters([-180, south, east, north], z) as any[];
+        clustered = [...left, ...right];
+      }
 
       function dominantKind(clusterId: number): PinKind {
         try {
