@@ -54,6 +54,7 @@ export default function EverybotMap({
 }) {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const markersRef = useRef<maplibregl.Marker[]>([]);
 
   // GeoJSON points
   const points = useMemo(() => {
@@ -91,23 +92,38 @@ export default function EverybotMap({
       attributionControl: false,
     });
 
+    const hardResize = () => {
+      const delays = [0, 50, 150, 400];
+      for (const d of delays) {
+        window.setTimeout(() => {
+          try {
+            m.resize();
+          } catch {}
+        }, d);
+      }
+    };
+
+    m.on("load", hardResize);
+
     m.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
     m.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
     m.setMinZoom(4);
     m.setMaxZoom(18);
 
     mapRef.current = m;
-    
-    m.on("load", () => {
-      requestAnimationFrame(() => {
-        try { m.resize(); } catch {}
-      });
-    });
 
     return () => {
+      // odłącz hardResize
       try {
-        (m as any).__markers?.forEach((mk: maplibregl.Marker) => mk.remove());
+        m.off("load", hardResize);
       } catch {}
+
+      // usuń markery (pewnie)
+      try {
+        markersRef.current.forEach((mk) => mk.remove());
+      } catch {}
+      markersRef.current = [];
+
       m.remove();
       mapRef.current = null;
     };
@@ -119,11 +135,11 @@ export default function EverybotMap({
     if (!m) return;
 
     const render = () => {
-      // remove old markers
+      // remove old markers (pewnie)
       try {
-        (m as any).__markers?.forEach((mk: maplibregl.Marker) => mk.remove());
+        markersRef.current.forEach((mk) => mk.remove());
       } catch {}
-      (m as any).__markers = [];
+      markersRef.current = [];
 
       const markers: maplibregl.Marker[] = [];
 
@@ -135,7 +151,9 @@ export default function EverybotMap({
       function dominantKind(clusterId: number): PinKind {
         try {
           const leaves = cluster.getLeaves(clusterId, 20) as any[];
-          let office = 0, agent = 0, external = 0;
+          let office = 0,
+            agent = 0,
+            external = 0;
           for (const lf of leaves) {
             const k = (lf?.properties?.__kind ?? "external") as PinKind;
             if (k === "office") office++;
@@ -237,8 +255,19 @@ export default function EverybotMap({
         markers.push(new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat([lng, lat]).addTo(m));
       }
 
-      (m as any).__markers = markers;
+      markersRef.current = markers;
     };
+
+    // KROK 5: render dopiero po load
+    if (!m.loaded()) {
+      const onLoad = () => render();
+      m.once("load", onLoad);
+      return () => {
+        try {
+          m.off("load", onLoad);
+        } catch {}
+      };
+    }
 
     // render now (when pins change)
     render();
