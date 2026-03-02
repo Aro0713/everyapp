@@ -148,15 +148,6 @@ const [botFilters, setBotFilters] = useState<EverybotFilters>({
   const [highlightIds, setHighlightIds] = useState<string[]>([]);
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  const [mapViewport, setMapViewport] = useState<{
-    minLat: number;
-    minLng: number;
-    maxLat: number;
-    maxLng: number;
-    zoom: number;
-  } | null>(null);
-
-const mapFetchTimerRef = useRef<number | null>(null);
   const [botCursor, setBotCursor] = useState<{
   updated_at: string;
   id: string;
@@ -382,19 +373,6 @@ async function loadMapPins() {
     const qs = new URLSearchParams();
     qs.set("limit", "5000");
 
-    const f = botFiltersRef.current ?? botFilters;
-
-    const vNorm = normalizeVoivodeshipInput(f.voivodeship);
-    if (vNorm) qs.set("voivodeship", vNorm);
-    if (f.city?.trim()) qs.set("city", f.city.trim());
-    if (f.district?.trim()) qs.set("district", f.district.trim());
-    if (f.transactionType?.trim()) qs.set("transactionType", f.transactionType.trim());
-    if (mapViewport && mapViewport.zoom >= 8) {
-    qs.set("minLat", String(mapViewport.minLat));
-    qs.set("minLng", String(mapViewport.minLng));
-    qs.set("maxLat", String(mapViewport.maxLat));
-    qs.set("maxLng", String(mapViewport.maxLng));
-    }
     const r = await fetch(`/api/external_listings/map?${qs.toString()}`);
     const j = await r.json().catch(() => null);
 
@@ -402,18 +380,10 @@ async function loadMapPins() {
 
     setMapPins(Array.isArray(j?.pins) ? j.pins : []);
   } catch (e) {
-    console.warn("map load failed");
+    console.warn("map load failed", e);
   }
 }
-function scheduleMapPinsReload() {
-  if (tab !== "everybot") return; // ✅ guard
-  if (mapFetchTimerRef.current) window.clearTimeout(mapFetchTimerRef.current);
-  mapFetchTimerRef.current = window.setTimeout(() => {
-    loadMapPins().catch(() => null);
-  }, 350);
-}
 
-  // ✅ WSTAW TO TU (1:1)
   useEffect(() => {
     return () => {
       // ✅ abort list
@@ -434,11 +404,6 @@ function scheduleMapPinsReload() {
         searchIntervalRef.current = null;
       }
 
-      // ✅ stop map debounce
-      if (mapFetchTimerRef.current) {
-        window.clearTimeout(mapFetchTimerRef.current);
-        mapFetchTimerRef.current = null;
-      }
     };
   }, []);
 
@@ -492,25 +457,6 @@ function scheduleMapPinsReload() {
       })();
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [tab]);
-    useEffect(() => {
-  return () => {
-    try { botAbortRef.current?.abort(); } catch {}
-    botAbortRef.current = null;
-
-    try { refreshAbortRef.current?.abort(); } catch {}
-    refreshAbortRef.current = null;
-
-    if (searchIntervalRef.current) {
-      window.clearInterval(searchIntervalRef.current);
-      searchIntervalRef.current = null;
-    }
-
-    if (mapFetchTimerRef.current) {
-      window.clearTimeout(mapFetchTimerRef.current);
-      mapFetchTimerRef.current = null;
-    }
-  };
-}, []);
   
   useEffect(() => {
   const el = everybotTableRef.current;
@@ -1084,20 +1030,16 @@ return (
             )}
           >
             <EverybotMap
-              pins={mapPins}
-              onSelectId={(id) => {
-                setSelectedExternalId(id);
-                requestAnimationFrame(() => {
-                  const el = rowRefs.current[id];
-                  if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
-                });
-              }}
-              onViewport={(v) => {
-                setMapViewport(v);
-                scheduleMapPinsReload();
-              }}
-              resizeKey={`${tab}:${mapPins.length}`}
-            />
+                pins={mapPins}
+                onSelectId={(id) => {
+                  setSelectedExternalId(id);
+                  requestAnimationFrame(() => {
+                    const el = rowRefs.current[id];
+                    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+                  });
+                }}
+                resizeKey={`${tab}:${mapPins.length}`}
+              />
           </div>
         </div>
 
