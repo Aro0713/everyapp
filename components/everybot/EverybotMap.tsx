@@ -90,6 +90,7 @@ export default function EverybotMap({
       center: [19.0, 52.0],
       zoom: 7.1,
       attributionControl: false,
+      renderWorldCopies: false, 
     });
 
     const hardResize = () => {
