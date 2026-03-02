@@ -204,22 +204,47 @@ export default function EverybotMap({
           `;
 
           el.onclick = () => {
-            const clusterId = f.properties.cluster_id;
-            const leaves = cluster.getLeaves(clusterId, Infinity) as any[];
+          const clusterId = f.properties.cluster_id;
+          const expZoom = Math.min(cluster.getClusterExpansionZoom(clusterId), 18);
 
-            if (leaves.length) {
-              const first = leaves[0];
-              const [leafLng, leafLat] = first.geometry.coordinates;
+          // bierzemy próbkę liści (bez Infinity, żeby nie zabić UI)
+          const sampleN = Math.min(Number(f.properties.point_count) || 0, 250);
+          const leaves = cluster.getLeaves(clusterId, sampleN) as any[];
 
-              const expZoom = Math.min(cluster.getClusterExpansionZoom(clusterId), 18);
+          if (!leaves.length) {
+            // fallback: jak nie ma liści, to chociaż zoom (bez zmiany centrum)
+            m.easeTo({ zoom: expZoom, duration: 380 });
+            return;
+          }
 
-              m.easeTo({
-                center: [leafLng, leafLat], // 🔥 lecisz do realnego punktu
-                zoom: expZoom,
-                duration: 380,
-              });
+          let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+
+          for (const lf of leaves) {
+            const [x, y] = lf.geometry.coordinates as [number, number];
+            if (x < minLng) minLng = x;
+            if (x > maxLng) maxLng = x;
+            if (y < minLat) minLat = y;
+            if (y > maxLat) maxLat = y;
+          }
+
+          // jeśli próbka jest mała i punkty są prawie w jednym miejscu – zoomnij w środek bbox
+          if (!Number.isFinite(minLng) || !Number.isFinite(minLat) || !Number.isFinite(maxLng) || !Number.isFinite(maxLat)) {
+            m.easeTo({ zoom: expZoom, duration: 380 });
+            return;
+          }
+
+          m.fitBounds(
+            [
+              [minLng, minLat],
+              [maxLng, maxLat],
+            ],
+            {
+              padding: 70,
+              duration: 380,
+              maxZoom: expZoom,
             }
-          };
+          );
+        };
 
           markers.push(new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([lng, lat]).addTo(m));
           continue;
