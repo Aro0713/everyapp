@@ -56,15 +56,18 @@ export default function EverybotMap({
   pins,
   onSelectId,
   onViewport,
+  resizeKey,
 }: {
   pins: Pin[];
   onSelectId?: (id: string) => void;
   onViewport?: (v: { minLat: number; minLng: number; maxLat: number; maxLng: number; zoom: number }) => void;
+  resizeKey?: string; // ✅ NOWE
 }) {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const roRef = useRef<ResizeObserver | null>(null);
   const onViewportRef = useRef<typeof onViewport>(onViewport);
+  const onMoveRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     onViewportRef.current = onViewport;
@@ -128,24 +131,25 @@ useEffect(() => {
   m.setMinZoom(4);
   m.setMaxZoom(18);
 
-  const onMove = () => {
-    const z = m.getZoom();
-    const b = m.getBounds();
-    setZoom(z);
-    setBounds(b);
+const onMove = () => {
+  const z = m.getZoom();
+  const b = m.getBounds();
+  setZoom(z);
+  setBounds(b);
 
-    // ✅ NIE używaj onViewport z closure — bierz z ref
-    const cb = onViewportRef.current;
-    if (cb) {
-      cb({
-        minLat: b.getSouth(),
-        minLng: b.getWest(),
-        maxLat: b.getNorth(),
-        maxLng: b.getEast(),
-        zoom: z,
-      });
-    }
-  };
+  const cb = onViewportRef.current;
+  if (cb) {
+    cb({
+      minLat: b.getSouth(),
+      minLng: b.getWest(),
+      maxLat: b.getNorth(),
+      maxLng: b.getEast(),
+      zoom: z,
+    });
+  }
+};
+
+onMoveRef.current = onMove;
 
   m.on("load", () => {
     onMove();
@@ -174,31 +178,44 @@ useEffect(() => {
       // ✅ throttle do 1 resize per frame (bez pętli)
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       rafRef.current = requestAnimationFrame(() => {
-        rafRef.current = null;
-        m.resize();
-      });
+      rafRef.current = null;
+      m.resize();
+      onMoveRef.current?.(); // ✅ FIX3
+    });
     });
 
     roRef.current.observe(containerRef.current);
   }
 
-  return () => {
-    roRef.current?.disconnect();
-    roRef.current = null;
+return () => {
+  roRef.current?.disconnect();
+  roRef.current = null;
 
-    if (rafRef.current) {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-    }
-    lastSizeRef.current = null;
+  if (rafRef.current) {
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = null;
+  }
+  lastSizeRef.current = null;
 
-    m.remove();
-    mapRef.current = null;
-  };
+  onMoveRef.current = null; // ✅ FIX3
+
+  m.remove();
+  mapRef.current = null;
+};
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
+useEffect(() => {
+  const m = mapRef.current;
+  if (!m) return;
 
+  requestAnimationFrame(() => {
+    try {
+      m.resize();
+      onMoveRef.current?.(); // ✅ ważne: odśwież bounds/zoom => clustered => markery
+    } catch {}
+  });
+}, [resizeKey]);
   // render markers (DOM markers)
   useEffect(() => {
     const m = mapRef.current;

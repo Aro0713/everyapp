@@ -384,7 +384,8 @@ async function loadMapPins() {
 
     const f = botFiltersRef.current ?? botFilters;
 
-    if (f.voivodeship?.trim()) qs.set("voivodeship", f.voivodeship.trim());
+    const vNorm = normalizeVoivodeshipInput(f.voivodeship);
+    if (vNorm) qs.set("voivodeship", vNorm);
     if (f.city?.trim()) qs.set("city", f.city.trim());
     if (f.district?.trim()) qs.set("district", f.district.trim());
     if (f.transactionType?.trim()) qs.set("transactionType", f.transactionType.trim());
@@ -405,17 +406,41 @@ async function loadMapPins() {
   }
 }
 function scheduleMapPinsReload() {
+  if (tab !== "everybot") return; // ✅ guard
   if (mapFetchTimerRef.current) window.clearTimeout(mapFetchTimerRef.current);
   mapFetchTimerRef.current = window.setTimeout(() => {
     loadMapPins().catch(() => null);
   }, 350);
 }
 
-useEffect(() => {
-  return () => {
-    if (mapFetchTimerRef.current) window.clearTimeout(mapFetchTimerRef.current);
-  };
-}, []);
+  // ✅ WSTAW TO TU (1:1)
+  useEffect(() => {
+    return () => {
+      // ✅ abort list
+      try {
+        botAbortRef.current?.abort();
+      } catch {}
+      botAbortRef.current = null;
+
+      // ✅ abort refresh
+      try {
+        refreshAbortRef.current?.abort();
+      } catch {}
+      refreshAbortRef.current = null;
+
+      // ✅ stop live/search timer
+      if (searchIntervalRef.current) {
+        window.clearInterval(searchIntervalRef.current);
+        searchIntervalRef.current = null;
+      }
+
+      // ✅ stop map debounce
+      if (mapFetchTimerRef.current) {
+        window.clearTimeout(mapFetchTimerRef.current);
+        mapFetchTimerRef.current = null;
+      }
+    };
+  }, []);
 
   async function importLink() {
     const url = importUrl.trim();
@@ -468,13 +493,24 @@ useEffect(() => {
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [tab]);
     useEffect(() => {
-    return () => {
-      if (searchIntervalRef.current) {
-        window.clearInterval(searchIntervalRef.current);
-        searchIntervalRef.current = null;
-      }
-    };
-  }, []);
+  return () => {
+    try { botAbortRef.current?.abort(); } catch {}
+    botAbortRef.current = null;
+
+    try { refreshAbortRef.current?.abort(); } catch {}
+    refreshAbortRef.current = null;
+
+    if (searchIntervalRef.current) {
+      window.clearInterval(searchIntervalRef.current);
+      searchIntervalRef.current = null;
+    }
+
+    if (mapFetchTimerRef.current) {
+      window.clearTimeout(mapFetchTimerRef.current);
+      mapFetchTimerRef.current = null;
+    }
+  };
+}, []);
   
   useEffect(() => {
   const el = everybotTableRef.current;
@@ -1033,129 +1069,142 @@ return (
           </ul>
         </div>
       </>
-    ) : (
-      <>
-        {/* EVERYBOT */}
-        <div className="space-y-3">
-          {/* ===== MAPA + AGENT (2/3 + 1/3) ===== */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
-            <div className="lg:col-span-2">
-                <div className="h-full min-h-[560px] rounded-3xl border border-white/10 bg-slate-950/45 shadow-2xl backdrop-blur-xl overflow-hidden">
-                  <EverybotMap
-                    pins={mapPins}
-                    onSelectId={(id) => {
-                      setSelectedExternalId(id);
-                      requestAnimationFrame(() => {
-                        const el = rowRefs.current[id];
-                        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+) : (
+  <>
+    {/* EVERYBOT */}
+    <div className="space-y-3">
+      {/* ===== MAPA + AGENT ===== */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch min-w-0">
+        {/* MAPA */}
+        <div className="lg:col-span-2 min-w-0">
+          <div
+            className={clsx(
+              "relative min-w-0 overflow-hidden rounded-3xl border border-white/10 bg-slate-950/45 shadow-2xl backdrop-blur-xl",
+              "h-[clamp(320px,55vh,620px)]"
+            )}
+          >
+            <EverybotMap
+              pins={mapPins}
+              onSelectId={(id) => {
+                setSelectedExternalId(id);
+                requestAnimationFrame(() => {
+                  const el = rowRefs.current[id];
+                  if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+                });
+              }}
+              onViewport={(v) => {
+                setMapViewport(v);
+                scheduleMapPinsReload();
+              }}
+              resizeKey={`${tab}:${mapPins.length}`}
+            />
+          </div>
+        </div>
+
+        {/* PANEL AGENTA */}
+        <div className="lg:col-span-1 min-w-0">
+          <div
+            className={clsx(
+              "min-w-0 overflow-hidden rounded-3xl border border-white/10 bg-slate-950/55 shadow-2xl backdrop-blur-xl",
+              "h-[clamp(320px,55vh,620px)]",
+              "lg:sticky lg:top-4"
+            )}
+          >
+            <div className="border-b border-white/10 bg-white/5 px-4 py-3">
+              <div className="text-sm font-extrabold text-white/90">EveryBOT</div>
+              <div className="mt-0.5 text-xs text-white/55">Agent i decyzje</div>
+            </div>
+
+            <div className="p-3">
+              <EverybotAgentPanel
+                contextFilters={botFilters}
+                onAgentResult={async ({ actions }) => {
+                  let currentFilters = botFilters;
+
+                  for (const a of actions ?? []) {
+                    if (a?.type === "set_filters" && a.filters && typeof a.filters === "object") {
+                      currentFilters = { ...currentFilters, ...a.filters };
+                      setBotFilters(currentFilters);
+
+                      setBotMatchedSince(null);
+                      setBotSearching(false);
+                      setBotSearchSeconds(0);
+
+                      const { rows } = await loadEverybot({
+                        filters: currentFilters,
+                        cursor: null,
+                        append: false,
+                        matchedSince: null,
                       });
-                    }}
-                    onViewport={(v) => {
-                      setMapViewport(v);
-                      scheduleMapPinsReload();
-                    }}
-                  />
-                </div>
-              </div>
-             <div className="lg:col-span-1">
-            <div className="h-full min-h-[560px] rounded-3xl border border-white/10 bg-slate-950/55 shadow-2xl backdrop-blur-xl overflow-hidden">
-              <div className="border-b border-white/10 bg-white/5 px-4 py-3">
-                <div className="text-sm font-extrabold text-white/90">EveryBOT</div>
-                <div className="mt-0.5 text-xs text-white/55">Agent i decyzje</div>
-              </div>
+                      setHighlightFromRows(rows, 10);
+                      await loadMapPins().catch(() => null);
+                      continue;
+                    }
 
-              <div className="p-3">
-                <EverybotAgentPanel
-                  contextFilters={botFilters}
-                  onAgentResult={async ({ actions }) => {
-                    // ... zostaje 1:1 jak masz
-                    let currentFilters = botFilters;
-
-                    for (const a of actions ?? []) {
-                      if (a?.type === "set_filters" && a.filters && typeof a.filters === "object") {
-                        currentFilters = { ...currentFilters, ...a.filters };
-                        setBotFilters(currentFilters);
-
-                        setBotMatchedSince(null);
-                        setBotSearching(false);
-                        setBotSearchSeconds(0);
-
-                        const { rows } = await loadEverybot({
+                    if (a?.type === "run_live") {
+                      await (async () => {
+                        const local = await loadEverybot({
                           filters: currentFilters,
                           cursor: null,
                           append: false,
                           matchedSince: null,
                         });
-                        setHighlightFromRows(rows, 10);
-                        await loadMapPins().catch(() => null);
-                        continue;
-                      }
-
-                      if (a?.type === "run_live") {
-                        await (async () => {
-                          const local = await loadEverybot({
+                        if (local.rows.length === 0) {
+                          const runTs = typeof a.runTs === "string" ? a.runTs : new Date().toISOString();
+                          await runLiveHunter(currentFilters, runTs);
+                          await loadEverybot({
                             filters: currentFilters,
                             cursor: null,
                             append: false,
                             matchedSince: null,
                           });
-                          if (local.rows.length === 0) {
-                            const runTs = typeof a.runTs === "string" ? a.runTs : new Date().toISOString();
-                            await runLiveHunter(currentFilters, runTs);
-                            await loadEverybot({
-                              filters: currentFilters,
-                              cursor: null,
-                              append: false,
-                              matchedSince: null,
-                            });
-                          }
-                        })();
-                        continue;
-                      }
-
-                      if (a?.type === "load_neon") {
-                        setBotMatchedSince(null);
-
-                        const { rows } = await loadEverybot({
-                          filters: currentFilters,
-                          cursor: null,
-                          append: false,
-                          matchedSince: null,
-                        });
-                        setHighlightFromRows(rows, 10);
-                        await loadMapPins().catch(() => null);
-                        continue;
-                      }
-
-                      if (a?.type === "refresh_map") {
-                        await loadMapPins().catch(() => null);
-                        continue;
-                      }
-
-                      if (a?.type === "geocode") {
-                        const limit = Number(a.limit ?? 50);
-                        await fetch("/api/everybot/geocode", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ limit: Number.isFinite(limit) ? limit : 50 }),
-                        });
-                        await refreshEverybotList();
-                        await loadMapPins().catch(() => null);
-                        continue;
-                      }
-
-                      if (a?.type === "open_listing" && typeof a.url === "string") {
-                        window.open(a.url, "_blank", "noopener,noreferrer");
-                        continue;
-                      }
+                        }
+                      })();
+                      continue;
                     }
-                  }}
-                />
-              </div>
+
+                    if (a?.type === "load_neon") {
+                      setBotMatchedSince(null);
+
+                      const { rows } = await loadEverybot({
+                        filters: currentFilters,
+                        cursor: null,
+                        append: false,
+                        matchedSince: null,
+                      });
+                      setHighlightFromRows(rows, 10);
+                      await loadMapPins().catch(() => null);
+                      continue;
+                    }
+
+                    if (a?.type === "refresh_map") {
+                      await loadMapPins().catch(() => null);
+                      continue;
+                    }
+
+                    if (a?.type === "geocode") {
+                      const limit = Number(a.limit ?? 50);
+                      await fetch("/api/everybot/geocode", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ limit: Number.isFinite(limit) ? limit : 50 }),
+                      });
+                      await refreshEverybotList();
+                      await loadMapPins().catch(() => null);
+                      continue;
+                    }
+
+                    if (a?.type === "open_listing" && typeof a.url === "string") {
+                      window.open(a.url, "_blank", "noopener,noreferrer");
+                      continue;
+                    }
+                  }
+                }}
+              />
             </div>
           </div>
-          </div>
-
+        </div>
+      </div>
           {/* ===== FILTR + TABELA ===== */}
           <div className="rounded-3xl border border-white/10 bg-slate-950/45 p-4 shadow-2xl backdrop-blur-xl">
             <EverybotSearchPanel
