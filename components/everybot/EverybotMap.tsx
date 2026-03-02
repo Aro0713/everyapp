@@ -64,6 +64,11 @@ export default function EverybotMap({
   const mapRef = useRef<maplibregl.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const roRef = useRef<ResizeObserver | null>(null);
+  const onViewportRef = useRef<typeof onViewport>(onViewport);
+
+  useEffect(() => {
+    onViewportRef.current = onViewport;
+  }, [onViewport]);
 
   const rafRef = useRef<number | null>(null); // ✅ DODANE
   const lastSizeRef = useRef<{ w: number; h: number } | null>(null); // ✅ DODANE
@@ -99,96 +104,100 @@ export default function EverybotMap({
     return cluster.getClusters(bbox, Math.round(zoom));
   }, [cluster, bounds, zoom]);
 
-    useEffect(() => {
-      if (!containerRef.current) return;
-      if (mapRef.current) return;
+useEffect(() => {
+  if (!containerRef.current) return;
+  if (mapRef.current) return;
 
-      const key = process.env.NEXT_PUBLIC_MAPTILER_KEY?.trim();
+  const key = process.env.NEXT_PUBLIC_MAPTILER_KEY?.trim();
 
-      const styleUrl = key
-        ? `https://api.maptiler.com/maps/streets-v2-dark/style.json?key=${encodeURIComponent(key)}`
-        : "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
+  const styleUrl = key
+    ? `https://api.maptiler.com/maps/streets-v2-dark/style.json?key=${encodeURIComponent(key)}`
+    : "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
-      const m = new maplibregl.Map({
-        container: containerRef.current,
-        style: styleUrl,
-        center: [19.0, 52.0],
-        zoom: 6.3,
-        attributionControl: false,
+  const m = new maplibregl.Map({
+    container: containerRef.current,
+    style: styleUrl,
+    center: [19.0, 52.0],
+    zoom: 6.3,
+    attributionControl: false,
+  });
+
+  m.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
+  m.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
+
+  m.setMinZoom(4);
+  m.setMaxZoom(18);
+
+  const onMove = () => {
+    const z = m.getZoom();
+    const b = m.getBounds();
+    setZoom(z);
+    setBounds(b);
+
+    // ✅ NIE używaj onViewport z closure — bierz z ref
+    const cb = onViewportRef.current;
+    if (cb) {
+      cb({
+        minLat: b.getSouth(),
+        minLng: b.getWest(),
+        maxLat: b.getNorth(),
+        maxLng: b.getEast(),
+        zoom: z,
       });
-
-      m.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
-      m.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
-
-      m.setMinZoom(4);
-      m.setMaxZoom(18);
-
-      const onMove = () => {
-        const z = m.getZoom();
-        const b = m.getBounds();
-        setZoom(z);
-        setBounds(b);
-
-        if (onViewport) {
-          onViewport({
-            minLat: b.getSouth(),
-            minLng: b.getWest(),
-            maxLat: b.getNorth(),
-            maxLng: b.getEast(),
-            zoom: z,
-          });
-        }
-      };
-
-      m.on("load", () => {
-        onMove();
-      });
-
-      m.on("moveend", onMove);
-      m.on("zoomend", onMove);
-
-      mapRef.current = m;
-
-      // ✅ STABILIZACJA ROZMIARU (to naprawia "skakanie")
-    if (containerRef.current) {
-      roRef.current = new ResizeObserver((entries) => {
-        const entry = entries[0];
-        if (!entry) return;
-
-        const cr = entry.contentRect;
-        const w = Math.round(cr.width);
-        const h = Math.round(cr.height);
-
-        // ✅ resize tylko jeśli realnie zmienił się rozmiar
-        const last = lastSizeRef.current;
-        if (last && last.w === w && last.h === h) return;
-        lastSizeRef.current = { w, h };
-
-        // ✅ throttle do 1 resize per frame (bez pętli)
-        if (rafRef.current) cancelAnimationFrame(rafRef.current);
-        rafRef.current = requestAnimationFrame(() => {
-          rafRef.current = null;
-          m.resize();
-        });
-      });
-
-      roRef.current.observe(containerRef.current);
     }
+  };
 
-     return () => {
-      roRef.current?.disconnect();
-      roRef.current = null;
+  m.on("load", () => {
+    onMove();
+  });
 
-      if (rafRef.current) {
-        cancelAnimationFrame(rafRef.current);
+  m.on("moveend", onMove);
+  m.on("zoomend", onMove);
+
+  mapRef.current = m;
+
+  // ✅ STABILIZACJA ROZMIARU (to naprawia "skakanie")
+  if (containerRef.current) {
+    roRef.current = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+
+      const cr = entry.contentRect;
+      const w = Math.round(cr.width);
+      const h = Math.round(cr.height);
+
+      // ✅ resize tylko jeśli realnie zmienił się rozmiar
+      const last = lastSizeRef.current;
+      if (last && last.w === w && last.h === h) return;
+      lastSizeRef.current = { w, h };
+
+      // ✅ throttle do 1 resize per frame (bez pętli)
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
         rafRef.current = null;
-      }
-      lastSizeRef.current = null;
+        m.resize();
+      });
+    });
 
-      m.remove();
-      mapRef.current = null;
-    };
-    }, [onViewport]);
+    roRef.current.observe(containerRef.current);
+  }
+
+  return () => {
+    roRef.current?.disconnect();
+    roRef.current = null;
+
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    lastSizeRef.current = null;
+
+    m.remove();
+    mapRef.current = null;
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
 
   // render markers (DOM markers)
   useEffect(() => {
