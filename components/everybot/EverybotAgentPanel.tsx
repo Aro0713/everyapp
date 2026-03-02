@@ -83,7 +83,7 @@ export default function EverybotAgentPanel({
   }
 
   return (
-    <div className="h-[70vh] rounded-2xl border border-gray-200 bg-white shadow-sm flex flex-col overflow-hidden">
+    <div className="h-[70vh] rounded-2xl border border-gray-200 bg-white/5 shadow-sm flex flex-col overflow-hidden">
       <div className="p-4 border-b border-gray-100">
         <div className="text-sm font-extrabold text-ew-primary">Agent EveryBOT</div>
         <div className="text-xs text-gray-500">Tekst • głos • pliki</div>
@@ -115,7 +115,7 @@ export default function EverybotAgentPanel({
       <div className="p-3 border-t border-gray-100 flex gap-2 items-center">
         <button
           type="button"
-          className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-ew-primary hover:bg-ew-accent/10"
+          className="rounded-xl border border-gray-200 bg-white/5 px-3 py-2 text-xs font-semibold text-ew-primary hover:bg-ew-accent/10"
           onClick={() => fileRef.current?.click()}
           disabled={sending}
         >

@@ -48,13 +48,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { rows } = await pool.query(
       `
       SELECT
-        id, source, source_url, title, price_amount, currency, updated_at,
-        lat, lng, city, district, street
-      FROM external_listings
-      WHERE office_id = $1
-        AND lat IS NOT NULL AND lng IS NOT NULL
+        el.id,
+        el.source,
+        el.source_url,
+        el.title,
+        el.price_amount,
+        el.currency,
+        el.updated_at,
+        el.lat,
+        el.lng,
+        el.city,
+        el.district,
+        el.street,
+        -- ✅ ostatni zapisany tryb z actions: 'agent' | 'office'
+        COALESCE(last_action.payload->>'mode', NULL) AS saved_mode
+      FROM external_listings el
+      LEFT JOIN LATERAL (
+        SELECT payload
+        FROM external_listing_actions
+        WHERE office_id = el.office_id
+          AND external_listing_id = el.id
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+      ) last_action ON true
+      WHERE el.office_id = $1
+        AND el.lat IS NOT NULL AND el.lng IS NOT NULL
         ${whereBbox}
-      ORDER BY updated_at DESC, id DESC
+      ORDER BY el.updated_at DESC, el.id DESC
       LIMIT $2
       `,
       params
