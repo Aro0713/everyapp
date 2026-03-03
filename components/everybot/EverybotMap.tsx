@@ -84,6 +84,8 @@ export default function EverybotMap({ pins, onSelectId }: Props) {
         if (!feature) return;
 
         const props: any = feature.properties ?? {};
+        console.log("[EveryBOT][POPUP] props keys:", Object.keys(props));
+        console.log("[EveryBOT][POPUP] props:", props);
         const id = String(props.id ?? "");
         if (!id) return;
 
@@ -106,7 +108,7 @@ export default function EverybotMap({ pins, onSelectId }: Props) {
 
         // === POPUP z danych feature.properties ===
         const titleRaw = String(props.title ?? "").trim();
-        const title = escapeHtml(titleRaw || "Oferta");
+        const title = escapeHtml(titleRaw || String(props.id ?? "Oferta"));
 
         const sourceRaw = String(props.source ?? "").trim();
         const source = escapeHtml(sourceRaw);
