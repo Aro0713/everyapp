@@ -54,6 +54,7 @@ export default function EverybotMap({
   const mapRef = useRef<maplibregl.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
+  const roRef = useRef<ResizeObserver | null>(null);
 
   // normalizujemy do liczb i zakresu lng [-180..180]
   const cleanPins = useMemo(() => {
@@ -105,6 +106,11 @@ export default function EverybotMap({
     m.setMaxZoom(18);
 
     mapRef.current = m;
+        
+    roRef.current = new ResizeObserver(() => {
+      try { m.resize(); } catch {}
+    });
+    roRef.current.observe(containerRef.current);
 
     return () => {
       try {
