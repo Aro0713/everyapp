@@ -207,28 +207,42 @@ export default function EverybotMap({
           const clusterId = f.properties.cluster_id;
           const expZoom = Math.min(cluster.getClusterExpansionZoom(clusterId), 18);
 
-          // bierzemy próbkę liści (bez Infinity, żeby nie zabić UI)
-          const sampleN = Math.min(Number(f.properties.point_count) || 0, 250);
-          const leaves = cluster.getLeaves(clusterId, sampleN) as any[];
-
-          if (!leaves.length) {
-            // fallback: jak nie ma liści, to chociaż zoom (bez zmiany centrum)
+          const total = Number(f.properties.point_count) || 0;
+          if (total <= 0) {
             m.easeTo({ zoom: expZoom, duration: 380 });
             return;
           }
 
+          const sampleN = Math.min(total, 250);
+
+          // ✅ bierzemy 3 próbki z różnych offsetów, żeby bbox nie był “z jednego regionu”
+          const offsets = total <= sampleN
+            ? [0]
+            : [
+                0,
+                Math.floor((total - sampleN) / 2),
+                Math.max(total - sampleN, 0),
+              ];
+
           let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
 
-          for (const lf of leaves) {
-            const [x, y] = lf.geometry.coordinates as [number, number];
-            if (x < minLng) minLng = x;
-            if (x > maxLng) maxLng = x;
-            if (y < minLat) minLat = y;
-            if (y > maxLat) maxLat = y;
+          for (const off of offsets) {
+            const leaves = cluster.getLeaves(clusterId, sampleN, off) as any[];
+            for (const lf of leaves) {
+              const [x, y] = lf.geometry.coordinates as [number, number];
+              if (x < minLng) minLng = x;
+              if (x > maxLng) maxLng = x;
+              if (y < minLat) minLat = y;
+              if (y > maxLat) maxLat = y;
+            }
           }
 
-          // jeśli próbka jest mała i punkty są prawie w jednym miejscu – zoomnij w środek bbox
-          if (!Number.isFinite(minLng) || !Number.isFinite(minLat) || !Number.isFinite(maxLng) || !Number.isFinite(maxLat)) {
+          if (
+            !Number.isFinite(minLng) ||
+            !Number.isFinite(minLat) ||
+            !Number.isFinite(maxLng) ||
+            !Number.isFinite(maxLat)
+          ) {
             m.easeTo({ zoom: expZoom, duration: 380 });
             return;
           }
@@ -245,7 +259,6 @@ export default function EverybotMap({
             }
           );
         };
-
           markers.push(new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([lng, lat]).addTo(m));
           continue;
         }
