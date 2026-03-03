@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import Supercluster from "supercluster";
 
 type Pin = {
   id: string;
@@ -56,26 +55,15 @@ export default function EverybotMap({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
 
-  // GeoJSON points
-  const points = useMemo(() => {
+  // normalizujemy do liczb i zakresu lng [-180..180]
+  const cleanPins = useMemo(() => {
     return (pins ?? [])
       .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng))
       .map((p) => {
         const lng = ((((p.lng + 180) % 360) + 360) % 360) - 180;
-        return {
-          type: "Feature" as const,
-          properties: { ...p, __kind: pinKind(p) },
-          geometry: { type: "Point" as const, coordinates: [lng, p.lat] as [number, number] },
-        };
+        return { ...p, lng };
       });
   }, [pins]);
-
-  // Supercluster index
-  const cluster = useMemo(() => {
-    const sc = new Supercluster({ radius: 64, maxZoom: 18 });
-    sc.load(points as any);
-    return sc;
-  }, [points]);
 
   // Create map once
   useEffect(() => {
@@ -93,7 +81,7 @@ export default function EverybotMap({
       center: [19.0, 52.0],
       zoom: 7.1,
       attributionControl: false,
-      renderWorldCopies: false, 
+      renderWorldCopies: false,
     });
 
     const hardResize = () => {
@@ -111,18 +99,18 @@ export default function EverybotMap({
 
     m.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
     m.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
+
+    // zostawiamy Twoje wymaganie: zoom-out do 4 ok
     m.setMinZoom(4);
     m.setMaxZoom(18);
 
     mapRef.current = m;
 
     return () => {
-      // odłącz hardResize
       try {
         m.off("load", hardResize);
       } catch {}
 
-      // usuń markery (pewnie)
       try {
         markersRef.current.forEach((mk) => mk.remove());
       } catch {}
@@ -133,13 +121,13 @@ export default function EverybotMap({
     };
   }, []);
 
-  // Render markers whenever pins change OR after move/zoom ends
+  // Render ALL pins as individual markers (no clustering)
   useEffect(() => {
     const m = mapRef.current;
     if (!m) return;
 
     const render = () => {
-      // remove old markers (pewnie)
+      // remove old markers
       try {
         markersRef.current.forEach((mk) => mk.remove());
       } catch {}
@@ -147,124 +135,8 @@ export default function EverybotMap({
 
       const markers: maplibregl.Marker[] = [];
 
-      const z = Math.round(m.getZoom());
-      const b = m.getBounds();
-
-      const west = b.getWest();
-      const east = b.getEast();
-      const south = b.getSouth();
-      const north = b.getNorth();
-
-      // ✅ jeśli bbox "zawija" (west > east) – dzielimy na 2 bboxy
-      let clustered: any[] = [];
-      if (west <= east) {
-        clustered = cluster.getClusters([west, south, east, north], z) as any[];
-      } else {
-        const left = cluster.getClusters([west, south, 180, north], z) as any[];
-        const right = cluster.getClusters([-180, south, east, north], z) as any[];
-        clustered = [...left, ...right];
-      }
-
-      function dominantKind(clusterId: number): PinKind {
-        try {
-          const leaves = cluster.getLeaves(clusterId, 20) as any[];
-          let office = 0,
-            agent = 0,
-            external = 0;
-          for (const lf of leaves) {
-            const k = (lf?.properties?.__kind ?? "external") as PinKind;
-            if (k === "office") office++;
-            else if (k === "agent") agent++;
-            else external++;
-          }
-          if (office >= agent && office >= external) return "office";
-          if (agent >= office && agent >= external) return "agent";
-          return "external";
-        } catch {
-          return "external";
-        }
-      }
-
-      for (const f of clustered) {
-        const [lng, lat] = f.geometry.coordinates as [number, number];
-        const isCluster = Boolean(f.properties.cluster);
-
-        if (isCluster) {
-          const count = Number(f.properties.point_count) || 0;
-          const kind = dominantKind(f.properties.cluster_id);
-          const c = kindColor(kind);
-
-          const el = document.createElement("button");
-          el.type = "button";
-          el.className = "ev-pin ev-pin--cluster";
-          el.setAttribute("aria-label", `Cluster: ${count}`);
-          el.innerHTML = `
-            <span class="ev-pin__clusterRing" style="box-shadow: 0 0 0 6px ${c.ring};"></span>
-            <span class="ev-pin__clusterCount">${count}</span>
-          `;
-
-          el.onclick = () => {
-          const clusterId = f.properties.cluster_id;
-          const expZoom = Math.min(cluster.getClusterExpansionZoom(clusterId), 18);
-
-          const total = Number(f.properties.point_count) || 0;
-          if (total <= 0) {
-            m.easeTo({ zoom: expZoom, duration: 380 });
-            return;
-          }
-
-          const sampleN = Math.min(total, 250);
-
-          // ✅ bierzemy 3 próbki z różnych offsetów, żeby bbox nie był “z jednego regionu”
-          const offsets = total <= sampleN
-            ? [0]
-            : [
-                0,
-                Math.floor((total - sampleN) / 2),
-                Math.max(total - sampleN, 0),
-              ];
-
-          let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
-
-          for (const off of offsets) {
-            const leaves = cluster.getLeaves(clusterId, sampleN, off) as any[];
-            for (const lf of leaves) {
-              const [x, y] = lf.geometry.coordinates as [number, number];
-              if (x < minLng) minLng = x;
-              if (x > maxLng) maxLng = x;
-              if (y < minLat) minLat = y;
-              if (y > maxLat) maxLat = y;
-            }
-          }
-
-          if (
-            !Number.isFinite(minLng) ||
-            !Number.isFinite(minLat) ||
-            !Number.isFinite(maxLng) ||
-            !Number.isFinite(maxLat)
-          ) {
-            m.easeTo({ zoom: expZoom, duration: 380 });
-            return;
-          }
-
-          m.fitBounds(
-            [
-              [minLng, minLat],
-              [maxLng, maxLat],
-            ],
-            {
-              padding: 70,
-              duration: 380,
-              maxZoom: expZoom,
-            }
-          );
-        };
-          markers.push(new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([lng, lat]).addTo(m));
-          continue;
-        }
-
-        const p = f.properties as any as Pin & { __kind?: PinKind };
-        const kind = (p.__kind ?? "external") as PinKind;
+      for (const p of cleanPins) {
+        const kind = pinKind(p);
         const c = kindColor(kind);
 
         const el = document.createElement("button");
@@ -303,7 +175,7 @@ export default function EverybotMap({
             maxWidth: "320px",
             offset: 16,
           })
-            .setLngLat([lng, lat])
+            .setLngLat([p.lng, p.lat])
             .setHTML(html)
             .addTo(m);
 
@@ -320,13 +192,12 @@ export default function EverybotMap({
           }, 0);
         };
 
-        markers.push(new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat([lng, lat]).addTo(m));
+        markers.push(new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat([p.lng, p.lat]).addTo(m));
       }
 
       markersRef.current = markers;
     };
 
-    // KROK 5: render dopiero po load
     if (!m.loaded()) {
       const onLoad = () => render();
       m.once("load", onLoad);
@@ -337,10 +208,9 @@ export default function EverybotMap({
       };
     }
 
-    // render now (when pins change)
     render();
 
-    // render after user moves/zooms
+    // re-render po zoom/pan (żeby marker layer zawsze była świeża)
     m.off("moveend", render);
     m.off("zoomend", render);
     m.on("moveend", render);
@@ -350,7 +220,7 @@ export default function EverybotMap({
       m.off("moveend", render);
       m.off("zoomend", render);
     };
-  }, [cluster, onSelectId]);
+  }, [cleanPins, onSelectId]);
 
   return (
     <div className="relative h-full w-full overflow-hidden">
@@ -378,51 +248,6 @@ export default function EverybotMap({
 
       <style jsx global>{`
         .maplibregl-canvas:focus { outline: none; }
-
-        .maplibregl-ctrl-top-right { margin: 12px 12px 0 0; }
-        .maplibregl-ctrl-group {
-          background: rgba(2, 6, 23, 0.55) !important;
-          backdrop-filter: blur(14px);
-          border: 1px solid rgba(255, 255, 255, 0.1) !important;
-          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
-          overflow: hidden;
-        }
-        .maplibregl-ctrl button { filter: brightness(1.05); }
-        .maplibregl-ctrl button:hover { background: rgba(255, 255, 255, 0.08) !important; }
-
-        .maplibregl-popup-content {
-          background: rgba(2, 6, 23, 0.72) !important;
-          color: rgba(255, 255, 255, 0.92) !important;
-          border: 1px solid rgba(255, 255, 255, 0.12) !important;
-          border-radius: 16px !important;
-          box-shadow: 0 30px 90px rgba(0, 0, 0, 0.5) !important;
-          backdrop-filter: blur(16px);
-          padding: 14px 14px 12px !important;
-        }
-        .maplibregl-popup-close-button {
-          color: rgba(255, 255, 255, 0.7) !important;
-          font-size: 18px !important;
-          padding: 6px 10px !important;
-        }
-        .maplibregl-popup-tip {
-          border-top-color: rgba(2, 6, 23, 0.72) !important;
-          border-bottom-color: rgba(2, 6, 23, 0.72) !important;
-        }
-
-        .ev-pop__title { font-weight: 800; font-size: 13px; line-height: 1.2; margin-bottom: 6px; }
-        .ev-pop__meta { font-size: 12px; color: rgba(255, 255, 255, 0.65); margin-bottom: 10px; }
-        .ev-pop__actions { display: flex; justify-content: flex-end; }
-        .ev-pop__btn {
-          border: 1px solid rgba(255, 255, 255, 0.12);
-          background: rgba(255, 255, 255, 0.1);
-          color: rgba(255, 255, 255, 0.92);
-          padding: 8px 10px;
-          border-radius: 12px;
-          font-weight: 800;
-          font-size: 12px;
-          cursor: pointer;
-        }
-        .ev-pop__btn:hover { background: rgba(255, 255, 255, 0.16); }
 
         .ev-pin {
           all: unset;
@@ -465,24 +290,39 @@ export default function EverybotMap({
           transform: translateY(-5px);
         }
 
-        .ev-pin--cluster {
-          width: 38px;
-          height: 38px;
-          border-radius: 999px;
-          display: grid;
-          place-items: center;
-          background: rgba(2, 6, 23, 0.55);
-          border: 1px solid rgba(255, 255, 255, 0.14);
-          backdrop-filter: blur(14px);
-          box-shadow: 0 22px 70px rgba(0, 0, 0, 0.45);
+        .maplibregl-popup-content {
+          background: rgba(2, 6, 23, 0.72) !important;
+          color: rgba(255, 255, 255, 0.92) !important;
+          border: 1px solid rgba(255, 255, 255, 0.12) !important;
+          border-radius: 16px !important;
+          box-shadow: 0 30px 90px rgba(0, 0, 0, 0.5) !important;
+          backdrop-filter: blur(16px);
+          padding: 14px 14px 12px !important;
         }
-        .ev-pin__clusterRing {
-          position: absolute;
-          inset: 8px;
-          border-radius: 999px;
+        .maplibregl-popup-close-button {
+          color: rgba(255, 255, 255, 0.7) !important;
+          font-size: 18px !important;
+          padding: 6px 10px !important;
+        }
+        .maplibregl-popup-tip {
+          border-top-color: rgba(2, 6, 23, 0.72) !important;
+          border-bottom-color: rgba(2, 6, 23, 0.72) !important;
+        }
+
+        .ev-pop__title { font-weight: 800; font-size: 13px; line-height: 1.2; margin-bottom: 6px; }
+        .ev-pop__meta { font-size: 12px; color: rgba(255, 255, 255, 0.65); margin-bottom: 10px; }
+        .ev-pop__actions { display: flex; justify-content: flex-end; }
+        .ev-pop__btn {
           border: 1px solid rgba(255, 255, 255, 0.12);
+          background: rgba(255, 255, 255, 0.1);
+          color: rgba(255, 255, 255, 0.92);
+          padding: 8px 10px;
+          border-radius: 12px;
+          font-weight: 800;
+          font-size: 12px;
+          cursor: pointer;
         }
-        .ev-pin__clusterCount { font-weight: 900; font-size: 12px; color: rgba(255, 255, 255, 0.92); }
+        .ev-pop__btn:hover { background: rgba(255, 255, 255, 0.16); }
       `}</style>
     </div>
   );
