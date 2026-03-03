@@ -1,11 +1,12 @@
+// components/everybot/EverybotMap.tsx
 import { useEffect, useMemo, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 type Pin = {
   id: string;
-  lat: number;
-  lng: number;
+  lat: number | string | null;
+  lng: number | string | null;
   source: string;
   source_url: string;
   title: string | null;
@@ -13,13 +14,6 @@ type Pin = {
   currency: string | null;
   saved_mode?: "agent" | "office" | null;
 };
-
-function fmtPrice(v: Pin["price_amount"], currency?: string | null) {
-  if (v === null || v === undefined || v === "") return "";
-  const n = typeof v === "number" ? v : Number(v);
-  if (!Number.isFinite(n)) return String(v);
-  return `${n.toLocaleString()} ${currency ?? ""}`.trim();
-}
 
 type PinKind = "external" | "office" | "agent";
 
@@ -44,6 +38,33 @@ function escapeHtml(s: string) {
     .replaceAll("'", "&#039;");
 }
 
+function fmtPrice(v: Pin["price_amount"], currency?: string | null) {
+  if (v === null || v === undefined || v === "") return "";
+  const n = typeof v === "number" ? v : Number(String(v).replace(",", "."));
+  if (!Number.isFinite(n)) return String(v);
+  return `${n.toLocaleString()} ${currency ?? ""}`.trim();
+}
+
+function toNum(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string") {
+    const s = v.trim().replace(",", ".");
+    if (!s) return null;
+    const n = Number(s);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function normalizeLng(lng: number): number {
+  // normalizacja do [-180..180]
+  return ((((lng + 180) % 360) + 360) % 360) - 180;
+}
+
+function isValidLatLng(lat: number, lng: number) {
+  return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+}
+
 export default function EverybotMap({
   pins,
   onSelectId,
@@ -56,56 +77,46 @@ export default function EverybotMap({
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const roRef = useRef<ResizeObserver | null>(null);
 
-  // normalizujemy do liczb i zakresu lng [-180..180]
- const cleanPins = useMemo(() => {
-  const arr = (pins ?? [])
-    .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng))
-    .map((p) => {
-      const lng = ((((p.lng + 180) % 360) + 360) % 360) - 180;
-      return { ...p, lng };
-    });
+  // 1) ZERO przesuwania: tylko normalizacja typów i lng
+  const cleanPins = useMemo(() => {
+    const arr = (pins ?? [])
+      .map((p) => {
+        const lat = toNum(p.lat);
+        const lng = toNum(p.lng);
+        if (lat === null || lng === null) return null;
+        const lngNorm = normalizeLng(lng);
+        if (!isValidLatLng(lat, lngNorm)) return null;
+        return { ...p, lat, lng: lngNorm };
+      })
+      .filter(Boolean) as Array<Omit<Pin, "lat" | "lng"> & { lat: number; lng: number }>;
 
-  const groups = new Map<string, Pin[]>();
-  for (const p of arr) {
-    const key = `${p.lat.toFixed(6)}|${p.lng.toFixed(6)}`;
-    const g = groups.get(key);
-    if (g) g.push(p);
-    else groups.set(key, [p]);
-  }
-
-  const out: Pin[] = [];
-  for (const g of groups.values()) {
-    if (g.length === 1) {
-      out.push(g[0]);
-      continue;
+    // diagnostyka w dev: szybko pokaże “stałe lng” / zamianę osi / śmieci
+    if (process.env.NODE_ENV !== "production") {
+      const s = arr.slice(0, 80);
+      const lats = s.map((x) => x.lat);
+      const lngs = s.map((x) => x.lng);
+      if (s.length) {
+        const latMin = Math.min(...lats),
+          latMax = Math.max(...lats),
+          lngMin = Math.min(...lngs),
+          lngMax = Math.max(...lngs);
+        // eslint-disable-next-line no-console
+        console.log("[EverybotMap] sample ranges", {
+          n: arr.length,
+          latMin,
+          latMax,
+          lngMin,
+          lngMax,
+          lngSpan: +(lngMax - lngMin).toFixed(6),
+          latSpan: +(latMax - latMin).toFixed(6),
+        });
+      }
     }
 
-    const baseLat = g[0].lat;
-    const baseLng = g[0].lng;
-    const metersPerDegLat = 111_320;
-    const metersPerDegLng = 111_320 * Math.cos((baseLat * Math.PI) / 180);
+    return arr;
+  }, [pins]);
 
-    for (let i = 0; i < g.length; i++) {
-      const ring = Math.floor(i / 12) + 1;
-      const pos = i % 12;
-      const angle = (pos / 12) * Math.PI * 2;
-      const rMeters = ring * 12;
-
-      const dLat = (rMeters * Math.sin(angle)) / metersPerDegLat;
-      const dLng = (rMeters * Math.cos(angle)) / metersPerDegLng;
-
-      out.push({
-        ...g[i],
-        lat: baseLat + dLat,
-        lng: baseLng + dLng,
-      });
-    }
-  }
-
-  return out;
-}, [pins]);
-
-  // Create map once
+  // 2) Create map once
   useEffect(() => {
     if (!containerRef.current) return;
     if (mapRef.current) return;
@@ -119,10 +130,16 @@ export default function EverybotMap({
       container: containerRef.current,
       style: styleUrl,
       center: [19.0, 52.0],
-      zoom: 7.1,
+      zoom: 6.8,
       attributionControl: false,
       renderWorldCopies: false,
     });
+
+    m.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
+    m.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
+
+    m.setMinZoom(4);
+    m.setMaxZoom(18);
 
     const hardResize = () => {
       const delays = [0, 50, 150, 400];
@@ -137,19 +154,14 @@ export default function EverybotMap({
 
     m.on("load", hardResize);
 
-    m.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
-    m.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
-
-    // zostawiamy Twoje wymaganie: zoom-out do 4 ok
-    m.setMinZoom(4);
-    m.setMaxZoom(18);
-
     mapRef.current = m;
-        
+
     roRef.current = new ResizeObserver(() => {
-      try { m.resize(); } catch {}
+      try {
+        m.resize();
+      } catch {}
     });
-    roRef.current.observe(containerRef.current!);
+    roRef.current.observe(containerRef.current);
 
     return () => {
       try {
@@ -161,15 +173,19 @@ export default function EverybotMap({
       } catch {}
       markersRef.current = [];
 
-      try { roRef.current?.disconnect(); } catch {}
+      try {
+        roRef.current?.disconnect();
+      } catch {}
       roRef.current = null;
 
-      m.remove();
+      try {
+        m.remove();
+      } catch {}
       mapRef.current = null;
     };
   }, []);
 
-  // Render ALL pins as individual markers (no clustering)
+  // 3) Render markers ONLY when data changes (no move/zoom rerender)
   useEffect(() => {
     const m = mapRef.current;
     if (!m) return;
@@ -182,70 +198,70 @@ export default function EverybotMap({
       markersRef.current = [];
 
       const markers: maplibregl.Marker[] = [];
-          for (const p of cleanPins) {
-      const kind = pinKind(p);
-      const c = kindColor(kind);
 
-      const el = document.createElement("button");
-      el.type = "button";
-      el.className = "ev-pin ev-pin--single";
-      el.setAttribute("aria-label", "Listing marker");
-      el.innerHTML = `
-        <span class="ev-pin__drop" style="background:${c.fill}; box-shadow: 0 0 0 6px ${c.ring};"></span>
-        <span class="ev-pin__dot"></span>
-      `;
+      for (const p of cleanPins) {
+        const kind = pinKind(p);
+        const c = kindColor(kind);
 
-      el.onclick = (ev: any) => {
-        ev?.preventDefault?.();
-        ev?.stopPropagation?.();
-
-        onSelectId?.(p.id);
-
-        const title = escapeHtml((p.title ?? "Ogłoszenie").slice(0, 90));
-        const price = escapeHtml(fmtPrice(p.price_amount, p.currency));
-        const source = escapeHtml(p.source ?? "");
-        const btnId = `openListing-${p.id}`;
-
-        const html = `
-          <div class="ev-pop">
-            <div class="ev-pop__title">${title}</div>
-            <div class="ev-pop__meta">${source}${price ? " • " + price : ""}</div>
-            <div class="ev-pop__actions">
-              <button id="${btnId}" class="ev-pop__btn">Otwórz</button>
-            </div>
-          </div>
+        const el = document.createElement("button");
+        el.type = "button";
+        el.className = "ev-pin ev-pin--single";
+        el.setAttribute("aria-label", "Listing marker");
+        el.innerHTML = `
+          <span class="ev-pin__drop" style="background:${c.fill}; box-shadow: 0 0 0 6px ${c.ring};"></span>
+          <span class="ev-pin__dot"></span>
         `;
 
-        const popup = new maplibregl.Popup({
-          closeButton: true,
-          closeOnClick: true,
-          maxWidth: "320px",
-          offset: 16,
-        })
+        el.onclick = (ev: any) => {
+          ev?.preventDefault?.();
+          ev?.stopPropagation?.();
+
+          onSelectId?.(p.id);
+
+          const title = escapeHtml((p.title ?? "Ogłoszenie").slice(0, 90));
+          const price = escapeHtml(fmtPrice(p.price_amount, p.currency));
+          const source = escapeHtml(p.source ?? "");
+          const btnId = `openListing-${p.id}`;
+
+          const html = `
+            <div class="ev-pop">
+              <div class="ev-pop__title">${title}</div>
+              <div class="ev-pop__meta">${source}${price ? " • " + price : ""}</div>
+              <div class="ev-pop__actions">
+                <button id="${btnId}" class="ev-pop__btn">Otwórz</button>
+              </div>
+            </div>
+          `;
+
+          const popup = new maplibregl.Popup({
+            closeButton: true,
+            closeOnClick: true,
+            maxWidth: "320px",
+            offset: 16,
+          })
+            .setLngLat([p.lng, p.lat])
+            .setHTML(html)
+            .addTo(m);
+
+          setTimeout(() => {
+            const root = popup.getElement();
+            const btn = root?.querySelector(`#${CSS.escape(btnId)}`) as HTMLButtonElement | null;
+            if (btn) {
+              btn.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                window.open(p.source_url, "_blank", "noopener,noreferrer");
+              };
+            }
+          }, 0);
+        };
+
+        const mk = new maplibregl.Marker({ element: el, anchor: "bottom" })
           .setLngLat([p.lng, p.lat])
-          .setHTML(html)
           .addTo(m);
 
-        setTimeout(() => {
-          const root = popup.getElement();
-          const btn = root?.querySelector(`#${CSS.escape(btnId)}`) as HTMLButtonElement | null;
-          if (btn) {
-            btn.onclick = (e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              window.open(p.source_url, "_blank", "noopener,noreferrer");
-            };
-          }
-        }, 0);
-      };
-
-      markers.push(
-        new maplibregl.Marker({ element: el, anchor: "bottom" })
-          .setLngLat([p.lng, p.lat])
-          .addTo(m)
-      );
-    }
-
+        markers.push(mk);
+      }
 
       markersRef.current = markers;
     };
@@ -261,16 +277,6 @@ export default function EverybotMap({
     }
 
     render();
-    
-    m.off("moveend", render);
-    m.off("zoomend", render);
-    m.on("moveend", render);
-    m.on("zoomend", render);
-
-    return () => {
-      m.off("moveend", render);
-      m.off("zoomend", render);
-    };
   }, [cleanPins, onSelectId]);
 
   return (
@@ -298,7 +304,9 @@ export default function EverybotMap({
       </div>
 
       <style jsx global>{`
-        .maplibregl-canvas:focus { outline: none; }
+        .maplibregl-canvas:focus {
+          outline: none;
+        }
 
         .ev-pin {
           all: unset;
@@ -322,6 +330,7 @@ export default function EverybotMap({
           place-items: center;
           filter: drop-shadow(0 10px 26px rgba(0, 0, 0, 0.45));
         }
+
         .ev-pin__drop {
           position: absolute;
           width: 18px;
@@ -331,6 +340,7 @@ export default function EverybotMap({
           border: 1px solid rgba(255, 255, 255, 0.22);
           backdrop-filter: blur(10px);
         }
+
         .ev-pin__dot {
           position: absolute;
           width: 6px;
@@ -350,19 +360,36 @@ export default function EverybotMap({
           backdrop-filter: blur(16px);
           padding: 14px 14px 12px !important;
         }
+
         .maplibregl-popup-close-button {
           color: rgba(255, 255, 255, 0.7) !important;
           font-size: 18px !important;
           padding: 6px 10px !important;
         }
+
         .maplibregl-popup-tip {
           border-top-color: rgba(2, 6, 23, 0.72) !important;
           border-bottom-color: rgba(2, 6, 23, 0.72) !important;
         }
 
-        .ev-pop__title { font-weight: 800; font-size: 13px; line-height: 1.2; margin-bottom: 6px; }
-        .ev-pop__meta { font-size: 12px; color: rgba(255, 255, 255, 0.65); margin-bottom: 10px; }
-        .ev-pop__actions { display: flex; justify-content: flex-end; }
+        .ev-pop__title {
+          font-weight: 800;
+          font-size: 13px;
+          line-height: 1.2;
+          margin-bottom: 6px;
+        }
+
+        .ev-pop__meta {
+          font-size: 12px;
+          color: rgba(255, 255, 255, 0.65);
+          margin-bottom: 10px;
+        }
+
+        .ev-pop__actions {
+          display: flex;
+          justify-content: flex-end;
+        }
+
         .ev-pop__btn {
           border: 1px solid rgba(255, 255, 255, 0.12);
           background: rgba(255, 255, 255, 0.1);
@@ -373,7 +400,10 @@ export default function EverybotMap({
           font-size: 12px;
           cursor: pointer;
         }
-        .ev-pop__btn:hover { background: rgba(255, 255, 255, 0.16); }
+
+        .ev-pop__btn:hover {
+          background: rgba(255, 255, 255, 0.16);
+        }
       `}</style>
     </div>
   );
