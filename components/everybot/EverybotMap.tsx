@@ -204,6 +204,10 @@ export default function EverybotMap({
     if (!m) return;
 
     const render = () => {
+      console.info("[EveryBOT][MAP_MARKERS_RENDER_START]", {
+        cleanPins: cleanPins.length,
+        existingMarkers: markersRef.current.length,
+      });
       // remove old markers
       try {
         markersRef.current.forEach((mk) => mk.remove());
@@ -275,6 +279,9 @@ export default function EverybotMap({
 
         markers.push(mk);
       }
+      console.info("[EveryBOT][MAP_MARKERS_RENDER_DONE]", {
+        created: markers.length,
+      });
 
       markersRef.current = markers;
     };
