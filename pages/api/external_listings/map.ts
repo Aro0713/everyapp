@@ -58,7 +58,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       `,
       [officeId, limit]
     );
+    // DEBUG RANGE BACKEND
+if (rows.length) {
+  const sample = rows.slice(0, 100);
 
+  const lats = sample.map(r => Number(r.lat)).filter(Number.isFinite);
+  const lngs = sample.map(r => Number(r.lng)).filter(Number.isFinite);
+
+  console.info("[EveryBOT][MAP_API_RANGE]",  {
+    count: rows.length,
+    latMin: Math.min(...lats),
+    latMax: Math.max(...lats),
+    lngMin: Math.min(...lngs),
+    lngMax: Math.max(...lngs),
+    lngSpan: Math.max(...lngs) - Math.min(...lngs),
+    latSpan: Math.max(...lats) - Math.min(...lats),
+  });
+}
     return res.status(200).json({
       ok: true,
       officeId,
