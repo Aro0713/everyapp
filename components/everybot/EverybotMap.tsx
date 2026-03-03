@@ -28,12 +28,25 @@ function escapeHtml(s: string) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 }
+function fmtPrice(v: unknown, currency?: unknown) {
+  const cur = String(currency ?? "").trim();
+  if (v === null || v === undefined || v === "") return "";
+  const n = typeof v === "number" ? v : Number(String(v).replace(",", "."));
+  if (!Number.isFinite(n)) return String(v) + (cur ? ` ${cur}` : "");
+  const formatted = n.toLocaleString("pl-PL", { maximumFractionDigits: 0 });
+  return (formatted + (cur ? ` ${cur}` : "")).trim();
+}
+
+function clampZoom(z: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, z));
+}
 
 export default function EverybotMap({ pins, onSelectId }: Props) {
   const mapRef = useRef<Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [hoverId, setHoverId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -70,6 +83,18 @@ export default function EverybotMap({ pins, onSelectId }: Props) {
           "circle-stroke-color": "#ffffff",
         },
       });
+      
+      map.on("mousemove", "pins-layer", (e) => {
+        const f = e.features?.[0];
+        const pid = String((f as any)?.properties?.id ?? "");
+        setHoverId(pid || null);
+        map.getCanvas().style.cursor = "pointer";
+      });
+
+      map.on("mouseleave", "pins-layer", () => {
+        setHoverId(null);
+        map.getCanvas().style.cursor = "";
+      });
 
       map.on("mouseenter", "pins-layer", () => {
         map.getCanvas().style.cursor = "pointer";
@@ -100,8 +125,10 @@ export default function EverybotMap({ pins, onSelectId }: Props) {
 
         map.flyTo({
           center,
-          zoom: Math.max(map.getZoom(), 11),
-          speed: 0.8,
+          zoom: clampZoom(Math.max(map.getZoom(), 12), 6, 16),
+          speed: 1.1,
+          curve: 1.42,
+          essential: true,
         });
 
         if (onSelectId) onSelectId(id);
@@ -116,11 +143,7 @@ export default function EverybotMap({ pins, onSelectId }: Props) {
         const urlRaw = String(props.url ?? "").trim();
         const url = urlRaw;
 
-        const priceVal = String(props.price ?? "").trim();
-        const currency = String(props.currency ?? "").trim();
-        const priceLine = priceVal
-          ? `${escapeHtml(priceVal)}${currency ? " " + escapeHtml(currency) : ""}`
-          : "";
+        const priceLine = fmtPrice(props.price, props.currency);
 
         if (popupRef.current) popupRef.current.remove();
 
@@ -130,20 +153,13 @@ export default function EverybotMap({ pins, onSelectId }: Props) {
             ${title}
           </div>
 
-          ${
-            priceLine
-              ? `<div style="margin-bottom:6px;opacity:.85;color:#111111;">
-                  ${priceLine}
-                </div>`
-              : ""
-          }
+          ${priceLine ? `<div style="margin-bottom:6px;opacity:.85;color:#111111;">${escapeHtml(priceLine)}</div>` : ""}
 
-          ${
-            source
-              ? `<div style="opacity:.7;font-size:12px;margin-bottom:10px;color:#111111;">
-                  ${source}
-                </div>`
-              : ""
+          ${source
+            ? `<div style="opacity:.7;font-size:12px;margin-bottom:10px;color:#111111;">
+                ${escapeHtml(source)}
+              </div>`
+            : ""
           }
 
           ${
@@ -200,17 +216,21 @@ export default function EverybotMap({ pins, onSelectId }: Props) {
     map.setPaintProperty("pins-layer", "circle-color", [
       "case",
       ["==", ["get", "id"], selectedId],
-      "#ef4444",
-      "#2563eb",
+      "#ef4444", // selected
+      ["==", ["get", "id"], hoverId],
+      "#f59e0b", // hover
+      "#2563eb", // normal
     ]);
 
     map.setPaintProperty("pins-layer", "circle-radius", [
       "case",
       ["==", ["get", "id"], selectedId],
-      10,
-      6,
+      11, // selected
+      ["==", ["get", "id"], hoverId],
+      9, // hover
+      6, // normal
     ]);
-  }, [selectedId]);
+  }, [selectedId, hoverId]);
 
   function buildGeoJson(pins: Pin[]): FeatureCollection<Point> {
     return {
