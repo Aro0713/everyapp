@@ -50,7 +50,7 @@ export default function EverybotMap({ pins, onSelectId }: Props) {
     // DIAG: jeśli styl/tiles są blokowane (np. CSP), zobaczysz to w konsoli
     map.on("error", (ev) => {
       // eslint-disable-next-line no-console
-      console.error("[EveryBOT][MAP_ERROR]", ev?.error ?? ev);
+      console.error("[EveryBOT][MAP_ERROR]", (ev as any)?.error ?? ev);
     });
 
     map.on("load", () => {
@@ -105,23 +105,26 @@ export default function EverybotMap({ pins, onSelectId }: Props) {
         if (onSelectId) onSelectId(id);
 
         // === POPUP z danych feature.properties ===
-        const title = escapeHtml(String(props.title ?? "Oferta"));
-        const source = escapeHtml(String(props.source ?? ""));
-        const urlRaw = String(props.url ?? "");
-        const url = urlRaw.trim();
+        const titleRaw = String(props.title ?? "").trim();
+        const title = escapeHtml(titleRaw || "Oferta");
+
+        const sourceRaw = String(props.source ?? "").trim();
+        const source = escapeHtml(sourceRaw);
+
+        const urlRaw = String(props.url ?? "").trim();
+        const url = urlRaw;
 
         const priceVal = String(props.price ?? "").trim();
         const currency = String(props.currency ?? "").trim();
-        const priceLine =
-          priceVal ? `${escapeHtml(priceVal)}${currency ? " " + escapeHtml(currency) : ""}` : "";
+        const priceLine = priceVal
+          ? `${escapeHtml(priceVal)}${currency ? " " + escapeHtml(currency) : ""}`
+          : "";
 
         if (popupRef.current) popupRef.current.remove();
 
         const html = `
           <div style="min-width:240px;max-width:340px;">
-            <div style="font-weight:700;margin-bottom:6px;">
-              ${title || "Oferta"}
-            </div>
+            <div style="font-weight:700;margin-bottom:6px;">${title}</div>
             ${priceLine ? `<div style="margin-bottom:6px;opacity:.85;">${priceLine}</div>` : ""}
             ${source ? `<div style="opacity:.7;font-size:12px;margin-bottom:10px;">${source}</div>` : ""}
             ${
