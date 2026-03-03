@@ -76,39 +76,6 @@ export default function EverybotMap({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const roRef = useRef<ResizeObserver | null>(null);
-  useEffect(() => {
-  console.warn("🔥 EverybotMap.tsx ACTIVE (components/everybot/EverybotMap.tsx)");
-}, []);
-
-  // 🔎 DEBUG: raw input pins (before any coercion)
-useEffect(() => {
-  if (process.env.NODE_ENV === "production") return;
-
-  const sample = (pins ?? []).slice(0, 300) as any[];
-  const lats = sample.map(p => Number(p.lat)).filter(Number.isFinite);
-  const lngs = sample.map(p => Number(p.lng)).filter(Number.isFinite);
-
-  const latMin = lats.length ? Math.min(...lats) : null;
-  const latMax = lats.length ? Math.max(...lats) : null;
-  const lngMin = lngs.length ? Math.min(...lngs) : null;
-  const lngMax = lngs.length ? Math.max(...lngs) : null;
-
-  console.info("[EveryBOT][MAP_RENDER_RAW]", {
-    count: (pins ?? []).length,
-    sampleN: sample.length,
-    types: sample.length ? { lat: typeof sample[0].lat, lng: typeof sample[0].lng } : null,
-    latMin,
-    latMax,
-    lngMin,
-    lngMax,
-    lngSpan: lngMin !== null && lngMax !== null ? lngMax - lngMin : null,
-    latSpan: latMin !== null && latMax !== null ? latMax - latMin : null,
-    uniqLng: new Set(sample.map(p => String(p.lng))).size,
-    uniqLat: new Set(sample.map(p => String(p.lat))).size,
-    hasComma: sample.some(p => typeof p.lng === "string" && String(p.lng).includes(",")),
-    first3: sample.slice(0, 3).map(p => ({ id: p.id, lat: p.lat, lng: p.lng })),
-  });
-}, [pins]);
 
   // 1) ZERO przesuwania: tylko normalizacja typów i lng
   const cleanPins = useMemo(() => {
