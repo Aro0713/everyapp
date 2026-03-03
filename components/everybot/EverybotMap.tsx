@@ -125,20 +125,41 @@ export default function EverybotMap({ pins, onSelectId }: Props) {
         if (popupRef.current) popupRef.current.remove();
 
         const html = `
-          <div style="min-width:240px;max-width:340px;">
-            <div style="font-weight:700;margin-bottom:6px;">${title}</div>
-            ${priceLine ? `<div style="margin-bottom:6px;opacity:.85;">${priceLine}</div>` : ""}
-            ${source ? `<div style="opacity:.7;font-size:12px;margin-bottom:10px;">${source}</div>` : ""}
-            ${
-              url
-                ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"
-                    style="display:inline-block;padding:6px 10px;border-radius:8px;background:#111827;color:#fff;text-decoration:none;font-size:13px;">
-                    Otwórz
-                  </a>`
-                : `<span style="opacity:.6;font-size:12px;">Brak linku</span>`
-            }
+        <div style="min-width:240px;max-width:340px;background:#ffffff;color:#111111;padding:4px;">
+          <div style="font-weight:700;margin-bottom:6px;color:#111111;">
+            ${title}
           </div>
-        `;
+
+          ${
+            priceLine
+              ? `<div style="margin-bottom:6px;opacity:.85;color:#111111;">
+                  ${priceLine}
+                </div>`
+              : ""
+          }
+
+          ${
+            source
+              ? `<div style="opacity:.7;font-size:12px;margin-bottom:10px;color:#111111;">
+                  ${source}
+                </div>`
+              : ""
+          }
+
+          ${
+            url
+              ? `<a href="${escapeHtml(url)}"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style="display:inline-block;padding:6px 10px;border-radius:8px;background:#111827;color:#ffffff;text-decoration:none;font-size:13px;">
+                  Otwórz
+                </a>`
+              : `<span style="opacity:.6;font-size:12px;color:#111111;">
+                  Brak linku
+                </span>`
+          }
+        </div>
+      `;
 
         popupRef.current = new maplibregl.Popup({
           closeButton: true,

@@ -101,3 +101,26 @@ input, select, textarea {
 .fc-event--private .fc-event-time {
   color: #ffffff !important;
 }
+/* =====================================
+   MAPLIBRE – POPUP / CONTROL OVERRIDES
+   (dark UI compatibility)
+   ===================================== */
+
+.maplibregl-popup-content {
+  background: #ffffff !important;
+  color: #111111 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.18) !important;
+}
+
+.maplibregl-popup-close-button {
+  color: #111111 !important;
+  font-size: 18px !important;
+  padding: 6px 8px !important;
+}
+
+/* opcjonalnie: lepszy “dziubek” */
+.maplibregl-popup-tip {
+  border-top-color: #ffffff !important;
+  border-bottom-color: #ffffff !important;
+}
