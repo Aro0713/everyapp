@@ -1044,22 +1044,24 @@ return (
 
         {/* PANEL AGENTA */}
         <div className="lg:col-span-1 min-w-0">
-          <div
-            className={clsx(
-              "min-w-0 overflow-hidden rounded-3xl border border-white/10 bg-slate-950/55 shadow-2xl backdrop-blur-xl",
-              "h-[clamp(320px,55vh,620px)]",
-              "lg:sticky lg:top-4"
-            )}
-          >
-            <div className="border-b border-white/10 bg-white/5 px-4 py-3">
-              <div className="text-sm font-extrabold text-white/90">EveryBOT</div>
-              <div className="mt-0.5 text-xs text-white/55">Agent i decyzje</div>
-            </div>
+            <div
+              className={clsx(
+                "min-w-0 overflow-hidden rounded-3xl border border-white/10 bg-slate-950/55 shadow-2xl backdrop-blur-xl",
+                "h-[clamp(320px,55vh,620px)]",
+                "lg:sticky lg:top-4",
+                "flex flex-col" // ✅ klucz
+              )}
+            >
+              <div className="border-b border-white/10 bg-white/5 px-4 py-3">
+                <div className="text-sm font-extrabold text-white/90">EveryBOT</div>
+                <div className="mt-0.5 text-xs text-white/55">Agent i decyzje</div>
+              </div>
 
-            <div className="p-3">
-              <EverybotAgentPanel
-                contextFilters={botFilters}
-                onAgentResult={async ({ actions }) => {
+              {/* ✅ klucz: ta część MUSI umieć scrollować i mieć wysokość */}
+              <div className="p-3 flex-1 min-h-0 overflow-y-auto">
+                <EverybotAgentPanel
+                  contextFilters={botFilters}
+                  onAgentResult={async ({ actions }) => {
                   let currentFilters = botFilters;
 
                   for (const a of actions ?? []) {
