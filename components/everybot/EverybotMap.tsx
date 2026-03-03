@@ -77,7 +77,6 @@ export default function EverybotMap({
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const roRef = useRef<ResizeObserver | null>(null);
   useEffect(() => {
-  if (process.env.NODE_ENV === "production") return;
 
   const sample = (pins ?? []).slice(0, 300) as any[];
   const lats = sample.map(p => Number(p.lat)).filter(Number.isFinite);
