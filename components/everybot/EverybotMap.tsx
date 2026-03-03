@@ -40,7 +40,7 @@ export default function EverybotMap({ pins, onSelectId }: Props) {
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: "https://demotiles.maplibre.org/style.json",
+      style: `https://api.maptiler.com/maps/streets/style.json?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY}`,
       center: [19.02, 50.25],
       zoom: 6,
     });
