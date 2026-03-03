@@ -77,6 +77,36 @@ export default function EverybotMap({
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const roRef = useRef<ResizeObserver | null>(null);
 
+
+  // 🔎 DEBUG: raw input pins (before any coercion)
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") return;
+
+    const sample = (pins ?? []).slice(0, 300) as any[];
+    const lats = sample.map(p => Number(p.lat)).filter(Number.isFinite);
+    const lngs = sample.map(p => Number(p.lng)).filter(Number.isFinite);
+
+    const latMin = lats.length ? Math.min(...lats) : null;
+    const latMax = lats.length ? Math.max(...lats) : null;
+    const lngMin = lngs.length ? Math.min(...lngs) : null;
+    const lngMax = lngs.length ? Math.max(...lngs) : null;
+
+    console.info("[EveryBOT][MAP_RENDER_RAW]", {
+      count: (pins ?? []).length,
+      sampleN: sample.length,
+      types: sample.length ? { lat: typeof sample[0].lat, lng: typeof sample[0].lng } : null,
+      latMin,
+      latMax,
+      lngMin,
+      lngMax,
+      lngSpan: lngMin !== null && lngMax !== null ? lngMax - lngMin : null,
+      latSpan: latMin !== null && latMax !== null ? latMax - latMin : null,
+      uniqLng: new Set(sample.map(p => String(p.lng))).size,
+      uniqLat: new Set(sample.map(p => String(p.lat))).size,
+      hasComma: sample.some(p => typeof p.lng === "string" && String(p.lng).includes(",")),
+    });
+  }, [pins]);
+
   // 1) ZERO przesuwania: tylko normalizacja typów i lng
   const cleanPins = useMemo(() => {
     const arr = (pins ?? [])
@@ -90,28 +120,34 @@ export default function EverybotMap({
       })
       .filter(Boolean) as Array<Omit<Pin, "lat" | "lng"> & { lat: number; lng: number }>;
 
-    // diagnostyka w dev: szybko pokaże “stałe lng” / zamianę osi / śmieci
-    if (process.env.NODE_ENV !== "production") {
-      const s = arr.slice(0, 80);
-      const lats = s.map((x) => x.lat);
-      const lngs = s.map((x) => x.lng);
-      if (s.length) {
-        const latMin = Math.min(...lats),
-          latMax = Math.max(...lats),
-          lngMin = Math.min(...lngs),
-          lngMax = Math.max(...lngs);
-        // eslint-disable-next-line no-console
-        console.log("[EverybotMap] sample ranges", {
-          n: arr.length,
-          latMin,
-          latMax,
-          lngMin,
-          lngMax,
-          lngSpan: +(lngMax - lngMin).toFixed(6),
-          latSpan: +(latMax - latMin).toFixed(6),
-        });
+    // DEBUG: normalized pins that will be rendered
+      if (process.env.NODE_ENV !== "production") {
+        const s = arr.slice(0, 300);
+        if (s.length) {
+          const lats = s.map((x) => x.lat);
+          const lngs = s.map((x) => x.lng);
+
+          const latMin = Math.min(...lats);
+          const latMax = Math.max(...lats);
+          const lngMin = Math.min(...lngs);
+          const lngMax = Math.max(...lngs);
+
+          console.info("[EveryBOT][MAP_RENDER_NORM]", {
+            count: arr.length,
+            sampleN: s.length,
+            latMin,
+            latMax,
+            lngMin,
+            lngMax,
+            lngSpan: lngMax - lngMin,
+            latSpan: latMax - latMin,
+            uniqLng6: new Set(s.map((p) => p.lng.toFixed(6))).size,
+            uniqLat6: new Set(s.map((p) => p.lat.toFixed(6))).size,
+          });
+        } else {
+          console.info("[EveryBOT][MAP_RENDER_NORM]", { count: arr.length, sampleN: 0 });
+        }
       }
-    }
 
     return arr;
   }, [pins]);
@@ -184,7 +220,7 @@ export default function EverybotMap({
       mapRef.current = null;
     };
   }, []);
-
+  
   // 3) Render markers ONLY when data changes (no move/zoom rerender)
   useEffect(() => {
     const m = mapRef.current;
