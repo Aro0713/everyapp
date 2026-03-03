@@ -76,7 +76,9 @@ export default function EverybotMap({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const roRef = useRef<ResizeObserver | null>(null);
-
+  useEffect(() => {
+  console.warn("🔥 EverybotMap.tsx ACTIVE (components/everybot/EverybotMap.tsx)");
+}, []);
 
   // 🔎 DEBUG: raw input pins (before any coercion)
   useEffect(() => {
