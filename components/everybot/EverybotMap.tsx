@@ -57,14 +57,53 @@ export default function EverybotMap({
   const roRef = useRef<ResizeObserver | null>(null);
 
   // normalizujemy do liczb i zakresu lng [-180..180]
-  const cleanPins = useMemo(() => {
-    return (pins ?? [])
-      .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng))
-      .map((p) => {
-        const lng = ((((p.lng + 180) % 360) + 360) % 360) - 180;
-        return { ...p, lng };
+ const cleanPins = useMemo(() => {
+  const arr = (pins ?? [])
+    .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng))
+    .map((p) => {
+      const lng = ((((p.lng + 180) % 360) + 360) % 360) - 180;
+      return { ...p, lng };
+    });
+
+  const groups = new Map<string, Pin[]>();
+  for (const p of arr) {
+    const key = `${p.lat.toFixed(6)}|${p.lng.toFixed(6)}`;
+    const g = groups.get(key);
+    if (g) g.push(p);
+    else groups.set(key, [p]);
+  }
+
+  const out: Pin[] = [];
+  for (const g of groups.values()) {
+    if (g.length === 1) {
+      out.push(g[0]);
+      continue;
+    }
+
+    const baseLat = g[0].lat;
+    const baseLng = g[0].lng;
+    const metersPerDegLat = 111_320;
+    const metersPerDegLng = 111_320 * Math.cos((baseLat * Math.PI) / 180);
+
+    for (let i = 0; i < g.length; i++) {
+      const ring = Math.floor(i / 12) + 1;
+      const pos = i % 12;
+      const angle = (pos / 12) * Math.PI * 2;
+      const rMeters = ring * 12;
+
+      const dLat = (rMeters * Math.sin(angle)) / metersPerDegLat;
+      const dLng = (rMeters * Math.cos(angle)) / metersPerDegLng;
+
+      out.push({
+        ...g[i],
+        lat: baseLat + dLat,
+        lng: baseLng + dLng,
       });
-  }, [pins]);
+    }
+  }
+
+  return out;
+}, [pins]);
 
   // Create map once
   useEffect(() => {
@@ -110,7 +149,7 @@ export default function EverybotMap({
     roRef.current = new ResizeObserver(() => {
       try { m.resize(); } catch {}
     });
-    roRef.current.observe(containerRef.current);
+    roRef.current.observe(containerRef.current!);
 
     return () => {
       try {
@@ -121,6 +160,9 @@ export default function EverybotMap({
         markersRef.current.forEach((mk) => mk.remove());
       } catch {}
       markersRef.current = [];
+
+      try { roRef.current?.disconnect(); } catch {}
+      roRef.current = null;
 
       m.remove();
       mapRef.current = null;
@@ -140,66 +182,70 @@ export default function EverybotMap({
       markersRef.current = [];
 
       const markers: maplibregl.Marker[] = [];
+          for (const p of cleanPins) {
+      const kind = pinKind(p);
+      const c = kindColor(kind);
 
-      for (const p of cleanPins) {
-        const kind = pinKind(p);
-        const c = kindColor(kind);
+      const el = document.createElement("button");
+      el.type = "button";
+      el.className = "ev-pin ev-pin--single";
+      el.setAttribute("aria-label", "Listing marker");
+      el.innerHTML = `
+        <span class="ev-pin__drop" style="background:${c.fill}; box-shadow: 0 0 0 6px ${c.ring};"></span>
+        <span class="ev-pin__dot"></span>
+      `;
 
-        const el = document.createElement("button");
-        el.type = "button";
-        el.className = "ev-pin ev-pin--single";
-        el.setAttribute("aria-label", "Listing marker");
-        el.innerHTML = `
-          <span class="ev-pin__drop" style="background:${c.fill}; box-shadow: 0 0 0 6px ${c.ring};"></span>
-          <span class="ev-pin__dot"></span>
+      el.onclick = (ev: any) => {
+        ev?.preventDefault?.();
+        ev?.stopPropagation?.();
+
+        onSelectId?.(p.id);
+
+        const title = escapeHtml((p.title ?? "Ogłoszenie").slice(0, 90));
+        const price = escapeHtml(fmtPrice(p.price_amount, p.currency));
+        const source = escapeHtml(p.source ?? "");
+        const btnId = `openListing-${p.id}`;
+
+        const html = `
+          <div class="ev-pop">
+            <div class="ev-pop__title">${title}</div>
+            <div class="ev-pop__meta">${source}${price ? " • " + price : ""}</div>
+            <div class="ev-pop__actions">
+              <button id="${btnId}" class="ev-pop__btn">Otwórz</button>
+            </div>
+          </div>
         `;
 
-        el.onclick = (ev: any) => {
-          ev?.preventDefault?.();
-          ev?.stopPropagation?.();
+        const popup = new maplibregl.Popup({
+          closeButton: true,
+          closeOnClick: true,
+          maxWidth: "320px",
+          offset: 16,
+        })
+          .setLngLat([p.lng, p.lat])
+          .setHTML(html)
+          .addTo(m);
 
-          onSelectId?.(p.id);
+        setTimeout(() => {
+          const root = popup.getElement();
+          const btn = root?.querySelector(`#${CSS.escape(btnId)}`) as HTMLButtonElement | null;
+          if (btn) {
+            btn.onclick = (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              window.open(p.source_url, "_blank", "noopener,noreferrer");
+            };
+          }
+        }, 0);
+      };
 
-          const title = escapeHtml((p.title ?? "Ogłoszenie").slice(0, 90));
-          const price = escapeHtml(fmtPrice(p.price_amount, p.currency));
-          const source = escapeHtml(p.source ?? "");
-          const btnId = `openListing-${p.id}`;
+      markers.push(
+        new maplibregl.Marker({ element: el, anchor: "bottom" })
+          .setLngLat([p.lng, p.lat])
+          .addTo(m)
+      );
+    }
 
-          const html = `
-            <div class="ev-pop">
-              <div class="ev-pop__title">${title}</div>
-              <div class="ev-pop__meta">${source}${price ? " • " + price : ""}</div>
-              <div class="ev-pop__actions">
-                <button id="${btnId}" class="ev-pop__btn">Otwórz</button>
-              </div>
-            </div>
-          `;
-
-          const popup = new maplibregl.Popup({
-            closeButton: true,
-            closeOnClick: true,
-            maxWidth: "320px",
-            offset: 16,
-          })
-            .setLngLat([p.lng, p.lat])
-            .setHTML(html)
-            .addTo(m);
-
-          setTimeout(() => {
-            const root = popup.getElement();
-            const btn = root?.querySelector(`#${CSS.escape(btnId)}`) as HTMLButtonElement | null;
-            if (btn) {
-              btn.onclick = (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                window.open(p.source_url, "_blank", "noopener,noreferrer");
-              };
-            }
-          }, 0);
-        };
-
-        markers.push(new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat([p.lng, p.lat]).addTo(m));
-      }
 
       markersRef.current = markers;
     };
@@ -215,8 +261,7 @@ export default function EverybotMap({
     }
 
     render();
-
-    // re-render po zoom/pan (żeby marker layer zawsze była świeża)
+    
     m.off("moveend", render);
     m.off("zoomend", render);
     m.on("moveend", render);
