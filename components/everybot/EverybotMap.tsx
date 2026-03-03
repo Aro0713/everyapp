@@ -121,34 +121,10 @@ export default function EverybotMap({
       })
       .filter(Boolean) as Array<Omit<Pin, "lat" | "lng"> & { lat: number; lng: number }>;
 
-    // DEBUG: normalized pins that will be rendered
-      if (process.env.NODE_ENV !== "production") {
-        const s = arr.slice(0, 300);
-        if (s.length) {
-          const lats = s.map((x) => x.lat);
-          const lngs = s.map((x) => x.lng);
-
-          const latMin = Math.min(...lats);
-          const latMax = Math.max(...lats);
-          const lngMin = Math.min(...lngs);
-          const lngMax = Math.max(...lngs);
-
-          console.info("[EveryBOT][MAP_RENDER_NORM]", {
-            count: arr.length,
-            sampleN: s.length,
-            latMin,
-            latMax,
-            lngMin,
-            lngMax,
-            lngSpan: lngMax - lngMin,
-            latSpan: latMax - latMin,
-            uniqLng6: new Set(s.map((p) => p.lng.toFixed(6))).size,
-            uniqLat6: new Set(s.map((p) => p.lat.toFixed(6))).size,
-          });
-        } else {
-          console.info("[EveryBOT][MAP_RENDER_NORM]", { count: arr.length, sampleN: 0 });
-        }
-      }
+       console.info("[EveryBOT][MAP_RENDER_NORM]", {
+      count: arr.length,
+      first3: arr.slice(0, 3).map(p => ({ id: p.id, lat: p.lat, lng: p.lng })),
+    });
 
     return arr;
   }, [pins]);
