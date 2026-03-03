@@ -20,9 +20,19 @@ type Props = {
   onSelectId?: (id: string) => void;
 };
 
+function escapeHtml(s: string) {
+  return s
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 export default function EverybotMap({ pins, onSelectId }: Props) {
   const mapRef = useRef<Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const popupRef = useRef<maplibregl.Popup | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -37,13 +47,18 @@ export default function EverybotMap({ pins, onSelectId }: Props) {
 
     mapRef.current = map;
 
+    // DIAG: jeśli styl/tiles są blokowane (np. CSP), zobaczysz to w konsoli
+    map.on("error", (ev) => {
+      // eslint-disable-next-line no-console
+      console.error("[EveryBOT][MAP_ERROR]", ev?.error ?? ev);
+    });
+
     map.on("load", () => {
       map.addSource("pins", {
         type: "geojson",
         data: buildGeoJson(pins),
       });
 
-      // Warstwa bazowa (neutralna). Selekcję ustawiamy przez setPaintProperty w useEffect([selectedId]).
       map.addLayer({
         id: "pins-layer",
         type: "circle",
@@ -68,27 +83,58 @@ export default function EverybotMap({ pins, onSelectId }: Props) {
         const feature = e.features?.[0];
         if (!feature) return;
 
-        const id = feature.properties?.id;
+        const id = feature.properties?.id as string | undefined;
         if (!id) return;
 
         if (feature.geometry.type !== "Point") return;
 
         const coords = (feature.geometry as Point).coordinates;
-
         if (!Array.isArray(coords) || coords.length < 2) return;
 
         const center: [number, number] = [coords[0], coords[1]];
+
+        setSelectedId(id);
 
         map.flyTo({
           center,
           zoom: Math.max(map.getZoom(), 11),
           speed: 0.8,
-      });
+        });
 
         if (onSelectId) onSelectId(id);
+
+        // POPUP: tytuł + źródło + link
+        const pin = pins.find((p) => p.id === id);
+        const title = escapeHtml(pin?.title ?? "Oferta");
+        const source = escapeHtml(pin?.source ?? "");
+        const url = pin?.source_url ?? "";
+
+        // zamknij poprzedni popup
+        if (popupRef.current) popupRef.current.remove();
+
+        const html = `
+          <div style="min-width:220px;max-width:320px;">
+            <div style="font-weight:700;margin-bottom:6px;">${title}</div>
+            <div style="opacity:.8;font-size:12px;margin-bottom:10px;">${source}</div>
+            ${
+              url
+                ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:6px 10px;border-radius:8px;background:#111827;color:#fff;text-decoration:none;font-size:13px;">Otwórz</a>`
+                : `<span style="opacity:.6;font-size:12px;">Brak linku</span>`
+            }
+          </div>
+        `;
+
+        popupRef.current = new maplibregl.Popup({
+          closeButton: true,
+          closeOnClick: false,
+          offset: 12,
+        })
+          .setLngLat(center)
+          .setHTML(html)
+          .addTo(map);
       });
 
-      // 🔹 auto-fit przy pierwszym renderze
+      // auto-fit przy starcie
       if (pins.length > 0) {
         const bounds = new maplibregl.LngLatBounds();
         pins.forEach((p) => bounds.extend([p.lng, p.lat]));
@@ -97,6 +143,7 @@ export default function EverybotMap({ pins, onSelectId }: Props) {
     });
 
     return () => {
+      if (popupRef.current) popupRef.current.remove();
       map.remove();
     };
   }, []);
@@ -139,7 +186,6 @@ export default function EverybotMap({ pins, onSelectId }: Props) {
         },
         properties: {
           id: pin.id,
-          title: pin.title,
         },
       })),
     };
