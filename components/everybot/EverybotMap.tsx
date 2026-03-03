@@ -83,7 +83,8 @@ export default function EverybotMap({ pins, onSelectId }: Props) {
         const feature = e.features?.[0];
         if (!feature) return;
 
-        const id = feature.properties?.id as string | undefined;
+        const props: any = feature.properties ?? {};
+        const id = String(props.id ?? "");
         if (!id) return;
 
         if (feature.geometry.type !== "Point") return;
@@ -103,22 +104,32 @@ export default function EverybotMap({ pins, onSelectId }: Props) {
 
         if (onSelectId) onSelectId(id);
 
-        // POPUP: tytuł + źródło + link
-        const pin = pins.find((p) => p.id === id);
-        const title = escapeHtml(pin?.title ?? "Oferta");
-        const source = escapeHtml(pin?.source ?? "");
-        const url = pin?.source_url ?? "";
+        // === POPUP z danych feature.properties ===
+        const title = escapeHtml(String(props.title ?? "Oferta"));
+        const source = escapeHtml(String(props.source ?? ""));
+        const urlRaw = String(props.url ?? "");
+        const url = urlRaw.trim();
 
-        // zamknij poprzedni popup
+        const priceVal = String(props.price ?? "").trim();
+        const currency = String(props.currency ?? "").trim();
+        const priceLine =
+          priceVal ? `${escapeHtml(priceVal)}${currency ? " " + escapeHtml(currency) : ""}` : "";
+
         if (popupRef.current) popupRef.current.remove();
 
         const html = `
-          <div style="min-width:220px;max-width:320px;">
-            <div style="font-weight:700;margin-bottom:6px;">${title}</div>
-            <div style="opacity:.8;font-size:12px;margin-bottom:10px;">${source}</div>
+          <div style="min-width:240px;max-width:340px;">
+            <div style="font-weight:700;margin-bottom:6px;">
+              ${title || "Oferta"}
+            </div>
+            ${priceLine ? `<div style="margin-bottom:6px;opacity:.85;">${priceLine}</div>` : ""}
+            ${source ? `<div style="opacity:.7;font-size:12px;margin-bottom:10px;">${source}</div>` : ""}
             ${
               url
-                ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:6px 10px;border-radius:8px;background:#111827;color:#fff;text-decoration:none;font-size:13px;">Otwórz</a>`
+                ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"
+                    style="display:inline-block;padding:6px 10px;border-radius:8px;background:#111827;color:#fff;text-decoration:none;font-size:13px;">
+                    Otwórz
+                  </a>`
                 : `<span style="opacity:.6;font-size:12px;">Brak linku</span>`
             }
           </div>
@@ -186,6 +197,11 @@ export default function EverybotMap({ pins, onSelectId }: Props) {
         },
         properties: {
           id: pin.id,
+          title: pin.title ?? "",
+          source: pin.source ?? "",
+          url: pin.source_url ?? "",
+          price: pin.price_amount ?? "",
+          currency: pin.currency ?? "",
         },
       })),
     };
