@@ -1,8 +1,17 @@
-// pages/api/external_listings/map.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { pool } from "../../../lib/neonDb";
 import { getUserIdFromRequest } from "../../../lib/session";
 import { getOfficeIdForUserId } from "../../../lib/office";
+
+function parseBbox(v: unknown) {
+  if (typeof v !== "string") return null;
+  const parts = v.split(",").map(Number);
+  if (parts.length !== 4) return null;
+  const [minLng, minLat, maxLng, maxLat] = parts;
+  if (![minLng, minLat, maxLng, maxLat].every(Number.isFinite)) return null;
+  if (minLng > maxLng || minLat > maxLat) return null;
+  return { minLng, minLat, maxLng, maxLat };
+}
 
 function optNumber(v: unknown): number | null {
   if (typeof v === "number" && Number.isFinite(v)) return v;
@@ -25,8 +34,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const officeId = await getOfficeIdForUserId(userId);
     if (!officeId) return res.status(400).json({ error: "MISSING_OFFICE_ID" });
 
-    const limitRaw = optNumber(req.query.limit) ?? 5000;
+    const bbox = parseBbox(req.query.bbox);
+    const limitRaw = optNumber(req.query.limit) ?? 2000;
     const limit = Math.min(Math.max(limitRaw, 1), 5000);
+
+    const params: any[] = [officeId];
+    let where = `
+      el.office_id = $1::uuid
+      AND el.lat IS NOT NULL
+      AND el.lng IS NOT NULL
+    `;
+
+    if (bbox) {
+      params.push(bbox.minLng, bbox.maxLng, bbox.minLat, bbox.maxLat);
+      where += `
+        AND el.lng BETWEEN $2 AND $3
+        AND el.lat BETWEEN $4 AND $5
+      `;
+    }
+
+    params.push(limit);
 
     const { rows } = await pool.query(
       `
@@ -39,29 +66,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         el.currency,
         el.updated_at,
         el.lat::double precision AS lat,
-        el.lng::double precision AS lng,
-        COALESCE(last_action.payload->>'mode', NULL) AS saved_mode
+        el.lng::double precision AS lng
       FROM external_listings el
-      LEFT JOIN LATERAL (
-        SELECT payload
-        FROM external_listing_actions
-        WHERE office_id = el.office_id
-          AND external_listing_id = el.id
-        ORDER BY created_at DESC, id DESC
-        LIMIT 1
-      ) last_action ON true
-      WHERE el.office_id = $1::uuid
-        AND el.lat IS NOT NULL
-        AND el.lng IS NOT NULL
+      WHERE ${where}
       ORDER BY el.updated_at DESC, el.id DESC
-      LIMIT $2::int
+      LIMIT $${params.length}::int
       `,
-      [officeId, limit]
+      params
     );
-    
+
     return res.status(200).json({
       ok: true,
       officeId,
+      count: rows.length,
       pins: rows,
     });
   } catch (e: any) {
