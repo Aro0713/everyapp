@@ -203,13 +203,13 @@ export default function EverybotAgentPanel({
   }
 
   return (
-    <div className="h-[70vh] rounded-2xl border border-white/10 bg-slate-950/45 shadow-2xl backdrop-blur-xl flex flex-col overflow-hidden">
+    <div className="h-full min-h-0 rounded-2xl border border-white/10 bg-slate-950/45 shadow-2xl backdrop-blur-xl flex flex-col overflow-hidden">
       <div className="p-4 border-b border-white/10 bg-white/5">
         <div className="text-sm font-extrabold text-white/90">Agent EveryBOT</div>
         <div className="text-xs text-white/55">Tekst • głos • pliki</div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-2">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2">
         {messages.map((m, idx) => (
           <div key={idx} className={m.role === "user" ? "text-right" : "text-left"}>
             <div
