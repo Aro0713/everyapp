@@ -62,6 +62,41 @@ function toSourceListingId(row: ExternalRow): string {
   // MVP: stabilny identyfikator = URL (znormalizowany)
   return row.external_id || row.source_url;
 }
+function buildPreviewRaw(row: ExternalRow) {
+  return {
+    stage: "search-preview",
+    source: row.source ?? null,
+    source_url: row.source_url ?? null,
+    external_id: row.external_id ?? null,
+    title: row.title ?? null,
+    description: row.description ?? null,
+    price_amount:
+      typeof row.price_amount === "number"
+        ? row.price_amount
+        : row.price_amount != null && String(row.price_amount).trim()
+        ? Number(row.price_amount)
+        : null,
+    currency: row.currency ?? null,
+    location_text: row.location_text ?? null,
+    status: row.status ?? null,
+    thumb_url: row.thumb_url ?? null,
+    transaction_type: row.transaction_type ?? null,
+    property_type: row.property_type ?? null,
+    area_m2: row.area_m2 ?? null,
+    price_per_m2: row.price_per_m2 ?? null,
+    rooms: row.rooms ?? null,
+    floor: row.floor ?? null,
+    year_built: row.year_built ?? null,
+    voivodeship: row.voivodeship ?? null,
+    city: row.city ?? null,
+    district: row.district ?? null,
+    street: row.street ?? null,
+    owner_phone: row.owner_phone ?? null,
+    matched_at: row.matched_at ?? null,
+    imported_at: row.imported_at ?? null,
+    updated_at: row.updated_at ?? null,
+  };
+}
 
 /* -------------------- types -------------------- */
 type ExternalRow = {
@@ -99,6 +134,8 @@ type ExternalRow = {
   city?: string | null;
   district?: string | null;
   street?: string | null;
+
+  raw?: Record<string, any> | null;
 };
 
 function cleanTitle(s: string | null): string | null {
@@ -1924,6 +1961,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               currency,
               location_text,
               status,
+              raw,
 
               thumb_url,
               matched_at,
@@ -1944,8 +1982,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               source_status,
               updated_at
             ) VALUES (
-              $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
-              $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,
+              $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,
+              $12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,
               now(),'active', now()
             )
             ON CONFLICT (office_id, source, source_listing_id)
@@ -1953,10 +1991,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               matched_at = EXCLUDED.matched_at,
               source_url = EXCLUDED.source_url,
               title = EXCLUDED.title,
+              description = COALESCE(EXCLUDED.description, external_listings.description),
               price_amount = EXCLUDED.price_amount,
               currency = EXCLUDED.currency,
               location_text = EXCLUDED.location_text,
               status = EXCLUDED.status,
+              raw = COALESCE(EXCLUDED.raw, external_listings.raw),
 
               thumb_url = COALESCE(EXCLUDED.thumb_url, external_listings.thumb_url),
               transaction_type = COALESCE(EXCLUDED.transaction_type, external_listings.transaction_type),
@@ -1985,10 +2025,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               r.source_url,
               r.title ?? null,
               r.description ?? null,
-              typeof r.price_amount === "number" ? r.price_amount : r.price_amount ? Number(r.price_amount) : null,
+              typeof r.price_amount === "number"
+                ? r.price_amount
+                : r.price_amount
+                ? Number(r.price_amount)
+                : null,
               r.currency ?? null,
               r.location_text ?? null,
               r.status ?? "active",
+              buildPreviewRaw(r),
 
               r.thumb_url ?? null,
               runTs,
