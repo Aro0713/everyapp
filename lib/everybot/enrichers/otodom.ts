@@ -10,17 +10,20 @@ import type { Enricher, EnrichResult } from "./types";
 function optString(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null;
 }
+
 function optNumber(v: unknown): number | null {
   if (typeof v === "number" && Number.isFinite(v)) return v;
   if (typeof v === "string" && v.trim() && Number.isFinite(Number(v))) return Number(v);
   return null;
 }
+
 function parseNumberLoose(s: string | null | undefined): number | null {
   if (!s) return null;
   const cleaned = s.replace(/\s/g, "").replace(",", ".").replace(/[^\d.]/g, "");
   const n = Number(cleaned);
   return Number.isFinite(n) ? n : null;
 }
+
 function absUrl(base: string, href?: string | null): string | null {
   if (!href) return null;
   try {
@@ -28,6 +31,88 @@ function absUrl(base: string, href?: string | null): string | null {
   } catch {
     return null;
   }
+}
+
+function normalizePhone(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const raw = v.trim();
+  if (!raw) return null;
+
+  const plus = raw.startsWith("+");
+  const digits = raw.replace(/\D/g, "");
+
+  if (digits.length === 9) return digits;
+  if (digits.length === 11 && digits.startsWith("48")) return `+${digits}`;
+  if (digits.length >= 9 && digits.length <= 15) return plus ? `+${digits}` : digits;
+
+  return null;
+}
+
+async function revealPhoneWithPlaywright(url: string): Promise<string | null> {
+  let browser: any = null;
+
+  try {
+    const playwright = await import("playwright");
+    const chromium = playwright.chromium;
+
+    browser = await chromium.launch({
+      headless: true,
+    });
+
+    const page = await browser.newPage({
+      userAgent:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
+      locale: "pl-PL",
+    });
+
+    await page.goto(url, {
+      waitUntil: "domcontentloaded",
+      timeout: 45000,
+    });
+
+    const dismissTexts = [/jasne/i, /akceptuj/i, /zgadzam/i, /rozumiem/i, /zamknij/i];
+
+    for (const rx of dismissTexts) {
+      const btn = page.getByText(rx).first();
+      const count = await btn.count().catch(() => 0);
+      if (count > 0) {
+        await btn.click({ timeout: 1500 }).catch(() => {});
+        await page.waitForTimeout(300).catch(() => {});
+      }
+    }
+
+    const showPhoneBtn = page.getByText(/pokaż numer/i).first();
+    const showCount = await showPhoneBtn.count().catch(() => 0);
+
+    if (showCount > 0) {
+      await showPhoneBtn.click({ timeout: 5000 }).catch(() => {});
+      await page.waitForTimeout(1500).catch(() => {});
+    }
+
+    const telHref = await page
+      .locator('a[href^="tel:"]')
+      .first()
+      .getAttribute("href")
+      .catch(() => null);
+
+    const fromHref = normalizePhone(
+      typeof telHref === "string" ? telHref.replace(/^tel:/i, "") : null
+    );
+    if (fromHref) return fromHref;
+
+    const bodyText = await page.locator("body").innerText().catch(() => "");
+    const m = bodyText.match(/(?:\+?48[\s-]?)?(?:\d[\s-]?){9,11}/);
+    const fromText = normalizePhone(m?.[0] ?? null);
+    if (fromText) return fromText;
+  } catch {
+    return null;
+  } finally {
+    try {
+      await browser?.close();
+    } catch {}
+  }
+
+  return null;
 }
 
 function extractNextData(html: string): any | null {
@@ -47,13 +132,14 @@ async function fetchHtml(url: string): Promise<string> {
     headers: {
       "User-Agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
-      "Accept":
+      Accept:
         "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
       "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.7",
       "Cache-Control": "no-cache",
-      "Pragma": "no-cache",
+      Pragma: "no-cache",
     },
   });
+
   const html = await r.text();
   if (!r.ok) throw new Error(`FETCH_FAILED ${r.status}`);
   return html;
@@ -97,7 +183,6 @@ function normalizeFloor(v: unknown): string | null {
   const low = s.toLowerCase();
   if (low === "ground_floor" || low.includes("parter") || low.includes("ground")) return "0";
 
-  // floor_2 / FLOOR_2 / "2"
   const m = s.match(/(\d+)/);
   return m ? m[1] : s;
 }
@@ -110,16 +195,13 @@ const otodomEnricher: Enricher = async (url: string): Promise<EnrichResult> => {
 
   const ad = next?.props?.pageProps?.ad;
   if (ad && typeof ad === "object") {
-    // --- core
     out.title = optString(ad.title) ?? optString(ad.slug) ?? null;
 
-    // --- transaction type (REAL: ad.adCategory.type albo ad.target.OfferType)
     out.transaction_type =
       normalizeTx(ad?.adCategory?.type) ??
       normalizeTxPl(ad?.target?.OfferType) ??
       null;
 
-    // --- price & currency (REAL: characteristics + ewentualnie ad.price.value jeśli kiedyś się pojawi)
     const pVal = optNumber(ad?.price?.value);
     const pCur = optString(ad?.price?.currency);
 
@@ -136,7 +218,6 @@ const otodomEnricher: Enricher = async (url: string): Promise<EnrichResult> => {
     out.price_amount = pVal ?? priceFromChars ?? null;
     out.currency = pCur ?? currencyFromChars ?? null;
 
-    // --- area / rooms / price per m2 (REAL: characteristics)
     out.area_m2 = optNumber(getChar(ad, "m")) ?? null;
 
     const roomsRaw = optNumber(getChar(ad, "rooms_num"));
@@ -147,7 +228,6 @@ const otodomEnricher: Enricher = async (url: string): Promise<EnrichResult> => {
       optNumber(getChar(ad, "price_per_m2")) ??
       null;
 
-    // --- floor / year built (REAL: characteristics)
     out.floor = normalizeFloor(getChar(ad, "floor_no")) ?? null;
 
     out.year_built =
@@ -155,13 +235,11 @@ const otodomEnricher: Enricher = async (url: string): Promise<EnrichResult> => {
       optNumber(getChar(ad, "building_year")) ??
       null;
 
-    // --- property type (REAL: adCategory/name + property.type)
     out.property_type =
-      optString(ad?.property?.type) ??        // np. FLAT / HOUSE / ...
-      optString(ad?.adCategory?.name) ??      // np. FLAT
+      optString(ad?.property?.type) ??
+      optString(ad?.adCategory?.name) ??
       null;
 
-    // --- location (REAL: ad.location.address.*)
     const addr = ad?.location?.address;
 
     out.street =
@@ -184,13 +262,11 @@ const otodomEnricher: Enricher = async (url: string): Promise<EnrichResult> => {
       optString(addr?.province?.code) ??
       null;
 
-    // fallback: powiat jako district jeśli district brak
     if (!out.district) out.district = optString(addr?.county?.name) ?? null;
 
     out.location_text =
       [out.street, out.district, out.city, out.voivodeship].filter(Boolean).join(", ") || null;
 
-    // --- thumbnail / images (REAL: images[*].large/medium/small/thumbnail)
     out.thumb_url =
       optString(ad?.images?.[0]?.large) ??
       optString(ad?.images?.[0]?.medium) ??
@@ -198,24 +274,33 @@ const otodomEnricher: Enricher = async (url: string): Promise<EnrichResult> => {
       optString(ad?.images?.[0]?.thumbnail) ??
       null;
 
-    // --- publish/update time (REAL: pushedUpAt/modifiedAt/createdAt)
     out.matched_at =
       optString(ad?.pushedUpAt) ??
       optString(ad?.modifiedAt) ??
       optString(ad?.createdAt) ??
       null;
 
-    // --- phone (REAL: contactDetails.phones / owner.phones / agency.phones)
     out.owner_phone =
-      optString(ad?.contactDetails?.phones?.[0]) ??
-      optString(ad?.owner?.phones?.[0]) ??
-      optString(ad?.agency?.phones?.[0]) ??
+      normalizePhone(optString(ad?.contactDetails?.phones?.[0])) ??
+      normalizePhone(optString(ad?.owner?.phones?.[0])) ??
+      normalizePhone(optString(ad?.agency?.phones?.[0])) ??
       null;
+
+    if (!out.owner_phone) {
+      out.owner_phone = await revealPhoneWithPlaywright(url);
+    }
+
+    (out as any).raw = {
+      source: "otodom",
+      extractedAt: new Date().toISOString(),
+      phoneSource: out.owner_phone ? "next-data-or-playwright" : "not-found",
+      ad,
+    };
 
     return out;
   }
 
-  // ===== Fallback HTML (tylko gdy nie ma __NEXT_DATA__/ad) =====
+  // ===== Fallback HTML (gdy nie ma __NEXT_DATA__/ad) =====
   const $ = cheerio.load(html);
 
   const title =
@@ -245,6 +330,17 @@ const otodomEnricher: Enricher = async (url: string): Promise<EnrichResult> => {
     $("img").first().attr("src") ||
     null;
   out.thumb_url = absUrl(url, img);
+
+  if (!out.owner_phone) {
+    out.owner_phone = await revealPhoneWithPlaywright(url);
+  }
+
+  (out as any).raw = {
+    source: "otodom",
+    extractedAt: new Date().toISOString(),
+    phoneSource: out.owner_phone ? "playwright-fallback" : "not-found",
+    htmlFallback: true,
+  };
 
   return out;
 };
