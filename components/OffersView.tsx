@@ -28,41 +28,68 @@ type OffersTab = "office" | "everybot";
 
 type ExternalRow = {
   id: string;
-  external_id?: string; // zostaw opcjonalnie na przyszłość
   office_id: string | null;
+
   source: string;
+  source_listing_id?: string | null;
   source_url: string;
+
   title: string | null;
+  description?: string | null;
+
   price_amount: string | number | null;
   currency: string | null;
+
   location_text: string | null;
   status: string;
-  imported_at: string;
+  shortlisted?: boolean;
+
+  imported_at?: string | null;
   updated_at: string;
+
   thumb_url: string | null;
-  lat?: number | null;
-  lng?: number | null;
-  rcn_last_price?: number | null;
-  rcn_last_date?: string | null;
-  rcn_link?: string | null;
 
-
-  // NOWE kolumny (Esti-like)
-  owner_phone?: string | null;
   matched_at?: string | null;
-  property_type?: string | null;
+
   transaction_type?: "sale" | "rent" | null;
+  property_type?: string | null;
+
   area_m2?: number | null;
   price_per_m2?: number | null;
   rooms?: number | null;
   floor?: string | null;
   year_built?: number | null;
+
   voivodeship?: string | null;
   city?: string | null;
   district?: string | null;
   street?: string | null;
-};
 
+  owner_phone?: string | null;
+
+  source_status?: string | null;
+  first_seen_at?: string | null;
+  last_seen_at?: string | null;
+  last_checked_at?: string | null;
+  enriched_at?: string | null;
+
+  lat?: number | null;
+  lng?: number | null;
+  geocoded_at?: string | null;
+  geocode_source?: string | null;
+  geocode_confidence?: number | null;
+
+  rcn_last_price?: number | null;
+  rcn_last_date?: string | null;
+  rcn_link?: string | null;
+  rcn_enriched_at?: string | null;
+
+  handled_by_office_id?: string | null;
+  handled_since?: string | null;
+  last_interaction_at?: string | null;
+  last_action?: string | null;
+  my_office_saved?: boolean | null;
+};
 
 function clsx(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
@@ -73,6 +100,19 @@ function fmtPrice(v: ExternalRow["price_amount"], currency?: string | null) {
   const n = typeof v === "number" ? v : Number(v);
   if (!Number.isFinite(n)) return String(v);
   return `${n.toLocaleString()} ${currency ?? ""}`.trim();
+}
+function fmtDate(v?: string | null) {
+  if (!v) return "-";
+  const ms = Date.parse(v);
+  if (!Number.isFinite(ms)) return "-";
+  return new Date(ms).toLocaleString();
+}
+
+function fmtShortDate(v?: string | null) {
+  if (!v) return "-";
+  const ms = Date.parse(v);
+  if (!Number.isFinite(ms)) return "-";
+  return new Date(ms).toLocaleDateString();
 }
 
 function normalizeVoivodeshipInput(v?: string | null): string | null {
@@ -1290,127 +1330,263 @@ return (
                   <div ref={everybotTableRef} className="w-full">
                     <div className="divide-y divide-white/10">
                       {botRows.map((r) => {
-                        const selected = selectedExternalId === r.id;
-                        const highlighted = highlightIds.includes(r.id);
+                      const selected = selectedExternalId === r.id;
+                      const highlighted = highlightIds.includes(r.id);
 
-                        const title = r.title ?? "-";
-                        const price = fmtPrice(r.price_amount, r.currency);
-                        const area = r.area_m2 != null ? `${r.area_m2} m²` : null;
-                        const rooms = r.rooms != null ? `${r.rooms} pokoje` : null;
-                        const floor = r.floor ? `${r.floor} piętro` : null;
-                        const ppm2 =
-                          r.price_per_m2 != null
-                            ? `${Math.round(r.price_per_m2).toLocaleString()} zł/m²`
-                            : null;
+                      const title = r.title ?? "-";
+                      const price = fmtPrice(r.price_amount, r.currency);
+                      const area = r.area_m2 != null ? `${r.area_m2} m²` : "-";
+                      const rooms = r.rooms != null ? `${r.rooms}` : "-";
+                      const floor = r.floor ?? "-";
+                      const yearBuilt = r.year_built != null ? String(r.year_built) : "-";
+                      const ppm2 =
+                        r.price_per_m2 != null
+                          ? `${Math.round(r.price_per_m2).toLocaleString()} zł/m²`
+                          : "-";
 
-                        const locLine =
-                          [r.street, r.district, r.city, r.voivodeship].filter(Boolean).join(", ") ||
-                          (r.location_text ?? "");
+                      const location =
+                        [r.street, r.district, r.city, r.voivodeship].filter(Boolean).join(", ") ||
+                        r.location_text ||
+                        "-";
 
-                        return (
-                          <div
-                            key={r.id}
-                            ref={(el) => {
-                              rowRefs.current[r.id] = el;
-                            }}
-                            className={clsx(
-                              "p-2.5 md:p-3",
-                              "bg-white/5 hover:bg-white/7 transition",
-                              selected && "ring-1 ring-white/20 bg-white/10"
-                            )}
-                          >
-                            <div className="flex gap-3">
-                              {/* zdjęcie */}
-                              <div className="shrink-0">
-                                {r.thumb_url ? (
-                                  <img
-                                    src={r.thumb_url}
-                                    alt=""
-                                    className="h-14 w-20 rounded-lg object-cover ring-1 ring-white/10"
-                                    loading="lazy"
-                                  />
-                                ) : (
-                                  <div className="h-14 w-20 rounded-lg bg-white/10 ring-1 ring-white/10" />
-                                )}
-                                <div className="mt-1 text-[10px] text-white/50">
-                                  {r.source}
-                                  {r.matched_at ? ` • ${new Date(r.matched_at).toLocaleDateString()}` : ""}
-                                </div>
-                              </div>
+                      const lastActivity =
+                        r.last_interaction_at ||
+                        r.last_seen_at ||
+                        r.last_checked_at ||
+                        r.updated_at ||
+                        null;
 
-                              {/* treść */}
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="min-w-0">
-                                    <div className="flex min-w-0 items-center gap-2">
-                                      <span
+                      const officeState = r.my_office_saved
+                        ? "zapisane"
+                        : r.last_action
+                        ? r.last_action
+                        : "-";
+
+                      const hasMap = typeof r.lat === "number" && typeof r.lng === "number";
+                      const hasRCN = r.rcn_last_price != null;
+                      const hasPhone = !!r.owner_phone;
+                      const hasEnriched = !!r.enriched_at;
+
+                      return (
+                        <div
+                          key={r.id}
+                          ref={(el) => {
+                            rowRefs.current[r.id] = el;
+                          }}
+                          className={clsx(
+                            "p-3",
+                            "bg-white/5 hover:bg-white/7 transition",
+                            selected && "ring-1 ring-white/20 bg-white/10"
+                          )}
+                        >
+                          <div className="flex gap-3">
+                            {/* MINIATURA */}
+                            <div className="shrink-0">
+                              {r.thumb_url ? (
+                                <img
+                                  src={r.thumb_url}
+                                  alt=""
+                                  className="h-16 w-24 rounded-lg object-cover ring-1 ring-white/10"
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <div className="h-16 w-24 rounded-lg bg-white/10 ring-1 ring-white/10" />
+                              )}
+                            </div>
+
+                            {/* GŁÓWNY UKŁAD AGENTA */}
+                            <div className="min-w-0 flex-1">
+                              {/* WIERSZ 1 */}
+                              <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,2.2fr)_minmax(180px,0.9fr)_minmax(170px,0.8fr)_minmax(180px,0.9fr)]">
+                                {/* Oferta */}
+                                <div className="min-w-0">
+                                  <div className="flex min-w-0 items-center gap-2">
+                                    <span
                                       className={clsx(
-                                        "h-2.5 w-2.5 rounded-full ring-1 ring-white/15 shrink-0",
+                                        "h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-white/15",
                                         highlighted ? "bg-emerald-400" : "bg-amber-300"
                                       )}
                                       title={highlighted ? "Podświetlone" : "Standard"}
                                     />
                                     <div className="truncate text-sm font-semibold text-white">{title}</div>
                                   </div>
-                                    {locLine ? (
-                                      <div className="truncate text-[11px] text-white/60">{locLine}</div>
+
+                                  <div className="mt-1 flex flex-wrap gap-1.5">
+                                    <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/85 ring-1 ring-white/10">
+                                      {r.source}
+                                    </span>
+                                    {r.transaction_type ? (
+                                      <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
+                                        {r.transaction_type}
+                                      </span>
                                     ) : null}
-                                  </div>
-
-                                  {/* cena */}
-                                  <div className="text-right">
-                                    <div className="text-sm font-extrabold text-white">{price}</div>
-                                    {ppm2 ? <div className="text-[11px] text-white/50">{ppm2}</div> : null}
-                                  </div>
-                                </div>
-
-                                {/* meta */}
-                                <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-white/70">
-                                  {r.transaction_type ? <span>{r.transaction_type}</span> : null}
-                                  {r.property_type ? <span>{r.property_type}</span> : null}
-                                  {area ? <span>{area}</span> : null}
-                                  {rooms ? <span>{rooms}</span> : null}
-                                  {floor ? <span>{floor}</span> : null}
-                                  {r.year_built ? <span>{r.year_built}</span> : null}
-                                </div>
-
-                                {/* RCN + telefon + akcje */}
-                                <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
-                                  <div className="text-[11px] text-white/60">
-                                    {r.owner_phone ? <span className="mr-3">📞 {r.owner_phone}</span> : null}
-
-                                    {r.rcn_last_price != null ? (
-                                      <span className="mr-3">
-                                        🧾 RCN: {Math.round(r.rcn_last_price).toLocaleString()} zł
-                                        {r.rcn_last_date ? ` (${new Date(r.rcn_last_date).toLocaleDateString()})` : ""}
-                                        {r.rcn_link ? (
-                                          <>
-                                            {" "}
-                                            <a
-                                              href={r.rcn_link}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className="text-ew-accent underline"
-                                            >
-                                              źródło
-                                            </a>
-                                          </>
-                                        ) : null}
+                                    {r.property_type ? (
+                                      <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
+                                        {r.property_type}
+                                      </span>
+                                    ) : null}
+                                    <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
+                                      status: {r.status || "-"}
+                                    </span>
+                                    {r.source_status ? (
+                                      <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
+                                        źródło: {r.source_status}
+                                      </span>
+                                    ) : null}
+                                    {r.shortlisted ? (
+                                      <span className="rounded bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-200 ring-1 ring-emerald-500/20">
+                                        shortlist
+                                      </span>
+                                    ) : null}
+                                    {r.my_office_saved ? (
+                                      <span className="rounded bg-sky-500/15 px-2 py-0.5 text-[10px] text-sky-200 ring-1 ring-sky-500/20">
+                                        w biurze
+                                      </span>
+                                    ) : null}
+                                    {hasPhone ? (
+                                      <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
+                                        telefon
+                                      </span>
+                                    ) : null}
+                                    {hasRCN ? (
+                                      <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
+                                        RCN
+                                      </span>
+                                    ) : null}
+                                    {hasMap ? (
+                                      <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
+                                        mapa
+                                      </span>
+                                    ) : null}
+                                    {hasEnriched ? (
+                                      <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
+                                        enriched
                                       </span>
                                     ) : null}
                                   </div>
 
-                                 <div className="flex flex-col items-end gap-1.5">
+                                  <div className="mt-1.5 truncate text-[11px] text-white/60">{location}</div>
+
+                                  {r.description ? (
+                                    <div className="mt-1 line-clamp-2 text-[11px] text-white/45">
+                                      {r.description}
+                                    </div>
+                                  ) : null}
+                                </div>
+
+                                {/* Cena */}
+                                <div>
+                                  <div className="text-sm font-extrabold text-white">{price}</div>
+                                  <div className="mt-1 text-[11px] text-white/55">{ppm2}</div>
+                                </div>
+
+                                {/* Parametry */}
+                                <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-white/70">
+                                  <div>
+                                    <span className="text-white/45">m²:</span> {area}
+                                  </div>
+                                  <div>
+                                    <span className="text-white/45">pokoje:</span> {rooms}
+                                  </div>
+                                  <div>
+                                    <span className="text-white/45">piętro:</span> {floor}
+                                  </div>
+                                  <div>
+                                    <span className="text-white/45">rok:</span> {yearBuilt}
+                                  </div>
+                                </div>
+
+                                {/* Kontakt / źródło */}
+                                <div className="space-y-1 text-[11px] text-white/70">
+                                  <div className="truncate">
+                                    <span className="text-white/45">telefon:</span>{" "}
+                                    {r.owner_phone ? r.owner_phone : "-"}
+                                  </div>
+                                  <div className="truncate">
+                                    <span className="text-white/45">ID źródła:</span>{" "}
+                                    {r.source_listing_id ? r.source_listing_id : "-"}
+                                  </div>
+                                  <div className="truncate">
+                                    <span className="text-white/45">matched:</span> {fmtShortDate(r.matched_at)}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* WIERSZ 2 */}
+                              <div className="mt-3 grid grid-cols-1 gap-3 border-t border-white/10 pt-3 xl:grid-cols-[minmax(220px,1fr)_minmax(240px,1.1fr)_minmax(220px,0.9fr)_auto]">
+                                {/* RCN */}
+                                <div className="text-[11px] text-white/65">
+                                  <div className="font-semibold text-white/80">RCN</div>
+                                  {r.rcn_last_price != null ? (
+                                    <div className="mt-1">
+                                      {Math.round(r.rcn_last_price).toLocaleString()} zł
+                                      {r.rcn_last_date ? ` • ${fmtShortDate(r.rcn_last_date)}` : ""}
+                                      {r.rcn_link ? (
+                                        <>
+                                          {" • "}
+                                          <a
+                                            href={r.rcn_link}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-ew-accent underline"
+                                          >
+                                            źródło
+                                          </a>
+                                        </>
+                                      ) : null}
+                                    </div>
+                                  ) : (
+                                    <div className="mt-1 text-white/40">brak</div>
+                                  )}
+                                </div>
+
+                                {/* Aktywność źródła */}
+                                <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-white/65">
+                                  <div>
+                                    <span className="text-white/45">first seen:</span> {fmtShortDate(r.first_seen_at)}
+                                  </div>
+                                  <div>
+                                    <span className="text-white/45">last seen:</span> {fmtShortDate(r.last_seen_at)}
+                                  </div>
+                                  <div>
+                                    <span className="text-white/45">last checked:</span> {fmtDate(r.last_checked_at)}
+                                  </div>
+                                  <div>
+                                    <span className="text-white/45">updated:</span> {fmtDate(r.updated_at)}
+                                  </div>
+                                  <div>
+                                    <span className="text-white/45">enriched:</span> {fmtDate(r.enriched_at)}
+                                  </div>
+                                  <div>
+                                    <span className="text-white/45">geocoded:</span> {fmtDate(r.geocoded_at)}
+                                  </div>
+                                </div>
+
+                                {/* Status biura */}
+                                <div className="grid grid-cols-1 gap-y-1 text-[11px] text-white/65">
+                                  <div>
+                                    <span className="text-white/45">stan biura:</span> {officeState}
+                                  </div>
+                                  <div>
+                                    <span className="text-white/45">ostatnia interakcja:</span> {fmtDate(lastActivity)}
+                                  </div>
+                                  <div>
+                                    <span className="text-white/45">handled since:</span> {fmtDate(r.handled_since)}
+                                  </div>
+                                </div>
+
+                                {/* Akcje */}
+                                <div className="flex flex-col items-end gap-1.5">
                                   <button
                                     type="button"
                                     disabled={savingId === r.id || savedIds.has(r.id)}
                                     className={clsx(
                                       "rounded-xl border px-3 py-1 text-[11px] font-semibold shadow-sm transition",
                                       savedIds.has(r.id)
-                                        ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-200 cursor-default"
+                                        ? "cursor-default border-emerald-500/25 bg-emerald-500/10 text-emerald-200"
                                         : savingId === r.id
-                                          ? "border-white/10 bg-white/5 text-white/35 cursor-not-allowed"
-                                          : "border-white/10 bg-white/10 text-white hover:bg-white/15"
+                                        ? "cursor-not-allowed border-white/10 bg-white/5 text-white/35"
+                                        : "border-white/10 bg-white/10 text-white hover:bg-white/15"
                                     )}
                                     onClick={() => saveExternalListing(r.id, "save")}
                                     title="Zapisz do działań"
@@ -1423,18 +1599,18 @@ return (
                                       href={r.source_url}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="text-ew-accent underline text-[11px] font-semibold"
+                                      className="text-[11px] font-semibold text-ew-accent underline"
                                     >
                                       {t(lang, "everybotOpen" as any)}
                                     </a>
                                   ) : null}
-                                  </div>
                                 </div>
                               </div>
                             </div>
                           </div>
-                        );
-                      })}
+                        </div>
+                      );
+                    })}
                     </div>
                   </div>
 

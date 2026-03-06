@@ -7,23 +7,30 @@ import { getOfficeIdForUserId } from "../../../lib/office";
 type Row = {
   id: string;
   office_id: string;
+
   source: string;
+  source_listing_id: string | null;
   source_url: string;
+
   status: string;
+  shortlisted: boolean;
+
   title: string | null;
   description: string | null;
-  price_amount: number | null;
-  lat: number | null;
-  lng: number | null;
-  rcn_last_price: number | null;
-  rcn_last_date: string | null;
-  rcn_link: string | null;
 
+  price_amount: number | null;
   currency: string | null;
   location_text: string | null;
 
   thumb_url: string | null;
+
+  imported_at: string;
   matched_at: string | null;
+  first_seen_at: string | null;
+  last_seen_at: string | null;
+  last_checked_at: string | null;
+  enriched_at: string | null;
+  updated_at: string;
 
   transaction_type: string | null;
   property_type: string | null;
@@ -31,7 +38,6 @@ type Row = {
   area_m2: number | null;
   price_per_m2: number | null;
   rooms: number | null;
-
   floor: string | null;
   year_built: number | null;
 
@@ -41,13 +47,18 @@ type Row = {
   street: string | null;
 
   owner_phone: string | null;
-
   source_status: string | null;
-  last_seen_at: string | null;
-  last_checked_at: string | null;
-  enriched_at: string | null;
 
-  updated_at: string;
+  lat: number | null;
+  lng: number | null;
+  geocoded_at: string | null;
+  geocode_source: string | null;
+  geocode_confidence: number | null;
+
+  rcn_last_price: number | null;
+  rcn_last_date: string | null;
+  rcn_link: string | null;
+  rcn_enriched_at: string | null;
 
   handled_by_office_id?: string | null;
   handled_since?: string | null;
@@ -277,27 +288,67 @@ function buildListSql(whereSql: string, orderBy: string, pLimit: number, pOffset
       GROUP BY external_listing_id
     )
     SELECT
-      l.id, l.office_id, l.source, l.source_url, l.status,
-      l.title, l.description,
-      l.price_amount, l.currency, l.location_text,
-      l.thumb_url, l.matched_at,
-      l.transaction_type, l.property_type,
-      l.area_m2, l.price_per_m2, l.rooms,
-      l.floor, l.year_built,
-      l.voivodeship, l.city, l.district, l.street,
-      l.owner_phone,
-      l.source_status, l.last_seen_at, l.last_checked_at, l.enriched_at,
+      l.id,
+      l.office_id,
 
-      l.lat, l.lng,
-      l.rcn_last_price, l.rcn_last_date, l.rcn_link,
+      l.source,
+      l.source_listing_id,
+      l.source_url,
 
+      l.status,
+      l.shortlisted,
+
+      l.title,
+      l.description,
+
+      l.price_amount,
+      l.currency,
+      l.location_text,
+
+      l.thumb_url,
+
+      l.imported_at,
+      l.matched_at,
+      l.first_seen_at,
+      l.last_seen_at,
+      l.last_checked_at,
+      l.enriched_at,
       l.updated_at,
+
+      l.transaction_type,
+      l.property_type,
+
+      l.area_m2,
+      l.price_per_m2,
+      l.rooms,
+      l.floor,
+      l.year_built,
+
+      l.voivodeship,
+      l.city,
+      l.district,
+      l.street,
+
+      l.owner_phone,
+      l.source_status,
+
+      l.lat,
+      l.lng,
+      l.geocoded_at,
+      l.geocode_source,
+      l.geocode_confidence,
+
+      l.rcn_last_price,
+      l.rcn_last_date,
+      l.rcn_link,
+      l.rcn_enriched_at,
 
       a.handled_by_office_id,
       a.handled_since,
       a.last_interaction_at,
       a.last_action,
       COALESCE(ms.my_office_saved, FALSE) AS my_office_saved
+      
     FROM external_listings l
     LEFT JOIN action_agg a ON a.external_listing_id = l.id
     LEFT JOIN my_saved ms ON ms.external_listing_id = l.id
