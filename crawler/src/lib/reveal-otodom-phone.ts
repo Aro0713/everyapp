@@ -61,39 +61,35 @@ async function dismissOverlays(page: Page): Promise<void> {
     } catch {}
   }
 
-  await page
-    .waitForFunction(() => {
-      const sdk = document.querySelector("#onetrust-consent-sdk");
-      if (!sdk) return true;
+  await page.waitForFunction(() => {
+    const sdk = document.querySelector("#onetrust-consent-sdk");
+    if (!sdk) return true;
 
-      const dark = document.querySelector(".onetrust-pc-dark-filter") as HTMLElement | null;
-      const banner = document.querySelector("#onetrust-banner-sdk") as HTMLElement | null;
+    const dark = document.querySelector(".onetrust-pc-dark-filter") as HTMLElement | null;
+    const banner = document.querySelector("#onetrust-banner-sdk") as HTMLElement | null;
 
-      const hidden = (el: HTMLElement | null) =>
-        !el ||
-        el.style.display === "none" ||
-        el.style.visibility === "hidden" ||
-        el.getAttribute("aria-hidden") === "true";
+    const hidden = (el: HTMLElement | null) =>
+      !el ||
+      el.style.display === "none" ||
+      el.style.visibility === "hidden" ||
+      el.getAttribute("aria-hidden") === "true";
 
-      return hidden(dark) && hidden(banner);
-    }, { timeout: 5000 })
-    .catch(() => {});
+    return hidden(dark) && hidden(banner);
+  }, { timeout: 5000 }).catch(() => {});
 }
 
 async function clickOtodomTopPhoneButton(page: Page): Promise<boolean> {
   const topSection = page.locator("main").first();
 
-  const contactPanel = topSection
-    .locator(
-      [
-        '[data-cy*="ad-contact"]',
-        '[data-testid*="contact"]',
-        "aside",
-        '[class*="contact"]',
-        '[class*="phone"]',
-      ].join(", ")
-    )
-    .first();
+  const contactPanel = topSection.locator(
+    [
+      '[data-cy*="ad-contact"]',
+      '[data-testid*="contact"]',
+      "aside",
+      '[class*="contact"]',
+      '[class*="phone"]',
+    ].join(", ")
+  ).first();
 
   const panelVisible = await contactPanel.isVisible().catch(() => false);
   if (!panelVisible) return false;
@@ -142,9 +138,9 @@ export async function revealOtodomPhone(url: string): Promise<string | null> {
   const executablePath = await chromiumBinary.executablePath();
 
   const browser = await chromium.launch({
-    headless: true,
-    executablePath,
     args: chromiumBinary.args,
+    executablePath,
+    headless: true,
   });
 
   try {
@@ -167,15 +163,13 @@ export async function revealOtodomPhone(url: string): Promise<string | null> {
       await page.waitForTimeout(3000).catch(() => {});
     }
 
-    await page
-      .waitForFunction(() => {
-        const tel = document.querySelector('a[href^="tel:"]');
-        if (tel) return true;
+    await page.waitForFunction(() => {
+      const tel = document.querySelector('a[href^="tel:"]');
+      if (tel) return true;
 
-        const text = document.body?.innerText || "";
-        return /(?:\+48\s*)?(?:\d[\s-]?){9,}/.test(text);
-      }, { timeout: 10000 })
-      .catch(() => {});
+      const text = document.body?.innerText || "";
+      return /(?:\+48\s*)?(?:\d[\s-]?){9,}/.test(text);
+    }, { timeout: 10000 }).catch(() => {});
 
     const telText = await page
       .locator('a[href^="tel:"]')
