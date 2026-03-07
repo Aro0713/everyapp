@@ -203,6 +203,7 @@ const [botFilters, setBotFilters] = useState<EverybotFilters>({
   const [saveMode, setSaveMode] = useState<"agent" | "office">("agent");
   const [savingId, setSavingId] = useState<string | null>(null);
   const [savedIds, setSavedIds] = useState<Set<string>>(() => new Set());
+  const [revealingPhoneIds, setRevealingPhoneIds] = useState<Set<string>>(() => new Set());
 
   async function saveExternalListing(
   externalListingId: string,
@@ -237,6 +238,52 @@ const [botFilters, setBotFilters] = useState<EverybotFilters>({
       setSavingId(null);
     }
   }
+async function revealPhone(externalListingId: string) {
+  if (!externalListingId) return;
+
+  setRevealingPhoneIds((prev) => {
+    const next = new Set(prev);
+    next.add(externalListingId);
+    return next;
+  });
+
+  try {
+    const r = await fetch("/api/external_listings/reveal-phone", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        external_listing_id: externalListingId,
+      }),
+    });
+
+    const j = await r.json().catch(() => null);
+    if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
+
+    const phone =
+      typeof j?.phone === "string" && j.phone.trim()
+        ? j.phone.trim()
+        : null;
+
+    setBotRows((prev) =>
+      prev.map((row) =>
+        row.id === externalListingId
+          ? {
+              ...row,
+              owner_phone: phone,
+            }
+          : row
+      )
+    );
+  } catch (e: any) {
+    alert(`Nie udało się pobrać numeru: ${e?.message ?? "Unknown error"}`);
+  } finally {
+    setRevealingPhoneIds((prev) => {
+      const next = new Set(prev);
+      next.delete(externalListingId);
+      return next;
+    });
+  }
+}
 function setHighlightFromRows(rows: ExternalRow[], limit: number) {
   const n = Math.min(Math.max(Number(limit) || 0, 0), 10);
   setHighlightIds(n ? rows.slice(0, n).map((r) => r.id) : []);
@@ -1329,188 +1376,320 @@ return (
                 <>
                   <div ref={everybotTableRef} className="w-full">
                     <div className="divide-y divide-white/10">
-                      {botRows.map((r) => {
-                      const selected = selectedExternalId === r.id;
-                      const highlighted = highlightIds.includes(r.id);
+                     {botRows.map((r) => {
+                    const selected = selectedExternalId === r.id;
+                    const highlighted = highlightIds.includes(r.id);
 
-                      const title = r.title ?? "-";
-                      const price = fmtPrice(r.price_amount, r.currency);
-                      const area = r.area_m2 != null ? `${r.area_m2} m²` : "-";
-                      const rooms = r.rooms != null ? `${r.rooms}` : "-";
-                      const floor = r.floor ?? "-";
-                      const yearBuilt = r.year_built != null ? String(r.year_built) : "-";
-                      const ppm2 =
-                        r.price_per_m2 != null
-                          ? `${Math.round(r.price_per_m2).toLocaleString()} zł/m²`
-                          : "-";
-
-                      const location =
-                        [r.street, r.district, r.city, r.voivodeship].filter(Boolean).join(", ") ||
-                        r.location_text ||
-                        "-";
-
-                      const lastActivity =
-                        r.last_interaction_at ||
-                        r.last_seen_at ||
-                        r.last_checked_at ||
-                        r.updated_at ||
-                        null;
-
-                      const officeState = r.my_office_saved
-                        ? "zapisane"
-                        : r.last_action
-                        ? r.last_action
+                    const title = r.title ?? "-";
+                    const price = fmtPrice(r.price_amount, r.currency);
+                    const area = r.area_m2 != null ? `${r.area_m2} m²` : "-";
+                    const rooms = r.rooms != null ? `${r.rooms}` : "-";
+                    const floor = r.floor ?? "-";
+                    const yearBuilt = r.year_built != null ? String(r.year_built) : "-";
+                    const ppm2 =
+                      r.price_per_m2 != null
+                        ? `${Math.round(r.price_per_m2).toLocaleString()} zł/m²`
                         : "-";
 
-                      const hasMap = typeof r.lat === "number" && typeof r.lng === "number";
-                      const hasRCN = r.rcn_last_price != null;
-                      const hasPhone = !!r.owner_phone;
-                      const hasEnriched = !!r.enriched_at;
+                    const location =
+                      [r.street, r.district, r.city, r.voivodeship].filter(Boolean).join(", ") ||
+                      r.location_text ||
+                      "-";
 
-                      return (
-                        <div
-                          key={r.id}
-                          ref={(el) => {
-                            rowRefs.current[r.id] = el;
-                          }}
-                          className={clsx(
-                            "p-3",
-                            "bg-white/5 hover:bg-white/7 transition",
-                            selected && "ring-1 ring-white/20 bg-white/10"
-                          )}
-                        >
-                          <div className="flex gap-3">
-                            {/* MINIATURA */}
-                            <div className="shrink-0">
-                              {r.thumb_url ? (
-                                <img
-                                  src={r.thumb_url}
-                                  alt=""
-                                  className="h-16 w-24 rounded-lg object-cover ring-1 ring-white/10"
-                                  loading="lazy"
-                                />
-                              ) : (
-                                <div className="h-16 w-24 rounded-lg bg-white/10 ring-1 ring-white/10" />
-                              )}
-                            </div>
+                    const lastActivity =
+                      r.last_interaction_at ||
+                      r.last_seen_at ||
+                      r.last_checked_at ||
+                      r.updated_at ||
+                      null;
 
-                            {/* GŁÓWNY UKŁAD AGENTA */}
-                            <div className="min-w-0 flex-1">
-                              {/* WIERSZ 1 */}
-                              <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,2.2fr)_minmax(180px,0.9fr)_minmax(170px,0.8fr)_minmax(180px,0.9fr)]">
-                                {/* Oferta */}
-                                <div className="min-w-0">
-                                  <div className="flex min-w-0 items-center gap-2">
-                                    <span
-                                      className={clsx(
-                                        "h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-white/15",
-                                        highlighted ? "bg-emerald-400" : "bg-amber-300"
-                                      )}
-                                      title={highlighted ? "Podświetlone" : "Standard"}
-                                    />
-                                    <div className="truncate text-sm font-semibold text-white">{title}</div>
-                                  </div>
+                    const officeState = r.my_office_saved
+                      ? "zapisane"
+                      : r.last_action
+                      ? r.last_action
+                      : "-";
 
-                                  <div className="mt-1 flex flex-wrap gap-1.5">
-                                    <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/85 ring-1 ring-white/10">
-                                      {r.source}
-                                    </span>
-                                    {r.transaction_type ? (
-                                      <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
-                                        {r.transaction_type}
-                                      </span>
-                                    ) : null}
-                                    {r.property_type ? (
-                                      <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
-                                        {r.property_type}
-                                      </span>
-                                    ) : null}
+                    const hasMap = typeof r.lat === "number" && typeof r.lng === "number";
+                    const hasRCN = r.rcn_last_price != null;
+                    const hasPhone = !!r.owner_phone;
+                    const hasEnriched = !!r.enriched_at;
+
+                    return (
+                      <div
+                        key={r.id}
+                        ref={(el) => {
+                          rowRefs.current[r.id] = el;
+                        }}
+                        className={clsx(
+                          "p-3",
+                          "bg-white/5 hover:bg-white/7 transition",
+                          selected && "ring-1 ring-white/20 bg-white/10"
+                        )}
+                      >
+                        <div className="flex gap-3">
+                          {/* MINIATURA */}
+                          <div className="shrink-0">
+                            {r.thumb_url ? (
+                              <img
+                                src={r.thumb_url}
+                                alt=""
+                                className="h-16 w-24 rounded-lg object-cover ring-1 ring-white/10"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="h-16 w-24 rounded-lg bg-white/10 ring-1 ring-white/10" />
+                            )}
+                          </div>
+
+                          {/* GŁÓWNY UKŁAD AGENTA */}
+                          <div className="min-w-0 flex-1">
+                            {/* WIERSZ 1 */}
+                            <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,2.2fr)_minmax(180px,0.9fr)_minmax(170px,0.8fr)_minmax(180px,0.9fr)]">
+                              {/* Oferta */}
+                              <div className="min-w-0">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <span
+                                    className={clsx(
+                                      "h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-white/15",
+                                      highlighted ? "bg-emerald-400" : "bg-amber-300"
+                                    )}
+                                    title={highlighted ? "Podświetlone" : "Standard"}
+                                  />
+                                  <div className="truncate text-sm font-semibold text-white">{title}</div>
+                                </div>
+
+                                <div className="mt-1 flex flex-wrap gap-1.5">
+                                  <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/85 ring-1 ring-white/10">
+                                    {r.source}
+                                  </span>
+
+                                  {r.transaction_type ? (
                                     <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
-                                      status: {r.status || "-"}
+                                      {r.transaction_type}
                                     </span>
-                                    {r.source_status ? (
-                                      <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
-                                        źródło: {r.source_status}
-                                      </span>
-                                    ) : null}
-                                    {r.shortlisted ? (
-                                      <span className="rounded bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-200 ring-1 ring-emerald-500/20">
-                                        shortlist
-                                      </span>
-                                    ) : null}
-                                    {r.my_office_saved ? (
-                                      <span className="rounded bg-sky-500/15 px-2 py-0.5 text-[10px] text-sky-200 ring-1 ring-sky-500/20">
-                                        w biurze
-                                      </span>
-                                    ) : null}
-                                    {hasPhone ? (
-                                      <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
-                                        telefon
-                                      </span>
-                                    ) : null}
-                                    {hasRCN ? (
-                                      <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
-                                        RCN
-                                      </span>
-                                    ) : null}
-                                    {hasMap ? (
-                                      <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
-                                        mapa
-                                      </span>
-                                    ) : null}
-                                    {hasEnriched ? (
-                                      <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
-                                        enriched
-                                      </span>
-                                    ) : null}
-                                  </div>
+                                  ) : null}
 
-                                  <div className="mt-1.5 truncate text-[11px] text-white/60">{location}</div>
+                                  {r.property_type ? (
+                                    <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
+                                      {r.property_type}
+                                    </span>
+                                  ) : null}
 
-                                  {r.description ? (
-                                    <div className="mt-1 line-clamp-2 text-[11px] text-white/45">
-                                      {r.description}
-                                    </div>
+                                  <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
+                                    status: {r.status || "-"}
+                                  </span>
+
+                                  {r.source_status ? (
+                                    <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
+                                      źródło: {r.source_status}
+                                    </span>
+                                  ) : null}
+
+                                  {r.shortlisted ? (
+                                    <span className="rounded bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-200 ring-1 ring-emerald-500/20">
+                                      shortlist
+                                    </span>
+                                  ) : null}
+
+                                  {r.my_office_saved ? (
+                                    <span className="rounded bg-sky-500/15 px-2 py-0.5 text-[10px] text-sky-200 ring-1 ring-sky-500/20">
+                                      w biurze
+                                    </span>
+                                  ) : null}
+
+                                  {hasPhone ? (
+                                    <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
+                                      telefon
+                                    </span>
+                                  ) : null}
+
+                                  {hasRCN ? (
+                                    <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
+                                      RCN
+                                    </span>
+                                  ) : null}
+
+                                  {hasMap ? (
+                                    <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
+                                      mapa
+                                    </span>
+                                  ) : null}
+
+                                  {hasEnriched ? (
+                                    <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
+                                      enriched
+                                    </span>
                                   ) : null}
                                 </div>
 
-                                {/* Cena */}
+                                <div className="mt-1.5 truncate text-[11px] text-white/60">{location}</div>
+
+                                {r.description ? (
+                                  <div className="mt-1 line-clamp-2 text-[11px] text-white/45">
+                                    {r.description}
+                                  </div>
+                                ) : null}
+                              </div>
+
+                              {/* Cena */}
+                              <div>
+                                <div className="text-sm font-extrabold text-white">{price}</div>
+                                <div className="mt-1 text-[11px] text-white/55">{ppm2}</div>
+                              </div>
+
+                              {/* Parametry */}
+                              <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-white/70">
                                 <div>
-                                  <div className="text-sm font-extrabold text-white">{price}</div>
-                                  <div className="mt-1 text-[11px] text-white/55">{ppm2}</div>
+                                  <span className="text-white/45">m²:</span> {area}
                                 </div>
-
-                                {/* Parametry */}
-                                <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-white/70">
-                                  <div>
-                                    <span className="text-white/45">m²:</span> {area}
-                                  </div>
-                                  <div>
-                                    <span className="text-white/45">pokoje:</span> {rooms}
-                                  </div>
-                                  <div>
-                                    <span className="text-white/45">piętro:</span> {floor}
-                                  </div>
-                                  <div>
-                                    <span className="text-white/45">rok:</span> {yearBuilt}
-                                  </div>
+                                <div>
+                                  <span className="text-white/45">pokoje:</span> {rooms}
                                 </div>
-
-                                {/* Kontakt / źródło */}
-                                <div className="space-y-1 text-[11px] text-white/70">
-                                  <div className="truncate">
-                                    <span className="text-white/45">telefon:</span>{" "}
-                                    {r.owner_phone ? r.owner_phone : "-"}
-                                  </div>
-                                  <div className="truncate">
-                                    <span className="text-white/45">ID źródła:</span>{" "}
-                                    {r.source_listing_id ? r.source_listing_id : "-"}
-                                  </div>
-                                  <div className="truncate">
-                                    <span className="text-white/45">matched:</span> {fmtShortDate(r.matched_at)}
-                                  </div>
+                                <div>
+                                  <span className="text-white/45">piętro:</span> {floor}
+                                </div>
+                                <div>
+                                  <span className="text-white/45">rok:</span> {yearBuilt}
                                 </div>
                               </div>
+
+                              {/* Kontakt / źródło */}
+                              <div className="space-y-1 text-[11px] text-white/70">
+                                <div className="truncate">
+                                  <span className="text-white/45">{t(lang, "phoneLabel" as any)}:</span>{" "}
+                                  {r.owner_phone ? (
+                                    <a
+                                      href={`tel:${r.owner_phone}`}
+                                      className="font-semibold text-ew-accent underline"
+                                      title={r.owner_phone}
+                                    >
+                                      {r.owner_phone}
+                                    </a>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      disabled={revealingPhoneIds.has(r.id)}
+                                      onClick={() => revealPhone(r.id)}
+                                      className={clsx(
+                                        "rounded-lg border px-2 py-0.5 text-[11px] font-semibold transition",
+                                        revealingPhoneIds.has(r.id)
+                                          ? "cursor-not-allowed border-white/10 bg-white/5 text-white/35"
+                                          : "border-white/10 bg-white/10 text-white hover:bg-white/15"
+                                      )}
+                                      title={t(lang, "showPhone" as any)}
+                                    >
+                                      {revealingPhoneIds.has(r.id)
+                                        ? t(lang, "loading" as any)
+                                        : t(lang, "showPhone" as any)}
+                                    </button>
+                                  )}
+                                </div>
+
+                                <div className="truncate">
+                                  <span className="text-white/45">ID źródła:</span>{" "}
+                                  {r.source_listing_id ? r.source_listing_id : "-"}
+                                </div>
+
+                                <div className="truncate">
+                                  <span className="text-white/45">matched:</span> {fmtShortDate(r.matched_at)}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* WIERSZ 2 */}
+                            <div className="mt-3 grid grid-cols-1 gap-3 border-t border-white/10 pt-3 xl:grid-cols-[minmax(220px,1fr)_minmax(240px,1.1fr)_minmax(220px,0.9fr)_auto]">
+                              {/* RCN */}
+                              <div className="text-[11px] text-white/65">
+                                <div className="font-semibold text-white/80">RCN</div>
+                                {r.rcn_last_price != null ? (
+                                  <div className="mt-1">
+                                    {Math.round(r.rcn_last_price).toLocaleString()} zł
+                                    {r.rcn_last_date ? ` • ${fmtShortDate(r.rcn_last_date)}` : ""}
+                                    {r.rcn_link ? (
+                                      <>
+                                        {" • "}
+                                        <a
+                                          href={r.rcn_link}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-ew-accent underline"
+                                        >
+                                          źródło
+                                        </a>
+                                      </>
+                                    ) : null}
+                                  </div>
+                                ) : (
+                                  <div className="mt-1 text-white/40">brak</div>
+                                )}
+                              </div>
+
+                              {/* Aktywność źródła */}
+                              <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-white/65">
+                                <div>
+                                  <span className="text-white/45">first seen:</span> {fmtShortDate(r.first_seen_at)}
+                                </div>
+                                <div>
+                                  <span className="text-white/45">last seen:</span> {fmtShortDate(r.last_seen_at)}
+                                </div>
+                                <div>
+                                  <span className="text-white/45">last checked:</span> {fmtDate(r.last_checked_at)}
+                                </div>
+                                <div>
+                                  <span className="text-white/45">updated:</span> {fmtDate(r.updated_at)}
+                                </div>
+                                <div>
+                                  <span className="text-white/45">enriched:</span> {fmtDate(r.enriched_at)}
+                                </div>
+                                <div>
+                                  <span className="text-white/45">geocoded:</span> {fmtDate(r.geocoded_at)}
+                                </div>
+                              </div>
+
+                              {/* Status biura */}
+                              <div className="grid grid-cols-1 gap-y-1 text-[11px] text-white/65">
+                                <div>
+                                  <span className="text-white/45">stan biura:</span> {officeState}
+                                </div>
+                                <div>
+                                  <span className="text-white/45">ostatnia interakcja:</span> {fmtDate(lastActivity)}
+                                </div>
+                                <div>
+                                  <span className="text-white/45">handled since:</span> {fmtDate(r.handled_since)}
+                                </div>
+                              </div>
+
+                              {/* Akcje */}
+                              <div className="flex flex-col items-end gap-1.5">
+                                <button
+                                  type="button"
+                                  disabled={savingId === r.id || savedIds.has(r.id)}
+                                  className={clsx(
+                                    "rounded-xl border px-3 py-1 text-[11px] font-semibold shadow-sm transition",
+                                    savedIds.has(r.id)
+                                      ? "cursor-default border-emerald-500/25 bg-emerald-500/10 text-emerald-200"
+                                      : savingId === r.id
+                                      ? "cursor-not-allowed border-white/10 bg-white/5 text-white/35"
+                                      : "border-white/10 bg-white/10 text-white hover:bg-white/15"
+                                  )}
+                                  onClick={() => saveExternalListing(r.id, "save")}
+                                  title="Zapisz do działań"
+                                >
+                                  {savedIds.has(r.id) ? "✅ Zapisane" : "💾 Zapisz"}
+                                </button>
+
+                                {r.source_url ? (
+                                  <a
+                                    href={r.source_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[11px] font-semibold text-ew-accent underline"
+                                  >
+                                    {t(lang, "everybotOpen" as any)}
+                                  </a>
+                                ) : null}
+                              </div>
+                            </div>
 
                               {/* WIERSZ 2 */}
                               <div className="mt-3 grid grid-cols-1 gap-3 border-t border-white/10 pt-3 xl:grid-cols-[minmax(220px,1fr)_minmax(240px,1.1fr)_minmax(220px,0.9fr)_auto]">

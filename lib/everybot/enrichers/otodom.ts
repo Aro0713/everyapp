@@ -5,6 +5,11 @@ import type { Enricher, EnrichResult } from "./types";
  * OTODOM – ENRICHER (detail page)
  * Źródło prawdy: __NEXT_DATA__.props.pageProps.ad
  * Mapowanie 1:1 pod realny payload (ad.adCategory.type, ad.location.address, characteristics).
+ *
+ * UWAGA:
+ * Ten enricher jest celowo "lekki" i działa w środowisku API/Vercel.
+ * Nie używa Playwright.
+ * Ukryte telefony obsługuje osobny crawler/worker poza Vercel.
  */
 
 function optString(v: unknown): string | null {
@@ -44,73 +49,6 @@ function normalizePhone(v: unknown): string | null {
   if (digits.length === 9) return digits;
   if (digits.length === 11 && digits.startsWith("48")) return `+${digits}`;
   if (digits.length >= 9 && digits.length <= 15) return plus ? `+${digits}` : digits;
-
-  return null;
-}
-
-async function revealPhoneWithPlaywright(url: string): Promise<string | null> {
-  let browser: any = null;
-
-  try {
-    const playwright = await import("playwright");
-    const chromium = playwright.chromium;
-
-    browser = await chromium.launch({
-      headless: true,
-    });
-
-    const page = await browser.newPage({
-      userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
-      locale: "pl-PL",
-    });
-
-    await page.goto(url, {
-      waitUntil: "domcontentloaded",
-      timeout: 45000,
-    });
-
-    const dismissTexts = [/jasne/i, /akceptuj/i, /zgadzam/i, /rozumiem/i, /zamknij/i];
-
-    for (const rx of dismissTexts) {
-      const btn = page.getByText(rx).first();
-      const count = await btn.count().catch(() => 0);
-      if (count > 0) {
-        await btn.click({ timeout: 1500 }).catch(() => {});
-        await page.waitForTimeout(300).catch(() => {});
-      }
-    }
-
-    const showPhoneBtn = page.getByText(/pokaż numer/i).first();
-    const showCount = await showPhoneBtn.count().catch(() => 0);
-
-    if (showCount > 0) {
-      await showPhoneBtn.click({ timeout: 5000 }).catch(() => {});
-      await page.waitForTimeout(1500).catch(() => {});
-    }
-
-    const telHref = await page
-      .locator('a[href^="tel:"]')
-      .first()
-      .getAttribute("href")
-      .catch(() => null);
-
-    const fromHref = normalizePhone(
-      typeof telHref === "string" ? telHref.replace(/^tel:/i, "") : null
-    );
-    if (fromHref) return fromHref;
-
-    const bodyText = await page.locator("body").innerText().catch(() => "");
-    const m = bodyText.match(/(?:\+?48[\s-]?)?(?:\d[\s-]?){9,11}/);
-    const fromText = normalizePhone(m?.[0] ?? null);
-    if (fromText) return fromText;
-  } catch {
-    return null;
-  } finally {
-    try {
-      await browser?.close();
-    } catch {}
-  }
 
   return null;
 }
@@ -280,20 +218,18 @@ const otodomEnricher: Enricher = async (url: string): Promise<EnrichResult> => {
       optString(ad?.createdAt) ??
       null;
 
+    // Tylko jawnie dostępne ścieżki z payloadu strony.
+    // Ukryty numer obsługuje osobny crawler Playwright poza Vercel.
     out.owner_phone =
       normalizePhone(optString(ad?.contactDetails?.phones?.[0])) ??
       normalizePhone(optString(ad?.owner?.phones?.[0])) ??
       normalizePhone(optString(ad?.agency?.phones?.[0])) ??
       null;
 
-    if (!out.owner_phone) {
-      out.owner_phone = await revealPhoneWithPlaywright(url);
-    }
-
     (out as any).raw = {
       source: "otodom",
       extractedAt: new Date().toISOString(),
-      phoneSource: out.owner_phone ? "next-data-or-playwright" : "not-found",
+      phoneSource: out.owner_phone ? "next-data" : "not-found-in-next-data",
       ad,
     };
 
@@ -331,14 +267,10 @@ const otodomEnricher: Enricher = async (url: string): Promise<EnrichResult> => {
     null;
   out.thumb_url = absUrl(url, img);
 
-  if (!out.owner_phone) {
-    out.owner_phone = await revealPhoneWithPlaywright(url);
-  }
-
   (out as any).raw = {
     source: "otodom",
     extractedAt: new Date().toISOString(),
-    phoneSource: out.owner_phone ? "playwright-fallback" : "not-found",
+    phoneSource: "not-found-html-fallback",
     htmlFallback: true,
   };
 

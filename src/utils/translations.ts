@@ -5327,6 +5327,38 @@ everybotSearching: {
     lt: "Realaus laiko KPI: aktyvumas, pipeline, efektyvumas ir greitesni sprendimai.",
     vi: "KPI theo thời gian thực: hoạt động, pipeline, hiệu quả và quyết định nhanh hơn.",
   },
+  showPhone: {
+  pl: "Pokaż numer",
+  en: "Show phone",
+  de: "Telefon anzeigen",
+  cs: "Zobrazit telefon",
+  sk: "Zobraziť telefón",
+  ua: "Показати номер",
+  lt: "Rodyti numerį",
+  vi: "Hiển thị số điện thoại",
+},
+
+phoneLabel: {
+  pl: "Telefon",
+  en: "Phone",
+  de: "Telefon",
+  cs: "Telefon",
+  sk: "Telefón",
+  ua: "Телефон",
+  lt: "Telefonas",
+  vi: "Điện thoại",
+},
+
+loading: {
+  pl: "Ładowanie…",
+  en: "Loading…",
+  de: "Wird geladen…",
+  cs: "Načítání…",
+  sk: "Načítanie…",
+  ua: "Завантаження…",
+  lt: "Įkeliama…",
+  vi: "Đang tải…",
+},
 
 } as const);
 
