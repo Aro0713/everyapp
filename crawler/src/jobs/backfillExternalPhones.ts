@@ -208,7 +208,7 @@ async function main() {
       `COALESCE(source_status, 'active') <> 'removed'`,
       `(owner_phone IS NULL OR btrim(owner_phone) = '')`,
       `(source_url IS NOT NULL AND btrim(source_url) <> '')`,
-      `source IN ('otodom', 'olx', 'gratka', 'morizon', 'odwlasciciela')`,
+      `(last_checked_at IS NULL OR last_checked_at < now() - interval '12 hours')`,
     ];
 
     if (onlySource) {
@@ -230,7 +230,7 @@ async function main() {
       SELECT id, source, source_url
       FROM external_listings
       WHERE ${where.join("\n          AND ")}
-      ORDER BY last_checked_at ASC NULLS FIRST, enriched_at DESC NULLS LAST, updated_at DESC
+      ORDER BY last_checked_at NULLS FIRST, updated_at DESC, enriched_at DESC NULLS LAST, updated_at DESC
       LIMIT $${params.length}
     `;
 
