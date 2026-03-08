@@ -76,47 +76,128 @@ async function tryClickConsent(page: any): Promise<void> {
   }
 }
 
-async function clickShowPhone(page: any): Promise<boolean> {
-  const candidates = [
-    page.getByText(/pokaż numer/i),
-    page.locator("button, a").filter({ hasText: /pokaż numer/i }),
+async function dismissOverlays(page: any): Promise<void> {
+  const selectors = [
+    "#onetrust-accept-btn-handler",
+    'button[aria-label*="Akcept"]',
+    'button[aria-label*="zgod"]',
+    'button:has-text("Akceptuję")',
+    'button:has-text("Akceptuj")',
+    'button:has-text("Zgadzam się")',
+    'button:has-text("Rozumiem")',
+    'button:has-text("Jasne")',
+    'button:has-text("OK")',
+    'button:has-text("Zamknij")',
   ];
 
-  for (const group of candidates) {
+  for (const selector of selectors) {
     try {
-      const count = await group.count().catch(() => 0);
-      if (count === 0) continue;
-
-      for (let i = 0; i < count; i++) {
-        const btn = group.nth(i);
-
-        const visible = await btn.isVisible().catch(() => false);
-        if (!visible) continue;
-
-        await btn.scrollIntoViewIfNeeded().catch(() => {});
-        await page.waitForTimeout(300).catch(() => {});
-
-        await btn.click({ timeout: 5000, force: true }).catch(() => {});
-        await page.waitForTimeout(3500).catch(() => {});
-
-        const telHref = await page
-          .locator('a[href^="tel:"]')
-          .first()
-          .getAttribute("href")
-          .catch(() => null);
-
-        const contactTexts = await collectContactTexts(page);
-
-        const changed =
-          typeof telHref === "string" ||
-          contactTexts.some((t) => extractPhoneCandidates(t).length > 0);
-
-        if (changed) return true;
+      const btn = page.locator(selector).first();
+      if (await btn.isVisible().catch(() => false)) {
+        await btn.click({ timeout: 2000 }).catch(() => {});
+        await page.waitForTimeout(600).catch(() => {});
       }
     } catch {}
   }
 
-  return false;
+  const fallbackSelectors = [
+    "#onetrust-reject-all-handler",
+    ".onetrust-close-btn-handler",
+    'button[aria-label*="Close"]',
+  ];
+
+  for (const selector of fallbackSelectors) {
+    try {
+      const btn = page.locator(selector).first();
+      if (await btn.isVisible().catch(() => false)) {
+        await btn.click({ timeout: 1500 }).catch(() => {});
+        await page.waitForTimeout(500).catch(() => {});
+      }
+    } catch {}
+  }
+
+  await page.waitForFunction(() => {
+    const sdk = document.querySelector("#onetrust-consent-sdk");
+    if (!sdk) return true;
+
+    const dark = document.querySelector(".onetrust-pc-dark-filter") as HTMLElement | null;
+    const banner = document.querySelector("#onetrust-banner-sdk") as HTMLElement | null;
+
+    const hidden = (el: HTMLElement | null) =>
+      !el ||
+      el.style.display === "none" ||
+      el.style.visibility === "hidden" ||
+      el.getAttribute("aria-hidden") === "true";
+
+    return hidden(dark) && hidden(banner);
+  }, { timeout: 5000 }).catch(() => {});
+}
+
+async function clickShowPhone(page: any): Promise<boolean> {
+  const topSection = page.locator("main").first();
+
+  const contactPanel = topSection.locator(
+    [
+      '[data-cy*="ad-contact"]',
+      '[data-testid*="contact"]',
+      "aside",
+      '[class*="contact"]',
+      '[class*="phone"]',
+    ].join(", ")
+  ).first();
+
+  const panelVisible = await contactPanel.isVisible().catch(() => false);
+  if (!panelVisible) {
+    return false;
+  }
+
+  await contactPanel.scrollIntoViewIfNeeded().catch(() => {});
+  await page.waitForTimeout(500).catch(() => {});
+
+  await dismissOverlays(page);
+
+  const exact = contactPanel
+    .locator('[data-cy="phone-number.show-full-number-button"]')
+    .first();
+
+  const exactVisible = await exact.isVisible().catch(() => false);
+  if (!exactVisible) {
+    return false;
+  }
+
+  try {
+    await exact.click({ timeout: 5000 });
+  } catch {
+    await dismissOverlays(page);
+    await page.waitForTimeout(500).catch(() => {});
+
+    try {
+      const clicked = await exact.evaluate((el: HTMLElement) => {
+        const btn = el as HTMLButtonElement;
+        btn.click();
+        return true;
+      });
+      if (!clicked) return false;
+    } catch {
+      const box = await exact.boundingBox().catch(() => null);
+      if (!box) return false;
+
+      try {
+        await page.mouse.click(
+          box.x + box.width / 2,
+          box.y + box.height / 2,
+          { delay: 80 }
+        );
+      } catch {
+        return false;
+      }
+    }
+  }
+
+  await page.waitForTimeout(3000).catch(() => {});
+  await page.waitForTimeout(5000).catch(() => {});
+
+  return true;
 }
 
 async function collectContactTexts(page: any): Promise<string[]> {
@@ -253,7 +334,8 @@ export async function revealOtodomPhone(sourceUrl: string): Promise<OtodomPhoneR
 
   try {
     browser = await chromium.launch({
-      headless: true,
+      headless: false,
+      slowMo: 250,
     });
 
     const page = await browser.newPage({
@@ -263,14 +345,18 @@ export async function revealOtodomPhone(sourceUrl: string): Promise<OtodomPhoneR
       viewport: { width: 1440, height: 1200 },
     });
 
-    await page.goto(sourceUrl, {
-      waitUntil: "networkidle",
+   await page.goto(sourceUrl, {
+      waitUntil: "domcontentloaded",
       timeout: 45000,
     });
 
+    await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(800);
+
     pageTitle = await page.title().catch(() => null);
 
-    await tryClickConsent(page);
+    await dismissOverlays(page);
+    await page.waitForTimeout(800).catch(() => {});
     clickedShowPhone = await clickShowPhone(page);
 
     const fromTel = await extractPhoneFromTel(page);
@@ -290,7 +376,7 @@ export async function revealOtodomPhone(sourceUrl: string): Promise<OtodomPhoneR
         },
       };
     }
-
+    
     const fromContactRoot = await extractPhoneFromContactRoot(page);
     if (fromContactRoot) {
       matchedTextPhone = true;
@@ -346,13 +432,51 @@ export async function revealOtodomPhone(sourceUrl: string): Promise<OtodomPhoneR
     }
 
     const fromDom = await extractPhoneFromDom(page);
-    if (fromDom) {
-      matchedTextPhone = true;
+      if (fromDom) {
+        matchedTextPhone = true;
+        return {
+          ok: true,
+          owner_phone: fromDom,
+          source_url: sourceUrl,
+          method: "dom-text",
+          debug: {
+            clickedShowPhone,
+            hadTelLink,
+            matchedTextPhone,
+            pageTitle,
+            error: null,
+          },
+        };
+      }
+
+      const contactTexts = await page
+        .locator('[data-cy*="ad-contact"], [data-testid*="contact"], aside, [class*="contact"], [class*="phone"]')
+        .allInnerTexts()
+        .catch(() => []);
+
+      const telLinks = await page
+        .locator('a[href^="tel:"]')
+        .evaluateAll((els: HTMLAnchorElement[]) =>
+          els.map((el) => ({
+            href: el.href,
+            text: (el.textContent || "").trim(),
+          }))
+        )
+        .catch(() => []);
+
+      console.log("OTODOM_PHONE_DEBUG", {
+        sourceUrl,
+        clickedShowPhone,
+        pageTitle,
+        telLinks,
+        contactTexts,
+      });
+
       return {
-        ok: true,
-        owner_phone: fromDom,
+        ok: false,
+        owner_phone: null,
         source_url: sourceUrl,
-        method: "dom-text",
+        method: "not-found",
         debug: {
           clickedShowPhone,
           hadTelLink,
@@ -361,22 +485,8 @@ export async function revealOtodomPhone(sourceUrl: string): Promise<OtodomPhoneR
           error: null,
         },
       };
-    }
-
-    return {
-      ok: false,
-      owner_phone: null,
-      source_url: sourceUrl,
-      method: "not-found",
-      debug: {
-        clickedShowPhone,
-        hadTelLink,
-        matchedTextPhone,
-        pageTitle,
-        error: null,
-      },
-    };
   } catch (e: any) {
+    
     return {
       ok: false,
       owner_phone: null,

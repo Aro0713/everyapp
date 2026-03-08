@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "crawl": "tsx src/index.ts"
+    "crawl": "tsx src/index.ts",
+    "phones": "tsx src/jobs/backfillExternalPhones.ts"
   },
   "dependencies": {
     "dotenv": "^17.3.1",
