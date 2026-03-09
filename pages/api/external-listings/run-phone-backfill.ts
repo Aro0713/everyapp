@@ -11,21 +11,26 @@ export default async function handler(
     return res.status(405).json({ ok: false });
   }
 
-  const script =
-    'powershell -ExecutionPolicy Bypass -File "C:\\Users\\a4pem\\everyapp-app\\crawler\\run-backfill-external-phones.ps1"';
+  const command =
+    'powershell -ExecutionPolicy Bypass -Command "cd C:\\Users\\a4pem\\everyapp-app\\crawler; npx tsx src/jobs/backfillExternalPhones.ts"';
 
-  exec(script, (err, stdout, stderr) => {
+  exec(command, (err, stdout, stderr) => {
+
     if (err) {
       console.error("CRAWLER_START_ERROR", err);
-      return;
+
+      return res.status(500).json({
+        ok: false,
+        error: "CRAWLER_START_FAILED"
+      });
     }
 
     console.log(stdout);
     console.error(stderr);
-  });
 
-  return res.json({
-    ok: true,
-    message: "Crawler started"
+    return res.json({
+      ok: true,
+      message: "Crawler started"
+    });
   });
 }
