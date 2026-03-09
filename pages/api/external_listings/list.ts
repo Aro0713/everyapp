@@ -402,6 +402,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const filtersHash = optString(req.query.filtersHash) ?? null;
 
     const where: string[] = [`1=1`];
+    where.push(`COALESCE(record_kind, 'unknown') = 'detail'`);
+    where.push(`COALESCE(base_completeness_score, 0) >= 2`);
 
     const params: any[] = [officeId];
     let p = 2;

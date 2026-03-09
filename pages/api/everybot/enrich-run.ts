@@ -96,7 +96,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         from external_listings
         where enriched_at is null
         and status in ('preview','active','enriched')
-        and (location_text is null or location_text = '' or city is null or voivodeship is null)
+        and (
+          location_text is null
+          or location_text = ''
+          or city is null
+          or voivodeship is null
+          or price_amount is null
+          or area_m2 is null
+          or rooms is null
+        )
         order by updated_at asc
         limit $1
         `,

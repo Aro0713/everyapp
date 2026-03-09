@@ -79,19 +79,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       try {
         for (const it of items) {
           // TODO: Twoja logika verify (np. sprawdź czy URL nadal żyje)
-          await pool.query(
+         await pool.query(
             `
             update external_listings
             set
                 last_checked_at = now(),
-                last_seen_at = coalesce(last_seen_at, now()),
+                last_seen_at = now(),
                 source_status = coalesce(source_status, 'active'),
-                enriched_at = case when status = 'enriched' and enriched_at is null then now() else enriched_at end,
-                updated_at = now()
+                enriched_at = case when status = 'enriched' and enriched_at is null then now() else enriched_at end
             where id = $1
             `,
             [it.id]
-            );
+          );
           processed++;
         }
       } finally {
