@@ -4,7 +4,7 @@ export type OlxPhoneResult = {
   ok: boolean;
   owner_phone: string | null;
   source_url: string;
-  method: "tel-link" | "dom-text" | "not-found" | "error";
+  method: "tel-link" | "dom-text" | "dom-text-retry" | "not-found" | "error";
   debug: {
     clickedShowPhone: boolean;
     hadTelLink: boolean;
@@ -418,6 +418,37 @@ export async function revealOlxPhone(sourceUrl: string): Promise<OlxPhoneResult>
           error: null,
         },
       };
+    }
+    // SECOND PASS – retry jeśli wygląda że numer jest maskowany
+    if (clickedShowPhone) {
+      await page.waitForTimeout(4000).catch(() => {});
+
+      const retryTexts = await page
+        .locator("aside, [class*='contact'], [class*='phone'], body")
+        .allInnerTexts()
+        .catch(() => []);
+
+      const combined = retryTexts.join("\n");
+
+      if (combined.includes("...") || /pokaż/i.test(combined)) {
+        const retryPhones = extractPhoneCandidates(combined);
+
+        if (retryPhones.length > 0) {
+          return {
+            ok: true,
+            owner_phone: retryPhones[0],
+            source_url: sourceUrl,
+            method: "dom-text-retry",
+            debug: {
+              clickedShowPhone,
+              hadTelLink,
+              matchedTextPhone: true,
+              pageTitle,
+              error: null,
+            },
+          };
+        }
+      }
     }
 
     const contactTexts = await page

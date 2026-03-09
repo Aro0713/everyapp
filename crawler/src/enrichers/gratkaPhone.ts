@@ -4,7 +4,7 @@ export type GratkaPhoneResult = {
   ok: boolean;
   owner_phone: string | null;
   source_url: string;
-  method: "tel-link" | "dom-text" | "not-found" | "error";
+  method: "tel-link" | "dom-text" | "dom-text-retry" | "not-found" | "error";
   debug: {
     clickedShowPhone: boolean;
     hadTelLink: boolean;
@@ -342,10 +342,24 @@ export async function revealGratkaPhone(sourceUrl: string): Promise<GratkaPhoneR
       };
     }
 
-    browser = await chromium.launch({
-      headless: false,
-      slowMo: 250,
-    });
+   const HEADLESS = process.env.PHONE_HEADLESS !== "false";
+
+  browser = await chromium.launch({
+    headless: HEADLESS,
+    slowMo: HEADLESS ? 0 : 250,
+    args: [
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--disable-extensions",
+      "--disable-background-networking",
+      "--disable-background-timer-throttling",
+      "--disable-renderer-backgrounding",
+      "--disable-features=Translate,BackForwardCache,AcceptCHFrame",
+      "--mute-audio",
+      "--no-first-run",
+      "--no-default-browser-check",
+    ],
+  });
 
     const page = await browser.newPage({
       userAgent:
@@ -454,6 +468,37 @@ export async function revealGratkaPhone(sourceUrl: string): Promise<GratkaPhoneR
           error: null,
         },
       };
+    }
+    // SECOND PASS – retry jeśli wygląda że numer jest maskowany
+    if (clickedShowPhone) {
+      await page.waitForTimeout(4000).catch(() => {});
+
+      const retryTexts = await page
+        .locator("aside, [class*='contact'], [class*='phone'], body")
+        .allInnerTexts()
+        .catch(() => []);
+
+      const combined = retryTexts.join("\n");
+
+      if (combined.includes("...") || /pokaż/i.test(combined)) {
+        const retryPhones = extractPhoneCandidates(combined);
+
+        if (retryPhones.length > 0) {
+          return {
+            ok: true,
+            owner_phone: retryPhones[0],
+            source_url: sourceUrl,
+            method: "dom-text-retry",
+            debug: {
+              clickedShowPhone,
+              hadTelLink,
+              matchedTextPhone: true,
+              pageTitle,
+              error: null,
+            },
+          };
+        }
+      }
     }
 
     const contactTexts = await page
