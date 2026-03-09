@@ -27,8 +27,35 @@ type NavItem = {
   disabled?: boolean;
 };
 
+type BackfillScope = "office" | "global";
+
+type PhoneBackfillStats = {
+  scope: BackfillScope;
+  officeId: string | null;
+  allListings: number;
+  withPhone: number;
+  withoutPhone: number;
+  filledTodayByUpdatedAt: number;
+  filledTodayByEnrichedAt: number;
+  checkedTodayByLastCheckedAt: number;
+  lastUpdateAt: string | null;
+  lastEnrichedAt: string | null;
+  lastCheckedAt: string | null;
+  effectivenessPercent: number;
+};
+
 function clsx(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
+}
+
+function formatDateTime(value: string | null, lang: LangKey) {
+  if (!value) return t(lang, "panelCrawlerNoData" as any);
+
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return value;
+  }
 }
 
 function PanelCard({
@@ -81,9 +108,18 @@ export default function PanelPage() {
 
   // -------------------- active view --------------------
   const [activeView, setActiveView] = useState<PanelView>("dashboard");
+  const [backfillScope, setBackfillScope] = useState<BackfillScope>("office");
+  const [stats, setStats] = useState<PhoneBackfillStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [runStatus, setRunStatus] = useState<"idle" | "running" | "success" | "error">("idle");
+  const [runMessage, setRunMessage] = useState<string | null>(null);
 
   async function runCrawlerBackfill() {
     try {
+      setRunStatus("running");
+      setRunMessage(t(lang, "panelCrawlerRunning" as any));
+
       const res = await fetch("/api/external-listings/run-phone-backfill", {
         method: "POST",
       });
@@ -91,13 +127,43 @@ export default function PanelPage() {
       const data = await res.json();
 
       if (data.ok) {
-        alert("Crawler uruchomiony");
+        setRunStatus("success");
+        setRunMessage(t(lang, "panelCrawlerRunSuccess" as any));
+        await fetchPhoneBackfillStats(backfillScope);
       } else {
-        alert("Błąd uruchomienia crawlera");
+        setRunStatus("error");
+        setRunMessage(t(lang, "panelCrawlerRunError" as any));
       }
     } catch (err) {
       console.error(err);
-      alert("Błąd API");
+      setRunStatus("error");
+      setRunMessage(t(lang, "panelCrawlerRunError" as any));
+    }
+  }
+
+  async function fetchPhoneBackfillStats(scope: BackfillScope) {
+    try {
+      setStatsLoading(true);
+      setStatsError(null);
+
+      const res = await fetch(`/api/external_listings/phone-backfill-stats?scope=${scope}`, {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setStatsError(data?.error ?? "STATS_ERROR");
+        return;
+      }
+
+      setStats(data);
+    } catch (err) {
+      console.error(err);
+      setStatsError("STATS_ERROR");
+    } finally {
+      setStatsLoading(false);
     }
   }
 
@@ -112,6 +178,11 @@ export default function PanelPage() {
     const c = getCookie("lang");
     if (isLangKey(c)) setLang(c);
   }, []);
+  useEffect(() => {
+  if (activeView === "reports") {
+    fetchPhoneBackfillStats(backfillScope);
+  }
+  }, [activeView, backfillScope]);
 
   const nav = useMemo<NavItem[]>(
     () => [
@@ -504,18 +575,155 @@ export default function PanelPage() {
                 <div className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-4 sm:px-4 lg:px-6">
                   <TeamView />
                 </div>
-              ) : activeView === "reports" ? (
+          ) : activeView === "reports" ? (
                 <div className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-4 sm:px-4 lg:px-6">
                   <PanelCard
-                    title="Crawler – uzupełnianie telefonów"
-                    subtitle="Uzupełnia brakujące telefony w external_listings"
+                    title={t(lang, "panelCrawlerCardTitle" as any)}
+                    subtitle={t(lang, "panelCrawlerCardSubtitle" as any)}
+                    right={
+                      <div className="inline-flex rounded-2xl border border-white/10 bg-white/5 p-1">
+                        <button
+                          type="button"
+                          onClick={() => setBackfillScope("office")}
+                          className={clsx(
+                            "rounded-xl px-3 py-2 text-xs font-semibold transition",
+                            backfillScope === "office"
+                              ? "bg-white/10 text-white"
+                              : "text-white/70 hover:bg-white/10 hover:text-white"
+                          )}
+                        >
+                          {t(lang, "panelCrawlerScopeOffice" as any)}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBackfillScope("global")}
+                          className={clsx(
+                            "rounded-xl px-3 py-2 text-xs font-semibold transition",
+                            backfillScope === "global"
+                              ? "bg-white/10 text-white"
+                              : "text-white/70 hover:bg-white/10 hover:text-white"
+                          )}
+                        >
+                          {t(lang, "panelCrawlerScopeGlobal" as any)}
+                        </button>
+                      </div>
+                    }
                   >
-                    <button
-                      onClick={runCrawlerBackfill}
-                      className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-semibold hover:bg-white/20"
-                    >
-                      Uruchom crawler
-                    </button>
+                    <div className="space-y-5">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={runCrawlerBackfill}
+                          disabled={runStatus === "running"}
+                          className={clsx(
+                            "rounded-2xl border px-4 py-3 text-sm font-semibold transition",
+                            runStatus === "running"
+                              ? "cursor-not-allowed border-white/10 bg-white/5 text-white/50"
+                              : "border-white/10 bg-white/10 text-white hover:bg-white/20"
+                          )}
+                        >
+                          {runStatus === "running"
+                            ? t(lang, "panelCrawlerRunning" as any)
+                            : t(lang, "panelCrawlerRunButton" as any)}
+                        </button>
+
+                        {runMessage ? (
+                          <span
+                            className={clsx(
+                              "rounded-full px-3 py-1 text-xs font-semibold",
+                              runStatus === "success" && "bg-emerald-500/20 text-emerald-300",
+                              runStatus === "error" && "bg-rose-500/20 text-rose-300",
+                              runStatus === "running" && "bg-white/10 text-white/80"
+                            )}
+                          >
+                            {runMessage}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      {statsLoading ? (
+                        <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 px-4 py-10 text-sm text-white/60">
+                          {t(lang, "panelCrawlerLoading" as any)}
+                        </div>
+                      ) : statsError ? (
+                        <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-4 text-sm text-rose-200">
+                          {t(lang, "panelCrawlerRunError" as any)}
+                        </div>
+                      ) : (
+                        <>
+                          <div className="grid gap-4 md:grid-cols-3">
+                            <StatPill
+                              label={t(lang, "panelCrawlerAllListings" as any)}
+                              value={String(stats?.allListings ?? 0)}
+                            />
+                            <StatPill
+                              label={t(lang, "panelCrawlerWithPhone" as any)}
+                              value={String(stats?.withPhone ?? 0)}
+                            />
+                            <StatPill
+                              label={t(lang, "panelCrawlerWithoutPhone" as any)}
+                              value={String(stats?.withoutPhone ?? 0)}
+                            />
+                          </div>
+
+                          <div className="grid gap-4 md:grid-cols-3">
+                            <StatPill
+                              label={t(lang, "panelCrawlerFilledTodayUpdated" as any)}
+                              value={String(stats?.filledTodayByUpdatedAt ?? 0)}
+                            />
+                            <StatPill
+                              label={t(lang, "panelCrawlerFilledTodayEnriched" as any)}
+                              value={String(stats?.filledTodayByEnrichedAt ?? 0)}
+                            />
+                            <StatPill
+                              label={t(lang, "panelCrawlerCheckedToday" as any)}
+                              value={String(stats?.checkedTodayByLastCheckedAt ?? 0)}
+                            />
+                          </div>
+
+                          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                            <div className="flex items-center justify-between gap-4">
+                              <p className="text-sm font-semibold text-white">
+                                {t(lang, "panelCrawlerEffectiveness" as any)}
+                              </p>
+                              <p className="text-sm font-extrabold text-white">
+                                {stats?.effectivenessPercent ?? 0}%
+                              </p>
+                            </div>
+
+                            <div className="mt-3 h-3 overflow-hidden rounded-full bg-white/10">
+                              <div
+                                className="h-full rounded-full bg-white/70 transition-all"
+                                style={{ width: `${stats?.effectivenessPercent ?? 0}%` }}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid gap-4 md:grid-cols-3">
+                            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                              <p className="text-xs text-white/60">{t(lang, "panelCrawlerLastUpdateAt" as any)}</p>
+                              <p className="mt-2 text-sm font-semibold text-white">
+                                {formatDateTime(stats?.lastUpdateAt ?? null, lang)}
+                              </p>
+                            </div>
+
+                            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                              <p className="text-xs text-white/60">{t(lang, "panelCrawlerLastEnrichedAt" as any)}</p>
+                              <p className="mt-2 text-sm font-semibold text-white">
+                                {formatDateTime(stats?.lastEnrichedAt ?? null, lang)}
+                              </p>
+                            </div>
+
+                            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                              <p className="text-xs text-white/60">{t(lang, "panelCrawlerLastCheckedAt" as any)}</p>
+                              <p className="mt-2 text-sm font-semibold text-white">
+                                {formatDateTime(stats?.lastCheckedAt ?? null, lang)}
+                              </p>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </PanelCard>
                 </div>
               ) : null}
