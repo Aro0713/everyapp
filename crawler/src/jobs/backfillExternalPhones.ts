@@ -208,7 +208,7 @@ async function main() {
       `COALESCE(source_status, 'active') <> 'removed'`,
       `(owner_phone IS NULL OR btrim(owner_phone) = '')`,
       `(source_url IS NOT NULL AND btrim(source_url) <> '')`,
-      `(last_checked_at IS NULL OR last_checked_at < now() - interval '12 hours')`,
+      `(last_checked_at IS NULL OR last_checked_at < now() - interval '2 hours')`,
     ];
 
     if (onlySource) {

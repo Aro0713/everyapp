@@ -16,7 +16,7 @@ function getCookie(name: string) {
   return m ? decodeURIComponent(m[2]) : null;
 }
 
-type PanelView = "dashboard" | "calendar" | "team" | "offers";
+type PanelView = "dashboard" | "calendar" | "team" | "offers" | "reports";
 
 type NavItem = {
   key: string;
@@ -82,6 +82,25 @@ export default function PanelPage() {
   // -------------------- active view --------------------
   const [activeView, setActiveView] = useState<PanelView>("dashboard");
 
+  async function runCrawlerBackfill() {
+    try {
+      const res = await fetch("/api/external-listings/run-phone-backfill", {
+        method: "POST",
+      });
+
+      const data = await res.json();
+
+      if (data.ok) {
+        alert("Crawler uruchomiony");
+      } else {
+        alert("Błąd uruchomienia crawlera");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Błąd API");
+    }
+  }
+
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 1024); // <lg
     onResize();
@@ -112,7 +131,7 @@ export default function PanelPage() {
       { key: "panelNavLeaderboard", disabled: true },
       { key: "panelNavDownloads", disabled: true },
       { key: "panelNavQueries", disabled: true },
-      { key: "panelNavReports", disabled: true },
+      { key: "panelNavReports", view: "reports", subKey: "panelReportsSub" },
       { key: "panelNavMenuSettings", disabled: true },
     ],
     []
@@ -166,7 +185,7 @@ export default function PanelPage() {
             {/* Właściwy panel */}
             <div
               className={clsx(
-                "h-full border-r border-white/10 bg-ew-primary/80 text-white backdrop-blur-md",
+                "h-full border-r border-white/10 bg-gradient-to-b from-slate-950/88 via-slate-900/80 to-slate-950/88 text-white backdrop-blur-xl",
                 "transition-transform duration-200 will-change-transform",
                 // ✅ węższy sidebar (stały)
                 "w-56",
@@ -215,7 +234,7 @@ export default function PanelPage() {
 
                   const rowClass = clsx(
                     "mt-1 flex w-full items-center justify-between rounded-2xl px-3 py-3 text-left text-sm transition",
-                    isActive && "bg-white/10 text-white",
+                    isActive && "bg-white/10 ring-1 ring-white/10 text-white",
                     !isActive && !isDisabled && "text-white/85 hover:bg-white/10 hover:text-white",
                     isDisabled && "cursor-not-allowed opacity-50"
                   );
@@ -477,15 +496,29 @@ export default function PanelPage() {
               <div className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-4 sm:px-4 lg:px-6">
                 <CalendarPage />
               </div>
-            ) : activeView === "offers" ? (
-              <div className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-4 sm:px-4 lg:px-6">
-                <OffersView lang={lang} />
-              </div>
-            ) : activeView === "team" ? (
-              <div className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-4 sm:px-4 lg:px-6">
-                <TeamView />
-              </div>
-            ) : null}
+           ) : activeView === "offers" ? (
+                <div className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-4 sm:px-4 lg:px-6">
+                  <OffersView lang={lang} />
+                </div>
+              ) : activeView === "team" ? (
+                <div className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-4 sm:px-4 lg:px-6">
+                  <TeamView />
+                </div>
+              ) : activeView === "reports" ? (
+                <div className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-4 sm:px-4 lg:px-6">
+                  <PanelCard
+                    title="Crawler – uzupełnianie telefonów"
+                    subtitle="Uzupełnia brakujące telefony w external_listings"
+                  >
+                    <button
+                      onClick={runCrawlerBackfill}
+                      className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-semibold hover:bg-white/20"
+                    >
+                      Uruchom crawler
+                    </button>
+                  </PanelCard>
+                </div>
+              ) : null}
           </section>
         </div>
       </main>
