@@ -1,36 +1,46 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { exec } from "child_process";
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
-    return res.status(405).json({ ok: false });
+    return res.status(405).json({ ok: false, error: "METHOD_NOT_ALLOWED" });
   }
 
-  const command =
-    'powershell -ExecutionPolicy Bypass -Command "cd C:\\Users\\a4pem\\everyapp-app\\crawler; npx tsx src/jobs/backfillExternalPhones.ts"';
+  const url = process.env.CRAWLER_CONTROL_URL;
+  const token = process.env.CRAWLER_TRIGGER_TOKEN;
 
-  exec(command, (err, stdout, stderr) => {
-
-    if (err) {
-      console.error("CRAWLER_START_ERROR", err);
-
-      return res.status(500).json({
-        ok: false,
-        error: "CRAWLER_START_FAILED"
-      });
-    }
-
-    console.log(stdout);
-    console.error(stderr);
-
-    return res.json({
-      ok: true,
-      message: "Crawler started"
+  if (!url || !token) {
+    return res.status(500).json({
+      ok: false,
+      error: "MISSING_CRAWLER_CONFIG",
     });
-  });
+  }
+
+  try {
+    const upstream = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+    });
+
+    const data = await upstream.json().catch(() => ({}));
+
+    return res.status(upstream.status).json({
+      ok: !!data?.ok,
+      ...data,
+    });
+  } catch (error) {
+    console.error("CRAWLER_PROXY_ERROR", error);
+
+    return res.status(500).json({
+      ok: false,
+      error: "CRAWLER_PROXY_FAILED",
+    });
+  }
 }
