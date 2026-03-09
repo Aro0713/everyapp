@@ -609,121 +609,90 @@ export default function PanelPage() {
                       </div>
                     }
                   >
-                    <div className="space-y-5">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={runCrawlerBackfill}
-                          disabled={runStatus === "running"}
-                          className={clsx(
-                            "rounded-2xl border px-4 py-3 text-sm font-semibold transition",
-                            runStatus === "running"
-                              ? "cursor-not-allowed border-white/10 bg-white/5 text-white/50"
-                              : "border-white/10 bg-white/10 text-white hover:bg-white/20"
-                          )}
-                        >
-                          {runStatus === "running"
-                            ? t(lang, "panelCrawlerRunning" as any)
-                            : t(lang, "panelCrawlerRunButton" as any)}
-                        </button>
-
-                        {runMessage ? (
-                          <span
-                            className={clsx(
-                              "rounded-full px-3 py-1 text-xs font-semibold",
-                              runStatus === "success" && "bg-emerald-500/20 text-emerald-300",
-                              runStatus === "error" && "bg-rose-500/20 text-rose-300",
-                              runStatus === "running" && "bg-white/10 text-white/80"
-                            )}
-                          >
-                            {runMessage}
-                          </span>
-                        ) : null}
-                      </div>
-
-                      {statsLoading ? (
-                        <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 px-4 py-10 text-sm text-white/60">
-                          {t(lang, "panelCrawlerLoading" as any)}
-                        </div>
-                      ) : statsError ? (
-                        <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-4 text-sm text-rose-200">
-                          {t(lang, "panelCrawlerRunError" as any)}
-                        </div>
-                      ) : (
-                        <>
-                          <div className="grid gap-4 md:grid-cols-3">
-                            <StatPill
-                              label={t(lang, "panelCrawlerAllListings" as any)}
-                              value={String(stats?.allListings ?? 0)}
-                            />
-                            <StatPill
-                              label={t(lang, "panelCrawlerWithPhone" as any)}
-                              value={String(stats?.withPhone ?? 0)}
-                            />
-                            <StatPill
-                              label={t(lang, "panelCrawlerWithoutPhone" as any)}
-                              value={String(stats?.withoutPhone ?? 0)}
-                            />
+                   <div className="space-y-5">
+                        {statsLoading ? (
+                          <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 px-4 py-10 text-sm text-white/60">
+                            {t(lang, "panelCrawlerLoading" as any)}
                           </div>
-
-                          <div className="grid gap-4 md:grid-cols-3">
-                            <StatPill
-                              label={t(lang, "panelCrawlerFilledTodayUpdated" as any)}
-                              value={String(stats?.filledTodayByUpdatedAt ?? 0)}
-                            />
-                            <StatPill
-                              label={t(lang, "panelCrawlerFilledTodayEnriched" as any)}
-                              value={String(stats?.filledTodayByEnrichedAt ?? 0)}
-                            />
-                            <StatPill
-                              label={t(lang, "panelCrawlerCheckedToday" as any)}
-                              value={String(stats?.checkedTodayByLastCheckedAt ?? 0)}
-                            />
+                        ) : statsError ? (
+                          <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-4 text-sm text-rose-200">
+                            {t(lang, "panelCrawlerRunError" as any)}
                           </div>
-
-                          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                            <div className="flex items-center justify-between gap-4">
-                              <p className="text-sm font-semibold text-white">
-                                {t(lang, "panelCrawlerEffectiveness" as any)}
-                              </p>
-                              <p className="text-sm font-extrabold text-white">
-                                {stats?.effectivenessPercent ?? 0}%
-                              </p>
-                            </div>
-
-                            <div className="mt-3 h-3 overflow-hidden rounded-full bg-white/10">
-                              <div
-                                className="h-full rounded-full bg-white/70 transition-all"
-                                style={{ width: `${stats?.effectivenessPercent ?? 0}%` }}
+                        ) : (
+                          <>
+                            <div className="grid gap-4 md:grid-cols-3">
+                              <StatPill
+                                label={t(lang, "panelCrawlerAllListings" as any)}
+                                value={String(stats?.allListings ?? 0)}
+                              />
+                              <StatPill
+                                label={t(lang, "panelCrawlerWithPhone" as any)}
+                                value={String(stats?.withPhone ?? 0)}
+                              />
+                              <StatPill
+                                label={t(lang, "panelCrawlerWithoutPhone" as any)}
+                                value={String(stats?.withoutPhone ?? 0)}
                               />
                             </div>
-                          </div>
 
-                          <div className="grid gap-4 md:grid-cols-3">
-                            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                              <p className="text-xs text-white/60">{t(lang, "panelCrawlerLastUpdateAt" as any)}</p>
-                              <p className="mt-2 text-sm font-semibold text-white">
-                                {formatDateTime(stats?.lastUpdateAt ?? null, lang)}
-                              </p>
+                            <div className="grid gap-4 md:grid-cols-3">
+                              <StatPill
+                                label={t(lang, "panelCrawlerFilledTodayUpdated" as any)}
+                                value={String(stats?.filledTodayByUpdatedAt ?? 0)}
+                              />
+                              <StatPill
+                                label={t(lang, "panelCrawlerFilledTodayEnriched" as any)}
+                                value={String(stats?.filledTodayByEnrichedAt ?? 0)}
+                              />
+                              <StatPill
+                                label={t(lang, "panelCrawlerCheckedToday" as any)}
+                                value={String(stats?.checkedTodayByLastCheckedAt ?? 0)}
+                              />
                             </div>
 
                             <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                              <p className="text-xs text-white/60">{t(lang, "panelCrawlerLastEnrichedAt" as any)}</p>
-                              <p className="mt-2 text-sm font-semibold text-white">
-                                {formatDateTime(stats?.lastEnrichedAt ?? null, lang)}
-                              </p>
+                              <div className="flex items-center justify-between gap-4">
+                                <p className="text-sm font-semibold text-white">
+                                  {t(lang, "panelCrawlerEffectiveness" as any)}
+                                </p>
+                                <p className="text-sm font-extrabold text-white">
+                                  {stats?.effectivenessPercent ?? 0}%
+                                </p>
+                              </div>
+
+                              <div className="mt-3 h-3 overflow-hidden rounded-full bg-white/10">
+                                <div
+                                  className="h-full rounded-full bg-white/70 transition-all"
+                                  style={{ width: `${stats?.effectivenessPercent ?? 0}%` }}
+                                />
+                              </div>
                             </div>
 
-                            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                              <p className="text-xs text-white/60">{t(lang, "panelCrawlerLastCheckedAt" as any)}</p>
-                              <p className="mt-2 text-sm font-semibold text-white">
-                                {formatDateTime(stats?.lastCheckedAt ?? null, lang)}
-                              </p>
+                            <div className="grid gap-4 md:grid-cols-3">
+                              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                                <p className="text-xs text-white/60">{t(lang, "panelCrawlerLastUpdateAt" as any)}</p>
+                                <p className="mt-2 text-sm font-semibold text-white">
+                                  {formatDateTime(stats?.lastUpdateAt ?? null, lang)}
+                                </p>
+                              </div>
+
+                              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                                <p className="text-xs text-white/60">{t(lang, "panelCrawlerLastEnrichedAt" as any)}</p>
+                                <p className="mt-2 text-sm font-semibold text-white">
+                                  {formatDateTime(stats?.lastEnrichedAt ?? null, lang)}
+                                </p>
+                              </div>
+
+                              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                                <p className="text-xs text-white/60">{t(lang, "panelCrawlerLastCheckedAt" as any)}</p>
+                                <p className="mt-2 text-sm font-semibold text-white">
+                                  {formatDateTime(stats?.lastCheckedAt ?? null, lang)}
+                                </p>
+                              </div>
                             </div>
-                          </div>
-                        </>
-                      )}
-                    </div>
+                          </>
+                        )}
+                      </div>
                   </PanelCard>
                 </div>
               ) : null}
