@@ -118,8 +118,10 @@ const meRes = await pool.query<{
         AND e.start_at >= date_trunc('day', now())
         AND e.start_at < date_trunc('day', now()) + interval '1 day'
         `,
-        [officeId, scope, userId]
-    ),
+          scope === "agent"
+            ? [officeId, meRes.rows[0]?.full_name ?? null]
+            : [officeId]
+        ),
 
    pool.query<{
         listing_id: string;
@@ -148,8 +150,11 @@ const meRes = await pool.query<{
         ORDER BY created_at DESC
         LIMIT 8
         `,
-        scope === "agent" ? [officeId, meRes.rows[0]?.full_name ?? null] : [officeId]
-    ),
+          scope === "agent"
+            ? [officeId, meRes.rows[0]?.full_name ?? null]
+            : [officeId]
+        ),
+  
 
     pool.query<{
         id: string;
@@ -188,7 +193,7 @@ const meRes = await pool.query<{
         LEFT JOIN my_saved ms
         ON ms.external_listing_id = l.id
         WHERE l.office_id = $1::uuid
-        ORDER BY COALESCE(l.created_at, l.updated_at) DESC, l.id DESC
+        ORDER BY COALESCE(l.imported_at, l.updated_at) DESC, l.id DESC
         LIMIT 8
         `,
         [officeId]
