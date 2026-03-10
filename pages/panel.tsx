@@ -108,6 +108,92 @@ export default function PanelPage() {
 
   // -------------------- active view --------------------
   const [activeView, setActiveView] = useState<PanelView>("dashboard");
+    type DashboardData = {
+    scope: "agent" | "office";
+    officeId: string;
+    userId: string;
+    me: {
+      fullName: string | null;
+      email: string | null;
+      officeName: string | null;
+      membershipRole: string | null;
+    };
+    kpis: {
+      calls: number;
+      meetings: number;
+      exports: number;
+      aiNotes: number;
+    };
+    offersInProgress: Array<{
+      listing_id: string;
+      office_id: string;
+      record_type: string;
+      transaction_type: string;
+      status: string;
+      created_at: string | null;
+      case_owner_name: string | null;
+      parties_summary: string | null;
+    }>;
+    topBuyers: Array<any>;
+    newExternalListings: Array<{
+      id: string;
+      source: string;
+      source_url: string;
+      title: string | null;
+      price_amount: number | null;
+      currency: string | null;
+      location_text: string | null;
+      created_at: string | null;
+      updated_at: string | null;
+      my_office_saved: boolean;
+    }>;
+    todayEvents: Array<{
+      id: string;
+      title: string;
+      start_at: string | null;
+      end_at: string | null;
+      location_text: string | null;
+      description: string | null;
+      owner_user_id: string | null;
+    }>;
+    recentActivatedOffers: Array<{
+      listing_id: string;
+      office_id: string;
+      record_type: string;
+      transaction_type: string;
+      status: string;
+      created_at: string | null;
+      case_owner_name: string | null;
+      parties_summary: string | null;
+    }>;
+    recentPriceChanges: Array<{
+      id: string;
+      source: string;
+      title: string | null;
+      price_amount: number | null;
+      currency: string | null;
+      updated_at: string | null;
+      location_text: string | null;
+    }>;
+    goals: {
+      calls: number;
+      visits: number;
+      saved: number;
+      revenue: number;
+    };
+    teamSnapshot: {
+      membersCount: number;
+      activeAgents: number;
+      pendingMembers: number;
+    };
+    exportErrors: Array<any>;
+    generatedAt: string;
+  };
+
+  const [dashboardScope, setDashboardScope] = useState<"agent" | "office">("office");
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [dashboardLoading, setDashboardLoading] = useState(false);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [backfillScope, setBackfillScope] = useState<BackfillScope>("office");
   const [stats, setStats] = useState<PhoneBackfillStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
@@ -175,6 +261,12 @@ export default function PanelPage() {
   }, []);
 
   useEffect(() => {
+    if (activeView === "dashboard") {
+      loadDashboard(dashboardScope);
+    }
+  }, [activeView, dashboardScope]);
+
+  useEffect(() => {
     const c = getCookie("lang");
     if (isLangKey(c)) setLang(c);
   }, []);
@@ -211,6 +303,31 @@ export default function PanelPage() {
   const activeNavItem = useMemo(() => {
     return nav.find((x) => x.view === activeView) ?? nav[0];
   }, [nav, activeView]);
+
+    async function loadDashboard(scope: "agent" | "office" = dashboardScope) {
+    try {
+      setDashboardLoading(true);
+      setDashboardError(null);
+
+      const r = await fetch(`/api/dashboard?scope=${scope}`, {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      const j = await r.json().catch(() => null);
+
+      if (!r.ok) {
+        throw new Error(j?.error ?? `HTTP ${r.status}`);
+      }
+
+      setDashboardData(j);
+    } catch (e: any) {
+      console.error("DASHBOARD_LOAD_ERROR", e);
+      setDashboardError(e?.message ?? "DASHBOARD_LOAD_ERROR");
+    } finally {
+      setDashboardLoading(false);
+    }
+  }
 
   return (
     <>
@@ -431,12 +548,72 @@ export default function PanelPage() {
             {/* MAIN GRID */}
             {activeView === "dashboard" ? (
               <div className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-4 sm:px-4 lg:px-6">
+                {dashboardError ? (
+                    <div className="mb-4 rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-xs text-red-200">
+                      {dashboardError}
+                    </div>
+                  ) : null}
+
+                  {dashboardLoading ? (
+                    <div className="mb-4 rounded-2xl border border-dashed border-white/15 bg-white/5 p-6 text-sm text-white/60">
+                      Ładowanie pulpitu...
+                    </div>
+                  ) : null}
+                <div className="mb-4 flex items-center justify-between gap-3">
+                    <div className="inline-flex rounded-2xl border border-white/10 bg-white/5 p-1">
+                      <button
+                        type="button"
+                        onClick={() => setDashboardScope("office")}
+                        className={clsx(
+                          "rounded-xl px-3 py-2 text-xs font-semibold transition",
+                          dashboardScope === "office"
+                            ? "bg-white/10 text-white"
+                            : "text-white/70 hover:bg-white/10 hover:text-white"
+                        )}
+                      >
+                        Biuro
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setDashboardScope("agent")}
+                        className={clsx(
+                          "rounded-xl px-3 py-2 text-xs font-semibold transition",
+                          dashboardScope === "agent"
+                            ? "bg-white/10 text-white"
+                            : "text-white/70 hover:bg-white/10 hover:text-white"
+                        )}
+                      >
+                        Agent
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => loadDashboard(dashboardScope)}
+                      className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-white/15"
+                    >
+                      {t(lang, "offersRefresh" as any)}
+                    </button>
+                  </div>
                 {/* KPI row */}
                 <div className="grid gap-4 md:grid-cols-4">
-                  <StatPill label={t(lang, "panelKpiCalls")} value="0" />
-                  <StatPill label={t(lang, "panelKpiMeetings")} value="0" />
-                  <StatPill label={t(lang, "panelKpiExports")} value="0" />
-                  <StatPill label={t(lang, "panelKpiNotes")} value="0" />
+                  <StatPill
+                      label={t(lang, "panelKpiCalls")}
+                      value={String(dashboardData?.kpis.calls ?? 0)}
+                    />
+                    <StatPill
+                      label={t(lang, "panelKpiMeetings")}
+                      value={String(dashboardData?.kpis.meetings ?? 0)}
+                    />
+                    <StatPill
+                      label={t(lang, "panelKpiExports")}
+                      value={String(dashboardData?.kpis.exports ?? 0)}
+                    />
+                    <StatPill
+                      label={t(lang, "panelKpiNotes")}
+                      value={String(dashboardData?.kpis.aiNotes ?? 0)}
+                    />
                 </div>
 
                 {/* Widgets grid */}
