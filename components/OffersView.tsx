@@ -68,6 +68,7 @@ type ExternalRow = {
   owner_phone?: string | null;
 
   source_status?: string | null;
+  same_phone_offers_count?: number | null;
   first_seen_at?: string | null;
   last_seen_at?: string | null;
   last_checked_at?: string | null;
@@ -1404,6 +1405,7 @@ return (
 
                     const isSaved = !!r.my_office_saved;
                     const isBusy = savingId === r.id;
+                    const hasOtherOffersSamePerson = (r.same_phone_offers_count ?? 0) > 0;
 
                     const hasMap = typeof r.lat === "number" && typeof r.lng === "number";
                     const hasRCN = r.rcn_last_price != null;
@@ -1720,7 +1722,18 @@ return (
                                     ✖ Odrzuć
                                   </button>
                                 </div>
-
+                                {hasOtherOffersSamePerson ? (
+                                  <button
+                                    type="button"
+                                    className="rounded-xl border border-white/10 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:bg-white/15"
+                                    title={t(lang, "otherOffersSamePerson" as any)}
+                                    onClick={() => {
+                                      alert(`TODO: pokaż inne oferty tej osoby (${r.same_phone_offers_count ?? 0})`);
+                                    }}
+                                  >
+                                    👤 {t(lang, "otherOffersSamePerson" as any)} ({r.same_phone_offers_count})
+                                  </button>
+                                ) : null}
                                 {r.source_url ? (
                                   <a
                                     href={r.source_url}

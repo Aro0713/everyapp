@@ -5589,6 +5589,16 @@ loading: {
   lt: "Įkeliama…",
   vi: "Đang tải…",
 },
+otherOffersSamePerson: {
+  pl: "Inne oferty tej osoby",
+  en: "Other listings from this person",
+  de: "Weitere Angebote dieser Person",
+  cs: "Další nabídky této osoby",
+  sk: "Ďalšie ponuky tejto osoby",
+  ua: "Інші оголошення цієї особи",
+  lt: "Kiti šio asmens pasiūlymai",
+  vi: "Các tin đăng khác của người này",
+},
 
 } as const);
 

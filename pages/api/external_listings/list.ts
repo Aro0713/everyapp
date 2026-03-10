@@ -46,8 +46,9 @@ type Row = {
   district: string | null;
   street: string | null;
 
-  owner_phone: string | null;
+   owner_phone: string | null;
   source_status: string | null;
+  same_phone_offers_count?: number | null;
 
   lat: number | null;
   lng: number | null;
@@ -331,6 +332,7 @@ function buildListSql(whereSql: string, orderBy: string, pLimit: number, pOffset
 
       l.owner_phone,
       l.source_status,
+      COALESCE(ph.same_phone_offers_count, 0) AS same_phone_offers_count,
 
       l.lat,
       l.lng,
@@ -349,12 +351,20 @@ function buildListSql(whereSql: string, orderBy: string, pLimit: number, pOffset
       a.last_action,
       COALESCE(ms.my_office_saved, FALSE) AS my_office_saved
       
-    FROM external_listings l
-    LEFT JOIN action_agg a ON a.external_listing_id = l.id
-    LEFT JOIN my_saved ms ON ms.external_listing_id = l.id
-    WHERE ${whereSql}
-    ORDER BY ${orderBy}
-    LIMIT $${pLimit}::int
+      FROM external_listings l
+      LEFT JOIN action_agg a ON a.external_listing_id = l.id
+      LEFT JOIN my_saved ms ON ms.external_listing_id = l.id
+      LEFT JOIN LATERAL (
+      SELECT COUNT(*)::int AS same_phone_offers_count
+      FROM external_listings x
+      WHERE x.id <> l.id
+        AND RIGHT(REGEXP_REPLACE(COALESCE(x.owner_phone, x.phone, ''), '[^0-9]', '', 'g'), 9) <> ''
+        AND RIGHT(REGEXP_REPLACE(COALESCE(x.owner_phone, x.phone, ''), '[^0-9]', '', 'g'), 9) =
+            RIGHT(REGEXP_REPLACE(COALESCE(l.owner_phone, l.phone, ''), '[^0-9]', '', 'g'), 9)
+      ) ph ON TRUE
+      WHERE ${whereSql}
+      ORDER BY ${orderBy}
+      LIMIT $${pLimit}::int
     ${typeof pOffset === "number" ? `OFFSET $${pOffset}::int` : ``}
   `;
 }
