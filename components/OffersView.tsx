@@ -204,6 +204,9 @@ const [botFilters, setBotFilters] = useState<EverybotFilters>({
   const [saveMode, setSaveMode] = useState<"agent" | "office">("agent");
   const [savingId, setSavingId] = useState<string | null>(null);
   const [revealingPhoneIds, setRevealingPhoneIds] = useState<Set<string>>(() => new Set());
+  const [expandedSamePhoneId, setExpandedSamePhoneId] = useState<string | null>(null);
+  const [samePhoneLoadingId, setSamePhoneLoadingId] = useState<string | null>(null);
+  const [samePhoneRowsById, setSamePhoneRowsById] = useState<Record<string, ExternalRow[]>>({});
 
   async function saveExternalListing(
     externalListingId: string,
@@ -234,6 +237,41 @@ const [botFilters, setBotFilters] = useState<EverybotFilters>({
     }
   }
 
+async function toggleSamePhoneOffers(row: ExternalRow) {
+  if (!row?.id) return;
+
+  if (expandedSamePhoneId === row.id) {
+    setExpandedSamePhoneId(null);
+    return;
+  }
+
+  if (samePhoneRowsById[row.id]) {
+    setExpandedSamePhoneId(row.id);
+    return;
+  }
+
+  setSamePhoneLoadingId(row.id);
+  try {
+    const r = await fetch(
+      `/api/external_listings/by-phone?externalListingId=${encodeURIComponent(row.id)}`
+    );
+
+    const j = await r.json().catch(() => null);
+    if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
+
+    const rows = Array.isArray(j?.rows) ? (j.rows as ExternalRow[]) : [];
+
+    setSamePhoneRowsById((prev) => ({
+      ...prev,
+      [row.id]: rows,
+    }));
+    setExpandedSamePhoneId(row.id);
+  } catch (e: any) {
+    alert(`Nie udało się pobrać innych ofert tej osoby: ${e?.message ?? "Unknown error"}`);
+  } finally {
+    setSamePhoneLoadingId(null);
+  }
+}
 async function revealPhone(externalListingId: string) {
   if (!externalListingId) return;
 
@@ -1406,6 +1444,9 @@ return (
                     const isSaved = !!r.my_office_saved;
                     const isBusy = savingId === r.id;
                     const hasOtherOffersSamePerson = (r.same_phone_offers_count ?? 0) > 0;
+                    const isSamePhoneExpanded = expandedSamePhoneId === r.id;
+                    const samePhoneRows = samePhoneRowsById[r.id] ?? [];
+                    const isSamePhoneLoading = samePhoneLoadingId === r.id;
 
                     const hasMap = typeof r.lat === "number" && typeof r.lng === "number";
                     const hasRCN = r.rcn_last_price != null;
@@ -1722,14 +1763,18 @@ return (
                                     ✖ Odrzuć
                                   </button>
                                 </div>
-                                {hasOtherOffersSamePerson ? (
+                               {hasOtherOffersSamePerson ? (
                                   <button
                                     type="button"
-                                    className="rounded-xl border border-white/10 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:bg-white/15"
+                                    disabled={isSamePhoneLoading}
+                                    className={clsx(
+                                      "rounded-xl border px-3 py-1 text-[11px] font-semibold shadow-sm transition",
+                                      isSamePhoneLoading
+                                        ? "cursor-not-allowed border-white/10 bg-white/5 text-white/35"
+                                        : "border-white/10 bg-white/10 text-white hover:bg-white/15"
+                                    )}
                                     title={t(lang, "otherOffersSamePerson" as any)}
-                                    onClick={() => {
-                                      alert(`TODO: pokaż inne oferty tej osoby (${r.same_phone_offers_count ?? 0})`);
-                                    }}
+                                    onClick={() => toggleSamePhoneOffers(r)}
                                   >
                                     👤 {t(lang, "otherOffersSamePerson" as any)} ({r.same_phone_offers_count})
                                   </button>
@@ -1747,6 +1792,76 @@ return (
                               </div>
                             </div>
                             </div>
+                                                      {isSamePhoneExpanded ? (
+                            <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-3">
+                              <div className="mb-2 text-[11px] font-semibold text-white/80">
+                                👤 {t(lang, "otherOffersSamePerson" as any)}
+                              </div>
+
+                              {isSamePhoneLoading ? (
+                                <div className="text-[11px] text-white/50">
+                                  {t(lang, "loading" as any)}
+                                </div>
+                              ) : samePhoneRows.length === 0 ? (
+                                <div className="text-[11px] text-white/50">Brak dodatkowych ofert.</div>
+                              ) : (
+                                <div className="space-y-2">
+                                  {samePhoneRows.map((x) => {
+                                    const xPrice = fmtPrice(x.price_amount, x.currency);
+                                    const xLocation =
+                                      [x.street, x.district, x.city, x.voivodeship].filter(Boolean).join(", ") ||
+                                      x.location_text ||
+                                      "-";
+
+                                    return (
+                                      <div
+                                        key={x.id}
+                                        className="flex items-start justify-between gap-3 rounded-xl border border-white/10 bg-slate-950/35 p-2"
+                                      >
+                                        <div className="min-w-0 flex-1">
+                                          <div className="truncate text-[12px] font-semibold text-white">
+                                            {x.title ?? "-"}
+                                          </div>
+                                          <div className="mt-1 truncate text-[11px] text-white/55">
+                                            {xLocation}
+                                          </div>
+                                          <div className="mt-1 flex flex-wrap gap-1.5">
+                                            <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/80 ring-1 ring-white/10">
+                                              {x.source}
+                                            </span>
+                                            {x.transaction_type ? (
+                                              <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
+                                                {x.transaction_type}
+                                              </span>
+                                            ) : null}
+                                            {x.property_type ? (
+                                              <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
+                                                {x.property_type}
+                                              </span>
+                                            ) : null}
+                                          </div>
+                                        </div>
+
+                                        <div className="shrink-0 text-right">
+                                          <div className="text-[12px] font-extrabold text-white">{xPrice}</div>
+                                          {x.source_url ? (
+                                            <a
+                                              href={x.source_url}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="mt-1 inline-block text-[11px] font-semibold text-ew-accent underline"
+                                            >
+                                              {t(lang, "everybotOpen" as any)}
+                                            </a>
+                                          ) : null}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          ) : null}
                           </div>
                         </div>
                       );
