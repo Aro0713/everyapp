@@ -202,42 +202,37 @@ const [botFilters, setBotFilters] = useState<EverybotFilters>({
     // --- Save external listing (agent/office) ---
   const [saveMode, setSaveMode] = useState<"agent" | "office">("agent");
   const [savingId, setSavingId] = useState<string | null>(null);
-  const [savedIds, setSavedIds] = useState<Set<string>>(() => new Set());
   const [revealingPhoneIds, setRevealingPhoneIds] = useState<Set<string>>(() => new Set());
 
   async function saveExternalListing(
-  externalListingId: string,
-  action: "save" | "reject" | "call" | "visit"
+    externalListingId: string,
+    action: "save" | "reject" | "call" | "visit"
   ) {
-
     if (!externalListingId) return;
+
     setSavingId(externalListingId);
     try {
       const r = await fetch("/api/external_listings/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-        external_listing_id: externalListingId,
-        mode: saveMode,
-        action,
-      }),
-
+          external_listing_id: externalListingId,
+          mode: saveMode,
+          action,
+        }),
       });
 
       const j = await r.json().catch(() => null);
       if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
 
-      setSavedIds((prev) => {
-        const next = new Set(prev);
-        next.add(externalListingId);
-        return next;
-      });
+      await refreshEverybotList();
     } catch (e: any) {
-      alert(`Nie udało się dodać ogłoszenia: ${e?.message ?? "Unknown error"}`);
+      alert(`Nie udało się zapisać akcji: ${e?.message ?? "Unknown error"}`);
     } finally {
       setSavingId(null);
     }
   }
+
 async function revealPhone(externalListingId: string) {
   if (!externalListingId) return;
 
@@ -318,6 +313,8 @@ async function loadEverybot(opts?: {
     qs.set("includeInactive", "1");
     qs.set("includePreview", "1");
     qs.set("onlyEnriched", "0");
+
+    if (botMatchedSince) qs.set("matchedSince", botMatchedSince);
 
     const hasStructuredFilters =
       f.propertyType?.trim() ||
@@ -1403,11 +1400,10 @@ return (
                       r.updated_at ||
                       null;
 
-                    const officeState = r.my_office_saved
-                      ? "zapisane"
-                      : r.last_action
-                      ? r.last_action
-                      : "-";
+                    const officeState = r.last_action ?? "-";
+
+                    const isSaved = !!r.my_office_saved;
+                    const isBusy = savingId === r.id;
 
                     const hasMap = typeof r.lat === "number" && typeof r.lng === "number";
                     const hasRCN = r.rcn_last_price != null;
@@ -1660,23 +1656,70 @@ return (
                               </div>
 
                               {/* Akcje */}
-                              <div className="flex flex-col items-end gap-1.5">
-                                <button
-                                  type="button"
-                                  disabled={savingId === r.id || savedIds.has(r.id)}
-                                  className={clsx(
-                                    "rounded-xl border px-3 py-1 text-[11px] font-semibold shadow-sm transition",
-                                    savedIds.has(r.id)
-                                      ? "cursor-default border-emerald-500/25 bg-emerald-500/10 text-emerald-200"
-                                      : savingId === r.id
-                                      ? "cursor-not-allowed border-white/10 bg-white/5 text-white/35"
-                                      : "border-white/10 bg-white/10 text-white hover:bg-white/15"
-                                  )}
-                                  onClick={() => saveExternalListing(r.id, "save")}
-                                  title="Zapisz do działań"
-                                >
-                                  {savedIds.has(r.id) ? "✅ Zapisane" : "💾 Zapisz"}
-                                </button>
+                             <div className="flex flex-col items-end gap-1.5">
+                                <div className="flex flex-wrap justify-end gap-1.5">
+                                  <button
+                                    type="button"
+                                    disabled={isBusy || isSaved}
+                                    onClick={() => saveExternalListing(r.id, "save")}
+                                    className={clsx(
+                                      "rounded-xl border px-3 py-1 text-[11px] font-semibold shadow-sm transition",
+                                      isSaved
+                                        ? "cursor-default border-emerald-500/25 bg-emerald-500/10 text-emerald-200"
+                                        : isBusy
+                                        ? "cursor-not-allowed border-white/10 bg-white/5 text-white/35"
+                                        : "border-white/10 bg-white/10 text-white hover:bg-white/15"
+                                    )}
+                                    title="Zapisz do działań"
+                                  >
+                                    {isSaved ? "✅ Zapisane" : "💾 Zapisz"}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    onClick={() => saveExternalListing(r.id, "call")}
+                                    className={clsx(
+                                      "rounded-xl border px-3 py-1 text-[11px] font-semibold shadow-sm transition",
+                                      isBusy
+                                        ? "cursor-not-allowed border-white/10 bg-white/5 text-white/35"
+                                        : "border-white/10 bg-white/10 text-white hover:bg-white/15"
+                                    )}
+                                    title="Oznacz telefon"
+                                  >
+                                    📞 Telefon
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    onClick={() => saveExternalListing(r.id, "visit")}
+                                    className={clsx(
+                                      "rounded-xl border px-3 py-1 text-[11px] font-semibold shadow-sm transition",
+                                      isBusy
+                                        ? "cursor-not-allowed border-white/10 bg-white/5 text-white/35"
+                                        : "border-white/10 bg-white/10 text-white hover:bg-white/15"
+                                    )}
+                                    title="Oznacz wizytę"
+                                  >
+                                    🏠 Wizyta
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    onClick={() => saveExternalListing(r.id, "reject")}
+                                    className={clsx(
+                                      "rounded-xl border px-3 py-1 text-[11px] font-semibold shadow-sm transition",
+                                      isBusy
+                                        ? "cursor-not-allowed border-white/10 bg-white/5 text-white/35"
+                                        : "border-red-500/20 bg-red-500/10 text-red-200 hover:bg-red-500/15"
+                                    )}
+                                    title="Odrzuć"
+                                  >
+                                    ✖ Odrzuć
+                                  </button>
+                                </div>
 
                                 {r.source_url ? (
                                   <a

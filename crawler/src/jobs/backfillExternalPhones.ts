@@ -102,14 +102,13 @@ async function updateListingFoundPhone(
 ) {
   await client.query(
     `
-    UPDATE external_listings
+   UPDATE external_listings
     SET
       owner_phone = $1,
       raw = CASE
               WHEN raw IS NULL OR raw = '{}'::jsonb THEN $2::jsonb
               ELSE raw || $2::jsonb
             END,
-      updated_at = now(),
       last_checked_at = now()
     WHERE id = $3
     `,
@@ -130,8 +129,7 @@ async function updateListingCheckedWithoutPhone(
               WHEN raw IS NULL OR raw = '{}'::jsonb THEN $1::jsonb
               ELSE raw || $1::jsonb
             END,
-      last_checked_at = now(),
-      updated_at = now()
+      last_checked_at = now()
     WHERE id = $2
     `,
     [debugJson, rowId]

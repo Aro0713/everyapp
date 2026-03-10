@@ -41,7 +41,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // office-mode nadal zapisujemy kto kliknął (audyt). Tryb dajemy do payload.
     const payload = {
       mode,
-      note: note ?? null,
       ua: optString(req.headers["user-agent"]) ?? null,
     };
 
@@ -51,8 +50,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         external_listing_id,
         user_id,
         action,
-        payload
-      ) VALUES ($1::uuid, $2::uuid, $3::uuid, $4::text, $5::jsonb)
+        payload,
+        note
+      ) VALUES ($1::uuid, $2::uuid, $3::uuid, $4::text, $5::jsonb, $6::text)
       RETURNING id
     `;
 
@@ -62,6 +62,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       userId,
       action,
       JSON.stringify(payload),
+      note,
     ]);
 
     return res.status(200).json({ ok: true, id: rows?.[0]?.id ?? null });

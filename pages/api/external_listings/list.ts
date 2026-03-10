@@ -425,12 +425,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ? `matched_at DESC NULLS LAST, updated_at DESC, id DESC`
       : `updated_at DESC, id DESC`;
 
-    if (source && source !== "all") {
-      where.push(`source = $${p}::text`);
-      params.push(source);
-      p++;
-    }
-
     const transactionType = optString(req.query.transactionType);
     const propertyType = optString(req.query.propertyType);
     const locationText = optString(req.query.locationText);
@@ -494,28 +488,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
       }
     }
-      // ===== FILTERS (hard-typed, 42P18-safe) =====
-
-      // q (tylko jeśli brak structured filters)
-      if (q && !hasStructuredFilters) {
-        const terms = q
-          .split(/[,\s]+/g)
-          .map((t) => t.trim().toLowerCase())
-          .filter((t) => t.length >= 2);
-
-        if (terms.length) {
-          const ors: string[] = [];
-          for (const term of terms) {
-            ors.push(`(
-              LOWER(COALESCE(title,'')) LIKE CAST($${p} AS text)
-              OR LOWER(COALESCE(location_text,'')) LIKE CAST($${p} AS text)
-            )`);
-            params.push(`%${term}%`);
-            p++;
-          }
-          where.push(`(${ors.join(" OR ")})`);
-        }
-      }
 
       // ===== FILTERS (SQL-safe; text matching moved to JS scoring) =====
 
