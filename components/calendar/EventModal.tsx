@@ -105,30 +105,48 @@ export default function EventModal({
         <div className="mt-5 space-y-4">
           <div>
             <label className="text-xs font-semibold text-white/70">Typ</label>
-            <select
-              value={draft.eventType}
-              onChange={(e) => {
-                const nextType = e.target.value as EventType;
-                setDraft((d) => {
-                  const autoTitle = labelForEventType(lang, nextType);
-                  const prevAuto = labelForEventType(lang, d.eventType);
-                  const shouldAuto = !d.title.trim() || d.title.trim() === prevAuto;
+            <div className="relative mt-1">
+                <select
+                    value={draft.eventType}
+                    onChange={(e) => {
+                    const nextType = e.target.value as EventType;
+                    setDraft((d) => {
+                        const autoTitle = labelForEventType(lang, nextType);
+                        const prevAuto = labelForEventType(lang, d.eventType);
+                        const shouldAuto = !d.title.trim() || d.title.trim() === prevAuto;
 
-                  return {
-                    ...d,
-                    eventType: nextType,
-                    title: shouldAuto ? autoTitle : d.title,
-                  };
-                });
-              }}
-              className="mt-1 w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white outline-none focus:border-white/40 focus:ring-2 focus:ring-white/20"
-            >
-              {EVENT_TYPES.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {t(lang, opt.labelKey as any) || opt.fallback}
-                </option>
-              ))}
-            </select>
+                        return {
+                        ...d,
+                        eventType: nextType,
+                        title: shouldAuto ? autoTitle : d.title,
+                        };
+                    });
+                    }}
+                    className="w-full appearance-none rounded-2xl border border-white/10 bg-white/10 px-4 py-2 pr-10 text-sm font-medium text-white shadow-sm outline-none transition focus:border-white/40 focus:ring-2 focus:ring-white/20"
+                >
+                    {EVENT_TYPES.map((opt) => (
+                    <option key={opt.value} value={opt.value} className="bg-slate-900 text-white">
+                        {t(lang, opt.labelKey as any) || opt.fallback}
+                    </option>
+                    ))}
+                </select>
+
+                {/* custom arrow */}
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 text-white/60">
+                    <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    className="h-4 w-4"
+                    >
+                    <path
+                        fillRule="evenodd"
+                        d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+                        clipRule="evenodd"
+                    />
+                    </svg>
+                </div>
+             </div>
           </div>
 
           <div>

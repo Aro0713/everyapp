@@ -5600,6 +5600,50 @@ otherOffersSamePerson: {
   vi: "Các tin đăng khác của người này",
 },
 
+calendarEventTypeCall: {
+  pl: "Telefon",
+  en: "Phone call",
+  de: "Telefonat",
+  cs: "Telefonát",
+  sk: "Telefonát",
+  ua: "Телефонний дзвінок",
+  lt: "Telefono skambutis",
+  vi: "Cuộc gọi",
+},
+
+calendarEventTypeVisit: {
+  pl: "Wizyta",
+  en: "Visit",
+  de: "Besuch",
+  cs: "Návštěva",
+  sk: "Návšteva",
+  ua: "Візит",
+  lt: "Vizitas",
+  vi: "Cuộc gặp",
+},
+
+calendarEventTypeMeeting: {
+  pl: "Spotkanie",
+  en: "Meeting",
+  de: "Treffen",
+  cs: "Schůzka",
+  sk: "Stretnutie",
+  ua: "Зустріч",
+  lt: "Susitikimas",
+  vi: "Cuộc họp",
+},
+
+calendarEventTypeFollowUp: {
+  pl: "Follow-up",
+  en: "Follow-up",
+  de: "Nachfassen",
+  cs: "Následný kontakt",
+  sk: "Následný kontakt",
+  ua: "Подальший контакт",
+  lt: "Tolesnis kontaktas",
+  vi: "Theo dõi",
+},
+
 } as const);
 
 export type TranslationKey = keyof typeof translations;
