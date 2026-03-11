@@ -7,6 +7,9 @@ import EverybotSearchPanel, {
 } from "@/components/EverybotSearchPanel";
 import dynamic from "next/dynamic";
 import EverybotAgentPanel from "@/components/everybot/EverybotAgentPanel";
+import EventModal, {
+  type EventDraft,
+} from "@/components/calendar/EventModal";
 
 const EverybotMap = dynamic(
   () => import("@/components/everybot/EverybotMap"),
@@ -115,6 +118,13 @@ function fmtShortDate(v?: string | null) {
   if (!Number.isFinite(ms)) return "-";
   return new Date(ms).toLocaleDateString();
 }
+function toLocalInput(dt: Date) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(
+    dt.getHours()
+  )}:${pad(dt.getMinutes())}`;
+}
 
 function normalizeVoivodeshipInput(v?: string | null): string | null {
   const s = (v ?? "").trim();
@@ -200,6 +210,20 @@ const [botFilters, setBotFilters] = useState<EverybotFilters>({
 
   const [importUrl, setImportUrl] = useState("");
   const [importing, setImporting] = useState(false);
+  // --- Event modal from offers ---
+  const [eventModalOpen, setEventModalOpen] = useState(false);
+  const [eventSaving, setEventSaving] = useState(false);
+  const [eventExternalListingId, setEventExternalListingId] = useState<string | null>(null);
+
+  const [eventDraft, setEventDraft] = useState<EventDraft>({
+    eventType: "call",
+    title: "",
+    start: "",
+    end: "",
+    locationText: "",
+    description: "",
+  });
+  const [calendarId, setCalendarId] = useState<string | null>(null);
     // --- Save external listing (agent/office) ---
   const [saveMode, setSaveMode] = useState<"agent" | "office">("agent");
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -207,6 +231,40 @@ const [botFilters, setBotFilters] = useState<EverybotFilters>({
   const [expandedSamePhoneId, setExpandedSamePhoneId] = useState<string | null>(null);
   const [samePhoneLoadingId, setSamePhoneLoadingId] = useState<string | null>(null);
   const [samePhoneRowsById, setSamePhoneRowsById] = useState<Record<string, ExternalRow[]>>({});
+
+  function openEventFromListing(row: ExternalRow, type: "call" | "visit") {
+  const now = new Date();
+  const end = new Date(now.getTime() + 30 * 60 * 1000);
+
+  const location =
+    [row.street, row.district, row.city].filter(Boolean).join(", ") ||
+    row.location_text ||
+    "";
+
+  const titlePrefix = type === "call" ? "Telefon" : "Wizyta";
+
+  const description = [
+    row.source ? `Źródło: ${row.source}` : "",
+    row.source_url ? `Link: ${row.source_url}` : "",
+    row.owner_phone ? `Telefon: ${row.owner_phone}` : "",
+    row.price_amount ? `Cena: ${row.price_amount} ${row.currency ?? ""}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  setEventExternalListingId(row.id);
+
+  setEventDraft({
+    eventType: type,
+    title: `${titlePrefix} – ${row.title ?? ""}`,
+    start: toLocalInput(now),
+    end: toLocalInput(end),
+    locationText: type === "visit" ? location : "",
+    description,
+  });
+
+  setEventModalOpen(true);
+}
 
   async function saveExternalListing(
     externalListingId: string,
@@ -556,9 +614,92 @@ async function loadMapPins() {
       setImporting(false);
     }
   }
+  async function saveEventFromOffer() {
+  if (!calendarId) {
+    alert("Brak aktywnego kalendarza.");
+    return;
+  }
+  if (!eventExternalListingId) return;
+
+  setEventSaving(true);
+
+  try {
+    const r = await fetch(`/api/calendar/events?calendarId=${calendarId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: eventDraft.title,
+        start: new Date(eventDraft.start).toISOString(),
+        end: new Date(eventDraft.end).toISOString(),
+        locationText: eventDraft.locationText,
+        description: eventDraft.description,
+        eventType: eventDraft.eventType,
+        source: "offers_view",
+        externalListingId: eventExternalListingId,
+      }),
+    });
+
+      const j = await r.json().catch(() => null);
+      if (!r.ok) throw new Error(j?.error ?? "Event save failed");
+
+      const action =
+        eventDraft.eventType === "call"
+          ? "call"
+          : eventDraft.eventType === "visit"
+          ? "visit"
+          : null;
+
+      if (action && eventExternalListingId) {
+        await fetch("/api/external_listings/save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            external_listing_id: eventExternalListingId,
+            mode: saveMode,
+            action,
+            note: `calendar_event_created:${j?.id ?? ""}`,
+          }),
+        }).catch(() => null);
+      }
+
+      setEventModalOpen(false);
+      setEventExternalListingId(null);
+      await refreshEverybotList();
+  } catch (e: any) {
+    alert(e?.message ?? "Nie udało się zapisać terminu");
+  } finally {
+    setEventSaving(false);
+  }
+}
 
     useEffect(() => {
       load();
+    }, []);
+    useEffect(() => {
+      (async () => {
+        try {
+          const r = await fetch("/api/me");
+          if (!r.ok) return;
+
+          const me = await r.json().catch(() => null);
+          const userId = me?.userId;
+          if (!userId) return;
+
+          const boot = await fetch("/api/calendar/bootstrap", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId }),
+          });
+
+          if (!boot.ok) return;
+
+          const data = await boot.json();
+          const id = data?.userCalendarId ?? data?.orgCalendarId ?? null;
+          if (id) setCalendarId(id);
+        } catch {
+          // silent
+        }
+      })();
     }, []);
     useEffect(() => {
       if (tab !== "everybot") return;
@@ -1721,7 +1862,7 @@ return (
                                   <button
                                     type="button"
                                     disabled={isBusy}
-                                    onClick={() => saveExternalListing(r.id, "call")}
+                                    onClick={() => openEventFromListing(r, "call")}
                                     className={clsx(
                                       "rounded-xl border px-3 py-1 text-[11px] font-semibold shadow-sm transition",
                                       isBusy
@@ -1736,7 +1877,7 @@ return (
                                   <button
                                     type="button"
                                     disabled={isBusy}
-                                    onClick={() => saveExternalListing(r.id, "visit")}
+                                    onClick={() => openEventFromListing(r, "visit")}
                                     className={clsx(
                                       "rounded-xl border px-3 py-1 text-[11px] font-semibold shadow-sm transition",
                                       isBusy
@@ -1893,8 +2034,23 @@ return (
             </div>
           </div>
         </div>
-      </>
+       </>
     )}
+    <EventModal
+      isOpen={eventModalOpen}
+      lang={lang}
+      saving={eventSaving}
+      editingEventId={null}
+      scopeLabel="Planowanie kontaktu z oferty"
+      draft={eventDraft}
+      setDraft={setEventDraft}
+      onClose={() => {
+        setEventModalOpen(false);
+        setEventExternalListingId(null);
+      }}
+      onSubmit={saveEventFromOffer}
+      activeCalendarId={calendarId}
+    />
   </div>
 );
 }

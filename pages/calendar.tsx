@@ -6,6 +6,12 @@ import listPlugin from "@fullcalendar/list";
 import interactionPlugin from "@fullcalendar/interaction";
 import type { LangKey } from "@/utils/translations";
 import { DEFAULT_LANG, isLangKey, t } from "@/utils/i18n";
+import EventModal, {
+  type EventDraft,
+  type EventType,
+  EVENT_TYPES,
+  labelForEventType,
+} from "@/components/calendar/EventModal";
 
 // FullCalendar locales
 import plLocale from "@fullcalendar/core/locales/pl";
@@ -74,34 +80,6 @@ function toLocalInput(dt: Date) {
   )}:${pad(dt.getMinutes())}`;
 }
 
-type EventType =
-  | "presentation"
-  | "acquisition"
-  | "broker_agreement"
-  | "preliminary_agreement"
-  | "final_agreement"
-  | "contact"
-  | "task"
-  | "vacation"
-  | "other";
-
-const EVENT_TYPES: Array<{ value: EventType; labelKey: string }> = [
-  { value: "presentation", labelKey: "calendarEventTypePresentation" },
-  { value: "acquisition", labelKey: "calendarEventTypeAcquisition" },
-  { value: "broker_agreement", labelKey: "calendarEventTypeBrokerAgreement" },
-  { value: "preliminary_agreement", labelKey: "calendarEventTypePreliminaryAgreement" },
-  { value: "final_agreement", labelKey: "calendarEventTypeFinalAgreement" },
-  { value: "contact", labelKey: "calendarEventTypeContact" },
-  { value: "task", labelKey: "calendarEventTypeTask" },
-  { value: "vacation", labelKey: "calendarEventTypeVacation" },
-  { value: "other", labelKey: "calendarEventTypeOther" },
-];
-
-function labelForEventType(lang: LangKey, type: EventType) {
-  const key = EVENT_TYPES.find((x) => x.value === type)?.labelKey;
-  return key ? t(lang, key as any) : "";
-}
-
 export default function CalendarPage() {
   const calendarRef = useRef<FullCalendar | null>(null);
 
@@ -149,21 +127,14 @@ export default function CalendarPage() {
   });
 
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<{
-    eventType: EventType;
-    title: string;
-    start: string;
-    end: string;
-    locationText: string;
-    description: string;
-  }>({
-    eventType: "presentation",
-    title: "",
-    start: "",
-    end: "",
-    locationText: "",
-    description: "",
-  });
+  const [draft, setDraft] = useState<EventDraft>({
+      eventType: "presentation",
+      title: "",
+      start: "",
+      end: "",
+      locationText: "",
+      description: "",
+    });
 
   useEffect(() => {
     (async () => {
@@ -991,159 +962,21 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {/* MODAL */}
-      {isModalOpen ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) {
-              setIsModalOpen(false);
-              setEditingEventId(null);
-            }
-          }}
-        >
-          <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-slate-950/70 p-6 text-white shadow-2xl backdrop-blur-xl">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-extrabold tracking-tight text-white">
-                  {editingEventId ? (t(lang, "calEditEvent" as any) ?? "Edytuj termin") : (t(lang, "calNewEvent" as any) ?? "Nowy termin")}
-                </h2>
-                <p className="mt-1 text-xs text-white/60">
-                  {scope === "user" ? "Zapis do mojego kalendarza" : "Zapis do kalendarza biura"}
-                </p>
-              </div>
-
-              <button
-                type="button"
-                className="rounded-2xl border border-white/10 bg-white/10 px-3 py-2 text-sm font-semibold text-white transition hover:bg-white/15"
-                onClick={() => {
-                  setIsModalOpen(false);
-                  setEditingEventId(null);
-                }}
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="mt-5 space-y-4">
-              <div>
-                <label className="text-xs font-semibold text-white/70">Typ</label>
-                <select
-                  value={draft.eventType}
-                  onChange={(e) => {
-                    const nextType = e.target.value as EventType;
-                    setDraft((d) => {
-                      const autoTitle = labelForEventType(lang, nextType);
-                      const prevAuto = labelForEventType(lang, d.eventType);
-                      const shouldAuto = !d.title.trim() || d.title.trim() === prevAuto;
-
-                      return {
-                        ...d,
-                        eventType: nextType,
-                        title: shouldAuto ? autoTitle : d.title,
-                      };
-                    });
-                  }}
-                  className="mt-1 w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white outline-none focus:border-white/40 focus:ring-2 focus:ring-white/20"
-                >
-                  {EVENT_TYPES.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {t(lang, opt.labelKey as any)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-white/70">
-                  {t(lang, "calFieldTitle" as any) ?? "Tytuł"}
-                </label>
-                <input
-                  value={draft.title}
-                  onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
-                  className="mt-1 w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white placeholder:text-white/40 outline-none transition focus:border-white/40 focus:ring-2 focus:ring-white/20"
-                  placeholder={t(lang, "calFieldTitlePh" as any) ?? "np. Prezentacja mieszkania"}
-                />
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="text-xs font-semibold text-white/70">
-                    {t(lang, "calFieldStart" as any) ?? "Start"}
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={draft.start}
-                    onChange={(e) => setDraft((d) => ({ ...d, start: e.target.value }))}
-                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white outline-none transition focus:border-white/40 focus:ring-2 focus:ring-white/20"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-white/70">
-                    {t(lang, "calFieldEnd" as any) ?? "Koniec"}
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={draft.end}
-                    onChange={(e) => setDraft((d) => ({ ...d, end: e.target.value }))}
-                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white outline-none transition focus:border-white/40 focus:ring-2 focus:ring-white/20"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-white/70">
-                  {t(lang, "calFieldLocation" as any) ?? "Lokalizacja"}
-                </label>
-                <input
-                  value={draft.locationText}
-                  onChange={(e) => setDraft((d) => ({ ...d, locationText: e.target.value }))}
-                  className="mt-1 w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white placeholder:text-white/40 outline-none transition focus:border-white/40 focus:ring-2 focus:ring-white/20"
-                  placeholder={t(lang, "calFieldLocationPh" as any) ?? "np. Katowice, ul. ..."}
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-white/70">
-                  {t(lang, "calFieldDesc" as any) ?? "Opis"}
-                </label>
-                <textarea
-                  value={draft.description}
-                  onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
-                  className="mt-1 w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white placeholder:text-white/40 outline-none transition focus:border-white/40 focus:ring-2 focus:ring-white/20"
-                  rows={4}
-                  placeholder={t(lang, "calFieldDescPh" as any) ?? "Dodatkowe informacje…"}
-                />
-              </div>
-            </div>
-
-            <div className="mt-6 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/15 disabled:opacity-60"
-                onClick={() => {
-                  setIsModalOpen(false);
-                  setEditingEventId(null);
-                }}
-                disabled={saving}
-              >
-                {t(lang, "calCancel" as any) ?? "Anuluj"}
-              </button>
-
-              <button
-                type="button"
-                className="rounded-2xl bg-white/15 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-white/20 disabled:opacity-60"
-                onClick={submitNewEvent}
-                disabled={saving || !activeCalendarId}
-                title={!activeCalendarId ? "Brak aktywnego kalendarza (Mój / Biuro)" : undefined}
-              >
-                {saving ? (t(lang, "calSaving" as any) ?? "Zapisuję…") : (t(lang, "calSave" as any) ?? "Zapisz")}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+          <EventModal
+        isOpen={isModalOpen}
+        lang={lang}
+        saving={saving}
+        editingEventId={editingEventId}
+        scopeLabel={scope === "user" ? "Zapis do mojego kalendarza" : "Zapis do kalendarza biura"}
+        draft={draft}
+        setDraft={setDraft}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingEventId(null);
+        }}
+        onSubmit={submitNewEvent}
+        activeCalendarId={activeCalendarId}
+      />
 
       {/* CONNECT MODAL */}
       {isConnectOpen ? (
