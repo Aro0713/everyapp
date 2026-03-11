@@ -118,6 +118,17 @@ function fmtShortDate(v?: string | null) {
   if (!Number.isFinite(ms)) return "-";
   return new Date(ms).toLocaleDateString();
 }
+function fmtActivityDate(v?: string | null) {
+  if (!v) return "-";
+  const ms = Date.parse(v);
+  if (!Number.isFinite(ms)) return "-";
+
+  const d = new Date(ms);
+  const date = d.toLocaleDateString();
+  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+  return `${date}, ${time}`;
+}
 function toLocalInput(dt: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -203,7 +214,7 @@ const [botFilters, setBotFilters] = useState<EverybotFilters>({
   updated_at: string;
   id: string;
 } | null>(null);
-
+  const [listingActivity, setListingActivity] = useState<Record<string, any>>({});
   const [botHasMore, setBotHasMore] = useState(false);
   const [botSearching, setBotSearching] = useState(false);
   const [botSearchSeconds, setBotSearchSeconds] = useState(0);
@@ -483,7 +494,7 @@ async function loadEverybot(opts?: {
     if (reqId === botReqSeqRef.current) setBotLoading(false);
   }
 }
- async function refreshEverybotList() {
+async function refreshEverybotList() {
   const reqId = ++refreshReqSeqRef.current;
 
   refreshAbortRef.current?.abort();
@@ -536,10 +547,51 @@ async function loadEverybot(opts?: {
     if (reqId !== refreshReqSeqRef.current) return;
 
     const scrollLeft = everybotTableRef.current?.scrollLeft ?? 0;
+    const nextRows = Array.isArray(j?.rows) ? j.rows : [];
 
-    setBotRows(Array.isArray(j?.rows) ? j.rows : []);
+    setBotRows(nextRows);
     setBotHasMore(Boolean(j?.nextCursor));
     setBotCursor(j?.nextCursor ?? null);
+
+    const ids = nextRows.map((row: ExternalRow) => row.id).filter(Boolean);
+
+    if (ids.length > 0) {
+      try {
+        const act = await fetch(
+          `/api/external_listings/activity?ids=${encodeURIComponent(ids.join(","))}`,
+          { signal: ac.signal }
+        );
+
+        const actJson = await act.json().catch(() => null);
+
+        if (act.ok && Array.isArray(actJson)) {
+          const map: Record<string, any> = {};
+
+          for (const row of actJson) {
+            const externalListingId =
+              typeof row?.external_listing_id === "string" ? row.external_listing_id : null;
+
+            if (!externalListingId) continue;
+            if (map[externalListingId]) continue;
+
+            map[externalListingId] = row;
+          }
+
+          if (reqId === refreshReqSeqRef.current) {
+            setListingActivity(map);
+          }
+        } else if (reqId === refreshReqSeqRef.current) {
+          setListingActivity({});
+        }
+      } catch (e: any) {
+        if (e?.name !== "AbortError" && reqId === refreshReqSeqRef.current) {
+          console.warn("listing activity refresh failed:", e?.message ?? e);
+          setListingActivity({});
+        }
+      }
+    } else {
+      setListingActivity({});
+    }
 
     requestAnimationFrame(() => {
       if (everybotTableRef.current) everybotTableRef.current.scrollLeft = scrollLeft;
@@ -1556,6 +1608,15 @@ return (
                      {botRows.map((r) => {
                     const selected = selectedExternalId === r.id;
                     const highlighted = highlightIds.includes(r.id);
+                    const activity = listingActivity[r.id];
+                    const activityLabel =
+                      activity?.type === "call"
+                        ? `📞 ${t(lang, "listingCallScheduled" as any)}`
+                        : activity?.type === "visit"
+                        ? `🏠 ${t(lang, "listingVisitScheduled" as any)}`
+                        : null;
+
+                    const activityDateLabel = activity?.start_at ? fmtActivityDate(activity.start_at) : null;
 
                     const title = r.title ?? "-";
                     const price = fmtPrice(r.price_amount, r.currency);
@@ -1572,7 +1633,7 @@ return (
                       [r.street, r.district, r.city, r.voivodeship].filter(Boolean).join(", ") ||
                       r.location_text ||
                       "-";
-
+                    
                     const lastActivity =
                       r.last_interaction_at ||
                       r.last_seen_at ||
@@ -1638,69 +1699,76 @@ return (
                                   <div className="truncate text-sm font-semibold text-white">{title}</div>
                                 </div>
 
-                                <div className="mt-1 flex flex-wrap gap-1.5">
-                                  <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/85 ring-1 ring-white/10">
-                                    {r.source}
-                                  </span>
+                             <div className="mt-1 flex flex-wrap gap-1.5">
+                                <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/85 ring-1 ring-white/10">
+                                  {r.source}
+                                </span>
 
-                                  {r.transaction_type ? (
-                                    <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
-                                      {r.transaction_type}
-                                    </span>
-                                  ) : null}
-
-                                  {r.property_type ? (
-                                    <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
-                                      {r.property_type}
-                                    </span>
-                                  ) : null}
-
+                                {r.transaction_type ? (
                                   <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
-                                    status: {r.status || "-"}
+                                    {r.transaction_type}
                                   </span>
+                                ) : null}
 
-                                  {r.source_status ? (
-                                    <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
-                                      źródło: {r.source_status}
-                                    </span>
-                                  ) : null}
+                                {r.property_type ? (
+                                  <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
+                                    {r.property_type}
+                                  </span>
+                                ) : null}
 
-                                  {r.shortlisted ? (
-                                    <span className="rounded bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-200 ring-1 ring-emerald-500/20">
-                                      shortlist
-                                    </span>
-                                  ) : null}
+                                <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
+                                  {t(lang, "listingStatus" as any)}: {r.status || "-"}
+                                </span>
 
-                                  {r.my_office_saved ? (
-                                    <span className="rounded bg-sky-500/15 px-2 py-0.5 text-[10px] text-sky-200 ring-1 ring-sky-500/20">
-                                      w biurze
-                                    </span>
-                                  ) : null}
+                                {r.source_status ? (
+                                  <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
+                                    {t(lang, "listingSourceStatus" as any)}: {r.source_status}
+                                  </span>
+                                ) : null}
 
-                                  {hasPhone ? (
-                                    <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
-                                      telefon
-                                    </span>
-                                  ) : null}
+                                {r.shortlisted ? (
+                                  <span className="rounded bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-200 ring-1 ring-emerald-500/20">
+                                    {t(lang, "listingShortlist" as any)}
+                                  </span>
+                                ) : null}
 
-                                  {hasRCN ? (
-                                    <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
-                                      RCN
-                                    </span>
-                                  ) : null}
+                                {r.my_office_saved ? (
+                                  <span className="rounded bg-sky-500/15 px-2 py-0.5 text-[10px] text-sky-200 ring-1 ring-sky-500/20">
+                                    {t(lang, "listingInOffice" as any)}
+                                  </span>
+                                ) : null}
 
-                                  {hasMap ? (
-                                    <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
-                                      mapa
-                                    </span>
-                                  ) : null}
+                                {hasPhone ? (
+                                  <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
+                                    {t(lang, "listingHasPhone" as any)}
+                                  </span>
+                                ) : null}
 
-                                  {hasEnriched ? (
-                                    <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
-                                      enriched
-                                    </span>
-                                  ) : null}
-                                </div>
+                                {hasRCN ? (
+                                  <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
+                                    RCN
+                                  </span>
+                                ) : null}
+
+                                {hasMap ? (
+                                  <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
+                                    {t(lang, "listingHasMap" as any)}
+                                  </span>
+                                ) : null}
+
+                                {hasEnriched ? (
+                                  <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
+                                    {t(lang, "listingEnriched" as any)}
+                                  </span>
+                                ) : null}
+
+                                {activityLabel ? (
+                                  <span className="rounded bg-indigo-500/15 px-2 py-0.5 text-[10px] text-indigo-200 ring-1 ring-indigo-500/20">
+                                    {activityLabel}
+                                    {activityDateLabel ? ` · ${activityDateLabel}` : ""}
+                                  </span>
+                                ) : null}
+                              </div>
 
                                 <div className="mt-1.5 truncate text-[11px] text-white/60">{location}</div>
 

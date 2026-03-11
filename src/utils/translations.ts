@@ -5643,6 +5643,104 @@ calendarEventTypeFollowUp: {
   lt: "Tolesnis kontaktas",
   vi: "Theo dõi",
 },
+listingStatus: {
+  pl: "status",
+  en: "status",
+  de: "Status",
+  cs: "stav",
+  sk: "stav",
+  ua: "статус",
+  lt: "būsena",
+  vi: "trạng thái",
+},
+
+listingSourceStatus: {
+  pl: "źródło",
+  en: "source",
+  de: "Quelle",
+  cs: "zdroj",
+  sk: "zdroj",
+  ua: "джерело",
+  lt: "šaltinis",
+  vi: "nguồn",
+},
+
+listingShortlist: {
+  pl: "shortlista",
+  en: "shortlist",
+  de: "Shortlist",
+  cs: "shortlist",
+  sk: "shortlist",
+  ua: "короткий список",
+  lt: "atranka",
+  vi: "danh sách chọn",
+},
+
+listingInOffice: {
+  pl: "w biurze",
+  en: "in office",
+  de: "im Büro",
+  cs: "v kanceláři",
+  sk: "v kancelárii",
+  ua: "в офісі",
+  lt: "biure",
+  vi: "trong văn phòng",
+},
+
+listingHasPhone: {
+  pl: "telefon",
+  en: "phone",
+  de: "Telefon",
+  cs: "telefon",
+  sk: "telefón",
+  ua: "телефон",
+  lt: "telefonas",
+  vi: "điện thoại",
+},
+
+listingHasMap: {
+  pl: "mapa",
+  en: "map",
+  de: "Karte",
+  cs: "mapa",
+  sk: "mapa",
+  ua: "мапа",
+  lt: "žemėlapis",
+  vi: "bản đồ",
+},
+
+listingEnriched: {
+  pl: "wzbogacone",
+  en: "enriched",
+  de: "angereichert",
+  cs: "obohaceno",
+  sk: "obohatené",
+  ua: "збагачено",
+  lt: "praturtinta",
+  vi: "đã bổ sung",
+},
+
+listingCallScheduled: {
+  pl: "telefon zaplanowany",
+  en: "call scheduled",
+  de: "Telefon geplant",
+  cs: "telefon naplánován",
+  sk: "telefon naplánovaný",
+  ua: "дзвінок заплановано",
+  lt: "skambutis suplanuotas",
+  vi: "cuộc gọi đã lên lịch",
+},
+
+listingVisitScheduled: {
+  pl: "wizyta zaplanowana",
+  en: "visit scheduled",
+  de: "Besuch geplant",
+  cs: "návštěva naplánována",
+  sk: "návšteva naplánovaná",
+  ua: "візит заплановано",
+  lt: "vizitas suplanuotas",
+  vi: "cuộc gặp đã lên lịch",
+},
 
 } as const);
 
