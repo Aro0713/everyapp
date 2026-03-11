@@ -17,14 +17,28 @@ const EverybotMap = dynamic(
 );
 
 type ListingRow = {
-  listing_id: string;
+  id: string;
+  item_source: "crm" | "portal";
   office_id: string;
-  record_type: "offer" | "search";
-  transaction_type: "sale" | "rent";
-  status: "draft" | "active" | "closed" | "archived";
+
+  record_type: string;
+  transaction_type: string;
+  status: string;
   created_at: string;
+
   case_owner_name: string | null;
   parties_summary: string | null;
+
+  title: string | null;
+  description: string | null;
+  price_amount: string | number | null;
+  currency: string | null;
+  location_text: string | null;
+  thumb_url: string | null;
+
+  action: "save" | "call" | "visit" | null;
+  source: string | null;
+  external_listing_id: string | null;
 };
 
 type OffersTab = "office" | "everybot";
@@ -295,10 +309,15 @@ const [botFilters, setBotFilters] = useState<EverybotFilters>({
         }),
       });
 
-      const j = await r.json().catch(() => null);
-      if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
+       const j = await r.json().catch(() => null);
+        if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
 
-      await refreshEverybotList();
+        await refreshEverybotList();
+
+       if (action === "save") {
+        await load();
+        setTab("office");
+      }
     } catch (e: any) {
       alert(`Nie udało się zapisać akcji: ${e?.message ?? "Unknown error"}`);
     } finally {
@@ -1223,115 +1242,158 @@ return (
     </div>
 
     {/* CONTENT */}
-    {tab === "office" ? (
-      <>
-        {/* LISTA OFERT */}
-        <div className="rounded-3xl border border-white/10 bg-slate-950/45 p-4 shadow-2xl backdrop-blur-xl">
-          {loading ? (
-            <div className="text-xs text-white/50">{t(lang, "offersLoading" as any)}</div>
-          ) : err ? (
-            <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-xs text-red-200">
-              {t(lang, "offersLoadError" as any)}: {err}
-            </div>
-          ) : empty ? (
-            <div className="flex h-44 items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/5">
-            <p className="text-xs text-white/60">{t(lang, "offersEmpty" as any)}</p>
-          </div>
-          ) : (
-            <div ref={officeTableRef} className="w-full">
-              <div className="divide-y divide-white/10">
-                {rows.map((r) => {
-                  const title =
-                    r.record_type === "offer"
-                      ? `${t(lang, "offersTabOffice" as any)}`
-                      : `${t(lang, "offersTabOffice" as any)}`;
+      {tab === "office" ? (
+        <>
+          {/* LISTA OFERT */}
+          <div className="rounded-3xl border border-white/10 bg-slate-950/45 p-4 shadow-2xl backdrop-blur-xl">
+            {loading ? (
+              <div className="text-xs text-white/50">{t(lang, "offersLoading" as any)}</div>
+            ) : err ? (
+              <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-xs text-red-200">
+                {t(lang, "offersLoadError" as any)}: {err}
+              </div>
+            ) : empty ? (
+              <div className="flex h-44 items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/5">
+                <p className="text-xs text-white/60">{t(lang, "offersEmpty" as any)}</p>
+              </div>
+            ) : (
+              <div ref={officeTableRef} className="w-full">
+                <div className="divide-y divide-white/10">
+                  {rows.map((r) => {
+                    const isPortal = r.item_source === "portal";
+                    const created = r.created_at ? new Date(r.created_at).toLocaleDateString() : null;
+                    const price =
+                      r.price_amount !== null && r.price_amount !== undefined && r.price_amount !== ""
+                        ? `${Number(r.price_amount).toLocaleString()} ${r.currency ?? ""}`.trim()
+                        : null;
 
-                  const metaLeft = [
-                    r.record_type === "offer" ? "offer" : "search",
-                    r.transaction_type,
-                    r.status,
-                  ].filter(Boolean) as string[];
+                    const sourceBadge = isPortal
+                      ? t(lang, "listingSourcePortal" as any)
+                      : t(lang, "listingSourceCRM" as any);
 
-                  const created = r.created_at ? new Date(r.created_at).toLocaleDateString() : null;
+                    const actionBadge =
+                      r.action === "save"
+                        ? t(lang, "listingActionSaved" as any)
+                        : r.action === "call"
+                        ? t(lang, "listingActionCall" as any)
+                        : r.action === "visit"
+                        ? t(lang, "listingActionVisit" as any)
+                        : null;
 
-                  return (
-                    <div key={r.listing_id} className={clsx("p-2.5 md:p-3", "transition")}>
-                      <div className="flex gap-3">
-                        {/* thumb (placeholder) */}
-                        <div className="shrink-0">
-                          <div className="h-14 w-20 rounded-lg bg-white/10 ring-1 ring-white/10" />
+                    return (
+                      <div key={r.id} className={clsx("p-2.5 md:p-3", "transition")}>
+                        <div className="flex gap-3">
+                          {/* thumb */}
+                          <div className="shrink-0">
+                            {r.thumb_url ? (
+                              <img
+                                src={r.thumb_url}
+                                alt=""
+                                className="h-14 w-20 rounded-lg object-cover ring-1 ring-white/10"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="h-14 w-20 rounded-lg bg-white/10 ring-1 ring-white/10" />
+                            )}
 
-                          <div className="mt-1 flex items-center gap-1.5 text-[10px] text-white/50">
-                            <span className="rounded bg-white/10 px-2 py-0.5 ring-1 ring-white/10 text-white/80">
-                              {r.record_type}
-                            </span>
-                            {created ? <span>{created}</span> : null}
+                            <div className="mt-1 flex items-center gap-1.5 text-[10px] text-white/50">
+                              <span
+                                className={clsx(
+                                  "rounded px-2 py-0.5 ring-1 text-white/90",
+                                  isPortal
+                                    ? "bg-indigo-500/15 ring-indigo-500/20 text-indigo-200"
+                                    : "bg-white/10 ring-white/10"
+                                )}
+                              >
+                                {sourceBadge}
+                              </span>
+                              {created ? <span>{created}</span> : null}
+                            </div>
                           </div>
-                        </div>
 
-                        {/* content */}
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="truncate text-sm font-semibold text-white">
-                                {title}
+                          {/* content */}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-semibold text-white">
+                                  {r.title ?? (isPortal ? t(lang, "listingPortalFallbackTitle" as any) : t(lang, "listingCrmFallbackTitle" as any))}
+                                </div>
+
+                                {r.location_text ? (
+                                  <div className="truncate text-[11px] text-white/60">
+                                    {r.location_text}
+                                  </div>
+                                ) : null}
+
+                                {r.case_owner_name || r.parties_summary ? (
+                                  <div className="truncate text-[11px] text-white/50">
+                                    {r.case_owner_name ?? "-"}
+                                    {r.parties_summary ? ` • ${r.parties_summary}` : ""}
+                                  </div>
+                                ) : null}
                               </div>
 
-                              {r.case_owner_name || r.parties_summary ? (
-                                <div className="truncate text-[11px] text-white/60">
-                                  {r.case_owner_name ?? "-"}
-                                  {r.parties_summary ? ` • ${r.parties_summary}` : ""}
+                              <div className="text-right">
+                                {price ? (
+                                  <div className="text-sm font-extrabold text-white">{price}</div>
+                                ) : (
+                                  <div className="text-sm font-extrabold text-white/35">—</div>
+                                )}
+                                <div className="text-[11px] text-white/50">
+                                  {r.transaction_type || "-"} • {r.status || "-"}
                                 </div>
+                              </div>
+                            </div>
+
+                            <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-white/70">
+                              <span className="rounded bg-white/10 px-1.5 py-0.5 ring-1 ring-white/10 text-white/80">
+                                {r.record_type}
+                              </span>
+
+                              {r.source ? (
+                                <span className="rounded bg-white/10 px-1.5 py-0.5 ring-1 ring-white/10 text-white/80">
+                                  {r.source}
+                                </span>
+                              ) : null}
+
+                              {actionBadge ? (
+                                <span className="rounded bg-indigo-500/15 px-1.5 py-0.5 ring-1 ring-indigo-500/20 text-indigo-200">
+                                  {actionBadge}
+                                </span>
                               ) : null}
                             </div>
 
-                            <div className="text-right">
-                              <div className="text-sm font-extrabold text-white">
-                                {r.transaction_type}
+                            {r.description ? (
+                              <div className="mt-1.5 line-clamp-2 text-[11px] text-white/45">
+                                {r.description}
                               </div>
-                              <div className="text-[11px] text-white/50">{r.status}</div>
-                            </div>
+                            ) : null}
                           </div>
-
-                          {/* meta */}
-                          {metaLeft.length ? (
-                            <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-white/70">
-                              {metaLeft.map((x, i) => (
-                                <span
-                                  key={i}
-                                  className="rounded bg-white/10 px-1.5 py-0.5 ring-1 ring-white/10 text-white/80"
-                                >
-                                  {x}
-                                </span>
-                              ))}
-                            </div>
-                          ) : null}
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
 
-        {/* IMPORT INFO */}
-        <div className="rounded-3xl border border-white/10 bg-slate-950/45 p-4 shadow-2xl backdrop-blur-xl">
-          <h3 className="text-sm font-extrabold text-white">
-            {t(lang, "offersImportTitle" as any)}
-          </h3>
-          <p className="mt-0.5 text-xs text-white/50">
-            {t(lang, "offersImportDesc" as any)}
-          </p>
-          <ul className="mt-3 list-disc space-y-2 pl-5 text-xs text-white/60">
-            <li>{t(lang, "offersImportHint1" as any)}</li>
-            <li>{t(lang, "offersImportHint2" as any)}</li>
-            <li>{t(lang, "offersImportHint3" as any)}</li>
-          </ul>
-        </div>
-      </>
-) : (
+          {/* IMPORT INFO */}
+          <div className="rounded-3xl border border-white/10 bg-slate-950/45 p-4 shadow-2xl backdrop-blur-xl">
+            <h3 className="text-sm font-extrabold text-white">
+              {t(lang, "offersImportTitle" as any)}
+            </h3>
+            <p className="mt-0.5 text-xs text-white/50">
+              {t(lang, "offersImportDesc" as any)}
+            </p>
+            <ul className="mt-3 list-disc space-y-2 pl-5 text-xs text-white/60">
+              <li>{t(lang, "offersImportHint1" as any)}</li>
+              <li>{t(lang, "offersImportHint2" as any)}</li>
+              <li>{t(lang, "offersImportHint3" as any)}</li>
+            </ul>
+          </div>
+        </>
+      ) : (
   <>
     {/* EVERYBOT */}
     <div className="space-y-3">

@@ -5741,7 +5741,82 @@ listingVisitScheduled: {
   lt: "vizitas suplanuotas",
   vi: "cuộc gặp đã lên lịch",
 },
+listingSourceCRM: {
+  pl: "CRM",
+  en: "CRM",
+  de: "CRM",
+  cs: "CRM",
+  sk: "CRM",
+  ua: "CRM",
+  lt: "CRM",
+  vi: "CRM",
+},
 
+listingSourcePortal: {
+  pl: "Portal",
+  en: "Portal",
+  de: "Portal",
+  cs: "Portál",
+  sk: "Portál",
+  ua: "Портал",
+  lt: "Portalas",
+  vi: "Cổng tin",
+},
+
+listingActionSaved: {
+  pl: "Zapisane",
+  en: "Saved",
+  de: "Gespeichert",
+  cs: "Uloženo",
+  sk: "Uložené",
+  ua: "Збережено",
+  lt: "Išsaugota",
+  vi: "Đã lưu",
+},
+
+listingActionCall: {
+  pl: "Telefon",
+  en: "Call",
+  de: "Telefon",
+  cs: "Telefon",
+  sk: "Telefonát",
+  ua: "Дзвінок",
+  lt: "Skambutis",
+  vi: "Cuộc gọi",
+},
+
+listingActionVisit: {
+  pl: "Wizyta",
+  en: "Visit",
+  de: "Besuch",
+  cs: "Návštěva",
+  sk: "Návšteva",
+  ua: "Візит",
+  lt: "Vizitas",
+  vi: "Cuộc gặp",
+},
+
+listingPortalFallbackTitle: {
+  pl: "Oferta z portalu",
+  en: "Portal listing",
+  de: "Portalangebot",
+  cs: "Nabídka z portálu",
+  sk: "Ponuka z portálu",
+  ua: "Оголошення з порталу",
+  lt: "Skelbimas iš portalo",
+  vi: "Tin đăng từ cổng tin",
+},
+
+listingCrmFallbackTitle: {
+  pl: "Oferta CRM",
+  en: "CRM listing",
+  de: "CRM-Angebot",
+  cs: "CRM nabídka",
+  sk: "CRM ponuka",
+  ua: "CRM-пропозиція",
+  lt: "CRM pasiūlymas",
+  vi: "Tin CRM",
+},
 } as const);
 
 export type TranslationKey = keyof typeof translations;

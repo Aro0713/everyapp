@@ -1,4 +1,3 @@
-// pages/api/external_listings/save.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { pool } from "../../../lib/neonDb";
 import { getUserIdFromRequest } from "../../../lib/session";
@@ -26,7 +25,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const body = req.body ?? {};
     const externalListingId = optString(body.external_listing_id);
-    const mode = optString(body.mode) ?? "agent"; // "agent" | "office"
+    const mode = optString(body.mode) ?? "agent";
     const note = optString(body.note);
 
     if (!externalListingId) {
@@ -39,7 +38,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ? (body.action as ListingAction)
         : "save";
 
-    // office-mode nadal zapisujemy kto kliknął (audyt). Tryb dajemy do payload.
     const payload = {
       mode,
       ua: optString(req.headers["user-agent"]) ?? null,
@@ -58,26 +56,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     `;
 
     const { rows } = await pool.query<{ id: string }>(sql, [
-        officeId,
-        externalListingId,
-        userId,
-        action,
-        JSON.stringify(payload),
-        note,
-      ]);
-      if (action === "save") {
-    try {
-      await createListingDraftFromExternal({
+      officeId,
+      externalListingId,
+      userId,
+      action,
+      JSON.stringify(payload),
+      note,
+    ]);
+
+    let listingId: string | null = null;
+
+    if (action === "save") {
+      const result = await createListingDraftFromExternal({
         externalListingId,
         officeId,
         userId,
       });
-    } catch (e) {
-      console.warn("CREATE_LISTING_DRAFT_FAILED", e);
-    }
-  }
 
-    return res.status(200).json({ ok: true, id: rows?.[0]?.id ?? null });
+      listingId = result?.listingId ?? null;
+    }
+
+    return res.status(200).json({
+      ok: true,
+      id: rows?.[0]?.id ?? null,
+      listingId,
+    });
   } catch (e: any) {
     console.error("EXTERNAL_LISTINGS_SAVE_ERROR", e);
     return res.status(400).json({ error: e?.message ?? "Bad request" });
