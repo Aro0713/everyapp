@@ -5817,6 +5817,103 @@ listingCrmFallbackTitle: {
   lt: "CRM pasiūlymas",
   vi: "Tin CRM",
 },
+listingOpen: {
+  pl: "Otwórz",
+  en: "Open",
+  de: "Öffnen",
+  cs: "Otevřít",
+  sk: "Otvoriť",
+  ua: "Відкрити",
+  lt: "Atidaryti",
+  vi: "Mở",
+},
+
+listingEdit: {
+  pl: "Edytuj",
+  en: "Edit",
+  de: "Bearbeiten",
+  cs: "Upravit",
+  sk: "Upraviť",
+  ua: "Редагувати",
+  lt: "Redaguoti",
+  vi: "Chỉnh sửa",
+},
+
+listingRemoveFromMyList: {
+  pl: "Usuń z mojej listy",
+  en: "Remove from my list",
+  de: "Aus meiner Liste entfernen",
+  cs: "Odebrat z mého seznamu",
+  sk: "Odstrániť z môjho zoznamu",
+  ua: "Видалити з мого списку",
+  lt: "Pašalinti iš mano sąrašo",
+  vi: "Xóa khỏi danh sách của tôi",
+},
+
+listingOpenTodo: {
+  pl: "Podgląd oferty CRM nie jest jeszcze podłączony.",
+  en: "CRM listing preview is not connected yet.",
+  de: "Die CRM-Angebotsansicht ist noch nicht angeschlossen.",
+  cs: "Náhled CRM nabídky ještě není připojen.",
+  sk: "Náhľad CRM ponuky ešte nie je pripojený.",
+  ua: "Перегляд CRM-пропозиції ще не підключено.",
+  lt: "CRM pasiūlymo peržiūra dar neprijungta.",
+  vi: "Chế độ xem tin CRM chưa được kết nối.",
+},
+
+listingEditTodo: {
+  pl: "Edycja oferty CRM nie jest jeszcze podłączona.",
+  en: "CRM listing editing is not connected yet.",
+  de: "Die Bearbeitung des CRM-Angebots ist noch nicht angeschlossen.",
+  cs: "Úprava CRM nabídky ještě není připojena.",
+  sk: "Úprava CRM ponuky ešte nie je pripojená.",
+  ua: "Редагування CRM-пропозиції ще не підключено.",
+  lt: "CRM pasiūlymo redagavimas dar neprijungtas.",
+  vi: "Chỉnh sửa tin CRM chưa được kết nối.",
+},
+
+listingRemoveFromMyListTodo: {
+  pl: "Usuwanie z mojej listy nie jest jeszcze podłączone.",
+  en: "Removing from my list is not connected yet.",
+  de: "Das Entfernen aus meiner Liste ist noch nicht angeschlossen.",
+  cs: "Odebrání z mého seznamu ještě není připojeno.",
+  sk: "Odstránenie z môjho zoznamu ešte nie je pripojené.",
+  ua: "Видалення з мого списку ще не підключено.",
+  lt: "Pašalinimas iš mano sąrašo dar neprijungtas.",
+  vi: "Xóa khỏi danh sách của tôi chưa được kết nối.",
+},
+listingRemoveFromMyListConfirm: {
+  pl: "Usunąć tę ofertę z mojej listy?",
+  en: "Remove this listing from my list?",
+  de: "Dieses Angebot aus meiner Liste entfernen?",
+  cs: "Odebrat tuto nabídku z mého seznamu?",
+  sk: "Odstrániť túto ponuku z môjho zoznamu?",
+  ua: "Видалити цю пропозицію з мого списку?",
+  lt: "Pašalinti šį pasiūlymą iš mano sąrašo?",
+  vi: "Xóa tin này khỏi danh sách của tôi?",
+},
+
+listingRemoveFromMyListError: {
+  pl: "Nie udało się usunąć oferty z mojej listy.",
+  en: "Could not remove the listing from my list.",
+  de: "Das Angebot konnte nicht aus meiner Liste entfernt werden.",
+  cs: "Nabídku se nepodařilo odebrat z mého seznamu.",
+  sk: "Ponuku sa nepodarilo odstrániť z môjho zoznamu.",
+  ua: "Не вдалося видалити пропозицію з мого списку.",
+  lt: "Nepavyko pašalinti pasiūlymo iš mano sąrašo.",
+  vi: "Không thể xóa tin khỏi danh sách của tôi.",
+},
+
+listingRemoveFromMyListCrmTodo: {
+  pl: "Usuwanie ofert CRM nie jest jeszcze podłączone.",
+  en: "Removing CRM listings is not connected yet.",
+  de: "Das Entfernen von CRM-Angeboten ist noch nicht angeschlossen.",
+  cs: "Odebírání CRM nabídek ještě není připojeno.",
+  sk: "Odstraňovanie CRM ponúk ešte nie je pripojené.",
+  ua: "Видалення CRM-пропозицій ще не підключено.",
+  lt: "CRM pasiūlymų šalinimas dar neprijungtas.",
+  vi: "Xóa tin CRM chưa được kết nối.",
+},
 } as const);
 
 export type TranslationKey = keyof typeof translations;

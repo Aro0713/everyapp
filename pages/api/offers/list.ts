@@ -167,8 +167,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       currency: r.currency,
       location_text: r.location_text,
       thumb_url: null,
+      source_url: null,
       action: null,
-      source: null,
       external_listing_id: null,
     }));
 
@@ -189,8 +189,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       currency: r.currency,
       location_text: r.location_text,
       thumb_url: r.thumb_url,
+      source_url: r.source_url,
       action: r.action,
-      source: r.source,
       external_listing_id: r.external_listing_id,
     }));
 

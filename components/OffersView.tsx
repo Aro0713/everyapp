@@ -35,6 +35,7 @@ type ListingRow = {
   currency: string | null;
   location_text: string | null;
   thumb_url: string | null;
+  source_url: string | null;
 
   action: "save" | "call" | "visit" | null;
   source: string | null;
@@ -324,6 +325,30 @@ const [botFilters, setBotFilters] = useState<EverybotFilters>({
       setSavingId(null);
     }
   }
+  async function removePortalListingFromMyList(externalListingId: string) {
+  if (!externalListingId) return;
+
+  const confirmed = window.confirm(t(lang, "listingRemoveFromMyListConfirm" as any));
+  if (!confirmed) return;
+
+  try {
+    const r = await fetch("/api/external_listings/remove-from-list", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        external_listing_id: externalListingId,
+      }),
+    });
+
+    const j = await r.json().catch(() => null);
+    if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
+
+    await load();
+    await refreshEverybotList();
+  } catch (e: any) {
+    alert(e?.message ?? t(lang, "listingRemoveFromMyListError" as any));
+  }
+}
 
 async function toggleSamePhoneOffers(row: ExternalRow) {
   if (!row?.id) return;
@@ -1280,7 +1305,7 @@ return (
                         ? t(lang, "listingActionVisit" as any)
                         : null;
 
-                    return (
+                                        return (
                       <div key={r.id} className={clsx("p-2.5 md:p-3", "transition")}>
                         <div className="flex gap-3">
                           {/* thumb */}
@@ -1316,7 +1341,10 @@ return (
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
                                 <div className="truncate text-sm font-semibold text-white">
-                                  {r.title ?? (isPortal ? t(lang, "listingPortalFallbackTitle" as any) : t(lang, "listingCrmFallbackTitle" as any))}
+                                  {r.title ??
+                                    (isPortal
+                                      ? t(lang, "listingPortalFallbackTitle" as any)
+                                      : t(lang, "listingCrmFallbackTitle" as any))}
                                 </div>
 
                                 {r.location_text ? (
@@ -1368,6 +1396,51 @@ return (
                                 {r.description}
                               </div>
                             ) : null}
+
+                            {/* actions */}
+                            <div className="mt-3 flex flex-wrap items-center justify-end gap-1.5 border-t border-white/10 pt-3">
+                              <button
+                                type="button"
+                                className="rounded-xl border border-white/10 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:bg-white/15"
+                                onClick={() => {
+                                  if (isPortal && r.source_url) {
+                                    window.open(r.source_url, "_blank", "noopener,noreferrer");
+                                    return;
+                                  }
+
+                                  alert(t(lang, "listingOpenTodo" as any));
+                                }}
+                              >
+                                {t(lang, "listingOpen" as any)}
+                              </button>
+
+                              {!isPortal ? (
+                                <button
+                                  type="button"
+                                  className="rounded-xl border border-white/10 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:bg-white/15"
+                                  onClick={() => {
+                                    alert(t(lang, "listingEditTodo" as any));
+                                  }}
+                                >
+                                  {t(lang, "listingEdit" as any)}
+                                </button>
+                              ) : null}
+
+                              <button
+                                type="button"
+                                className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-1 text-[11px] font-semibold text-red-200 shadow-sm transition hover:bg-red-500/15"
+                                onClick={() => {
+                                  if (isPortal && r.external_listing_id) {
+                                    removePortalListingFromMyList(r.external_listing_id);
+                                    return;
+                                  }
+
+                                  alert(t(lang, "listingRemoveFromMyListCrmTodo" as any));
+                                }}
+                              >
+                                {t(lang, "listingRemoveFromMyList" as any)}
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>
