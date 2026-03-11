@@ -3,6 +3,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { pool } from "../../../lib/neonDb";
 import { getUserIdFromRequest } from "../../../lib/session";
 import { getOfficeIdForUserId } from "../../../lib/office";
+import { createListingDraftFromExternal } from "../../../lib/offers/createListingDraftFromExternal";
 
 type ListingAction = "save" | "reject" | "call" | "visit";
 
@@ -57,13 +58,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     `;
 
     const { rows } = await pool.query<{ id: string }>(sql, [
-      officeId,
-      externalListingId,
-      userId,
-      action,
-      JSON.stringify(payload),
-      note,
-    ]);
+        officeId,
+        externalListingId,
+        userId,
+        action,
+        JSON.stringify(payload),
+        note,
+      ]);
+      if (action === "save") {
+    try {
+      await createListingDraftFromExternal({
+        externalListingId,
+        officeId,
+        userId,
+      });
+    } catch (e) {
+      console.warn("CREATE_LISTING_DRAFT_FAILED", e);
+    }
+  }
 
     return res.status(200).json({ ok: true, id: rows?.[0]?.id ?? null });
   } catch (e: any) {
