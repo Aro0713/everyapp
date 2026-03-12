@@ -16,7 +16,17 @@ function getCookie(name: string) {
   return m ? decodeURIComponent(m[2]) : null;
 }
 
-type PanelView = "dashboard" | "calendar" | "team" | "offers" | "reports";
+type PanelView =
+  | "dashboard"
+  | "calendar"
+  | "offers"
+  | "contacts"
+  | "team"
+  | "officeTransactions"
+  | "downloads"
+  | "notes"
+  | "reports"
+  | "menuSettings";
 
 type NavItem = {
   key: string;
@@ -88,6 +98,34 @@ function StatPill({ label, value }: { label: string; value: string }) {
     <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 shadow-lg backdrop-blur-md">
       <p className="text-xs text-white/60">{label}</p>
       <p className="mt-1 text-sm font-extrabold text-white">{value}</p>
+    </div>
+  );
+}
+function PlaceholderView({
+  title,
+  subtitle,
+}: {
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <div className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-4 sm:px-4 lg:px-6">
+      <div className="rounded-3xl border border-white/10 bg-slate-950/45 p-4 shadow-2xl backdrop-blur-xl">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-extrabold tracking-tight text-white">{title}</h2>
+            <p className="mt-0.5 text-xs text-white/50">{subtitle}</p>
+          </div>
+
+          <span className="rounded-xl border border-white/10 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/80">
+            W przygotowaniu
+          </span>
+        </div>
+
+        <div className="mt-4 flex min-h-[420px] items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/5">
+          <p className="text-sm text-white/60">Kontener sekcji jest już aktywny. Kolejny krok: właściwy widok i dane.</p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -276,26 +314,18 @@ export default function PanelPage() {
   }
   }, [activeView, backfillScope]);
 
-  const nav = useMemo<NavItem[]>(
+    const nav = useMemo<NavItem[]>(
     () => [
       { key: "panelNavDashboard", view: "dashboard", subKey: "panelHeaderSub" },
       { key: "panelNavCalendar", view: "calendar", subKey: "panelCalendarSub" },
-
-      // widoczne, ale jeszcze nieaktywne moduły
       { key: "panelNavListings", view: "offers", subKey: "offersSubtitle" },
-      { key: "panelNavBuyers", disabled: true },
-      { key: "panelNavClients", disabled: true },
+      { key: "panelNavClients", view: "contacts", subKey: "panelContactsSub" },
       { key: "panelNavTeam", view: "team", subKey: "teamSubtitle" },
-      { key: "panelNavOfficeDeals", disabled: true },
-      { key: "panelNavEmployees", disabled: true },
-      { key: "panelNavPrimaryMarket", disabled: true },
-      { key: "panelNavBoard", disabled: true },
-      { key: "panelNavUsers", disabled: true },
-      { key: "panelNavLeaderboard", disabled: true },
-      { key: "panelNavDownloads", disabled: true },
-      { key: "panelNavQueries", disabled: true },
+      { key: "panelNavOfficeDeals", view: "officeTransactions", subKey: "panelOfficeDealsSub" },
+      { key: "panelNavDownloads", view: "downloads", subKey: "panelDownloadsSub" },
+      { key: "panelNavNotes", view: "notes", subKey: "panelNotesSub" },
       { key: "panelNavReports", view: "reports", subKey: "panelReportsSub" },
-      { key: "panelNavMenuSettings", disabled: true },
+      { key: "panelNavMenuSettings", view: "menuSettings", subKey: "panelMenuSettingsSub" },
     ],
     []
   );
@@ -744,15 +774,20 @@ export default function PanelPage() {
               <div className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-4 sm:px-4 lg:px-6">
                 <CalendarPage />
               </div>
-           ) : activeView === "offers" ? (
+                      ) : activeView === "offers" ? (
                 <div className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-4 sm:px-4 lg:px-6">
                   <OffersView lang={lang} />
                 </div>
-              ) : activeView === "team" ? (
-                <div className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-4 sm:px-4 lg:px-6">
-                  <TeamView />
-                </div>
-          ) : activeView === "reports" ? (
+                ) : activeView === "contacts" ? (
+                  <PlaceholderView
+                    title={t(lang, "panelNavClients" as any)}
+                    subtitle={t(lang, "panelContactsSub" as any)}
+                  />
+                ) : activeView === "team" ? (
+                  <div className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-4 sm:px-4 lg:px-6">
+                    <TeamView />
+                  </div>
+                ) : activeView === "reports" ? (
                 <div className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-4 sm:px-4 lg:px-6">
                   <PanelCard
                     title={t(lang, "panelCrawlerCardTitle" as any)}
@@ -827,6 +862,7 @@ export default function PanelPage() {
                               />
                             </div>
 
+
                             <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                               <div className="flex items-center justify-between gap-4">
                                 <p className="text-sm font-semibold text-white">
@@ -872,6 +908,26 @@ export default function PanelPage() {
                       </div>
                   </PanelCard>
                 </div>
+              ) : activeView === "officeTransactions" ? (
+                <PlaceholderView
+                  title={t(lang, "panelNavOfficeDeals" as any)}
+                  subtitle={t(lang, "panelOfficeDealsSub" as any)}
+                />
+              ) : activeView === "downloads" ? (
+                <PlaceholderView
+                  title={t(lang, "panelNavDownloads" as any)}
+                  subtitle={t(lang, "panelDownloadsSub" as any)}
+                />
+              ) : activeView === "notes" ? (
+                <PlaceholderView
+                  title={t(lang, "panelNavNotes" as any)}
+                  subtitle={t(lang, "panelNotesSub" as any)}
+                />
+              ) : activeView === "menuSettings" ? (
+                <PlaceholderView
+                  title={t(lang, "panelNavMenuSettings" as any)}
+                  subtitle={t(lang, "panelMenuSettingsSub" as any)}
+                />
               ) : null}
           </section>
         </div>
