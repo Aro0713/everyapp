@@ -115,10 +115,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         SELECT COUNT(*)::text AS count
         FROM events e
         WHERE e.org_id = $1::uuid
+          AND ($2::text <> 'agent' OR e.created_by = $3::uuid)
           AND e.start_at >= ((date_trunc('day', now() AT TIME ZONE 'Europe/Warsaw')) AT TIME ZONE 'Europe/Warsaw')
           AND e.start_at < (((date_trunc('day', now() AT TIME ZONE 'Europe/Warsaw')) + interval '1 day') AT TIME ZONE 'Europe/Warsaw')
         `,
-        [officeId]
+        [officeId, scope, userId]
       ),
 
       pool.query<{
@@ -174,6 +175,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           FROM external_listing_actions
           WHERE office_id = $1::uuid
             AND action = 'save'
+            AND ($2::text <> 'agent' OR user_id = $3::uuid)
           GROUP BY external_listing_id
         )
         SELECT
@@ -191,10 +193,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         LEFT JOIN my_saved ms
           ON ms.external_listing_id = l.id
         WHERE l.office_id = $1::uuid
+          AND (
+            $2::text <> 'agent'
+            OR EXISTS (
+              SELECT 1
+              FROM external_listing_actions ela
+              WHERE ela.external_listing_id = l.id
+                AND ela.office_id = $1::uuid
+                AND ela.user_id = $3::uuid
+            )
+          )
         ORDER BY COALESCE(l.imported_at, l.updated_at) DESC, l.id DESC
         LIMIT 8
         `,
-        [officeId]
+        [officeId, scope, userId]
       ),
 
       pool.query<{
@@ -214,15 +226,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           e.end_at,
           e.location_text,
           e.description,
-          NULL::text AS owner_user_id
+          e.created_by::text AS owner_user_id
         FROM events e
         WHERE e.org_id = $1::uuid
+          AND ($2::text <> 'agent' OR e.created_by = $3::uuid)
           AND e.start_at >= ((date_trunc('day', now() AT TIME ZONE 'Europe/Warsaw')) AT TIME ZONE 'Europe/Warsaw')
           AND e.start_at < (((date_trunc('day', now() AT TIME ZONE 'Europe/Warsaw')) + interval '1 day') AT TIME ZONE 'Europe/Warsaw')
         ORDER BY e.start_at ASC
         LIMIT 10
         `,
-        [officeId]
+        [officeId, scope, userId]
       ),
 
       pool.query<{
@@ -270,21 +283,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }>(
         `
         SELECT
-          id::text,
-          source::text,
-          title,
-          price_amount,
-          currency,
-          updated_at,
-          location_text
-        FROM external_listings
-        WHERE office_id = $1::uuid
-          AND price_amount IS NOT NULL
-          AND updated_at >= now() - interval '7 days'
-        ORDER BY updated_at DESC, id DESC
+          l.id::text,
+          l.source::text,
+          l.title,
+          l.price_amount,
+          l.currency,
+          l.updated_at,
+          l.location_text
+        FROM external_listings l
+        WHERE l.office_id = $1::uuid
+          AND l.price_amount IS NOT NULL
+          AND l.updated_at >= now() - interval '7 days'
+          AND (
+            $2::text <> 'agent'
+            OR EXISTS (
+              SELECT 1
+              FROM external_listing_actions ela
+              WHERE ela.external_listing_id = l.id
+                AND ela.office_id = $1::uuid
+                AND ela.user_id = $3::uuid
+            )
+          )
+        ORDER BY l.updated_at DESC, l.id DESC
         LIMIT 8
         `,
-        [officeId]
+        [officeId, scope, userId]
       ),
 
       pool.query<{
