@@ -132,6 +132,10 @@ function PlaceholderView({
     </div>
   );
 }
+type AgentChatMessage = {
+  role: "user" | "assistant";
+  text: string;
+};
 
 export default function PanelPage() {
 
@@ -152,9 +156,14 @@ export default function PanelPage() {
   const [activeView, setActiveView] = useState<PanelView>("dashboard");
 
   // -------------------- EveryAgent --------------------
-  const [agentText, setAgentText] = useState("");
-  const [agentReply, setAgentReply] = useState<string | null>(null);
-  const [agentLoading, setAgentLoading] = useState(false);
+    const [agentText, setAgentText] = useState("");
+    const [agentLoading, setAgentLoading] = useState(false);
+    const [agentMessages, setAgentMessages] = useState<AgentChatMessage[]>([
+      {
+        role: "assistant",
+        text: t(lang, "panelAgentWelcome" as any),
+      },
+    ]);
     type DashboardData = {
     scope: "agent" | "office";
     officeId: string;
@@ -367,47 +376,69 @@ export default function PanelPage() {
       setDashboardLoading(false);
     }
   }
-  async function runEveryAgent() {
-
+async function runEveryAgent() {
   const msg = agentText.trim();
   if (!msg) return;
 
-  try {
+  const nextHistory: AgentChatMessage[] = [
+    ...agentMessages,
+    { role: "user", text: msg },
+  ];
 
+  setAgentMessages(nextHistory);
+  setAgentText("");
+
+  try {
     setAgentLoading(true);
-    setAgentReply(null);
 
     const r = await fetch("/api/everyagent", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify({ message: msg })
+      body: JSON.stringify({
+        message: msg,
+        history: nextHistory,
+        uiContext: {
+          currentView: activeView,
+          currentFilters: null,
+          currentListingId: "",
+          currentClientId: "",
+          currentLocation: "",
+          clientProfile: "",
+        },
+      }),
     });
 
     const j = await r.json().catch(() => null);
 
-    setAgentReply(j?.reply ?? null);
+    const reply =
+      typeof j?.reply === "string" && j.reply.trim()
+        ? j.reply.trim()
+        : t(lang, "panelAgentNoResult" as any);
+
+    setAgentMessages((prev) => [
+      ...prev,
+      { role: "assistant", text: reply },
+    ]);
 
     if (Array.isArray(j?.actions)) {
-
       for (const action of j.actions) {
-
         console.log("EVERYAGENT_ACTION", action);
-
-        // tu później podpinamy realne akcje
       }
-
     }
-
   } catch (e) {
-
     console.error("EVERYAGENT_RUN_ERROR", e);
 
+    setAgentMessages((prev) => [
+      ...prev,
+      {
+        role: "assistant",
+        text: t(lang, "panelAgentError" as any),
+      },
+    ]);
   } finally {
-
     setAgentLoading(false);
-
   }
 }
 
@@ -679,16 +710,40 @@ export default function PanelPage() {
                     </button>
                   </div>
                   <div className="mb-6">
-                    <PanelCard
-                      title={t(lang, "panelAgentTitle" as any)}
-                      subtitle={t(lang, "panelAgentSubtitle" as any)}
-                    >
+                  <PanelCard
+                    title={t(lang, "panelAgentTitle" as any)}
+                    subtitle={t(lang, "panelAgentSubtitle" as any)}
+                  >
+                    <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                      <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
+                        {agentMessages.map((msg, idx) => (
+                          <div
+                            key={`${msg.role}-${idx}`}
+                            className={clsx(
+                              "max-w-[85%] rounded-2xl px-4 py-3 text-sm",
+                              msg.role === "user"
+                                ? "ml-auto bg-white/15 text-white"
+                                : "mr-auto border border-white/10 bg-white/10 text-white/90"
+                            )}
+                          >
+                            {msg.text}
+                          </div>
+                        ))}
 
-                      <div className="flex gap-3">
+                        {agentLoading && (
+                          <div className="mr-auto max-w-[85%] rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm text-white/70">
+                            {t(lang, "panelAgentThinking" as any)}
+                          </div>
+                        )}
+                      </div>
 
+                      <div className="mt-3 flex gap-3">
                         <input
                           value={agentText}
                           onChange={(e) => setAgentText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") runEveryAgent();
+                          }}
                           placeholder={t(lang, "panelAgentPlaceholder" as any)}
                           className="flex-1 rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white outline-none"
                         />
@@ -699,23 +754,10 @@ export default function PanelPage() {
                         >
                           {t(lang, "panelAgentSend" as any)}
                         </button>
-
                       </div>
-
-                      {agentLoading && (
-                        <p className="mt-3 text-xs text-white/60">
-                          {t(lang, "panelAgentThinking" as any)}
-                        </p>
-                      )}
-
-                      {agentReply && (
-                        <div className="mt-4 rounded-xl border border-white/10 bg-white/10 p-3 text-sm text-white/90">
-                          {agentReply}
-                        </div>
-                      )}
-
-                    </PanelCard>
-                  </div>
+                    </div>
+                  </PanelCard>
+                </div>
                 {/* KPI row */}
                 <div className="grid gap-4 md:grid-cols-4">
                   <StatPill

@@ -7060,6 +7060,16 @@ panelAgentNoResult: {
   lt: "EveryAgent nerado rezultatų.",
   vi: "EveryAgent không tìm thấy kết quả.",
 },
+panelAgentWelcome: {
+  pl: "Dzień dobry. Jestem EveryAgent. Powiedz, co mam zrobić.",
+  en: "Good day. I’m EveryAgent. Tell me what to do.",
+  de: "Guten Tag. Ich bin EveryAgent. Sagen Sie mir, was ich tun soll.",
+  cs: "Dobrý den. Jsem EveryAgent. Řekněte mi, co mám udělat.",
+  sk: "Dobrý deň. Som EveryAgent. Povedzte mi, čo mám urobiť.",
+  ua: "Добрий день. Я EveryAgent. Скажіть, що мені зробити.",
+  lt: "Laba diena. Aš esu EveryAgent. Pasakykite, ką turiu padaryti.",
+  vi: "Xin chào. Tôi là EveryAgent. Hãy nói tôi cần làm gì.",
+},
 } as const);
 
 export type TranslationKey = keyof typeof translations;
