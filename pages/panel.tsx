@@ -8,8 +8,10 @@ import CalendarPage from "./calendar";
 import { useRouter } from "next/router";
 import TeamView from "@/components/TeamView";
 import OffersView from "@/components/OffersView";
+import OfficeDealsView from "@/components/OfficeDealsView";
 import Image from "next/image";
 import ContactsView from "@/components/ContactsView";
+
 
 function getCookie(name: string) {
   if (typeof document === "undefined") return null;
@@ -787,6 +789,12 @@ export default function PanelPage() {
                   <div className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-4 sm:px-4 lg:px-6">
                     <TeamView />
                   </div>
+
+                ) : activeView === "officeTransactions" ? (
+                <div className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-4 sm:px-4 lg:px-6">
+                  <OfficeDealsView lang={lang} />
+                </div>
+
                 ) : activeView === "reports" ? (
                 <div className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-4 sm:px-4 lg:px-6">
                   <PanelCard
@@ -907,12 +915,7 @@ export default function PanelPage() {
                         )}
                       </div>
                   </PanelCard>
-                </div>
-              ) : activeView === "officeTransactions" ? (
-                <PlaceholderView
-                  title={t(lang, "panelNavOfficeDeals" as any)}
-                  subtitle={t(lang, "panelOfficeDealsSub" as any)}
-                />
+              </div>
               ) : activeView === "downloads" ? (
                 <PlaceholderView
                   title={t(lang, "panelNavDownloads" as any)}
