@@ -2,6 +2,8 @@ import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
+import { t } from "@/utils/i18n";
+import type { LangKey } from "@/utils/translations";
 
 type OfferForm = {
   id: string;
@@ -34,6 +36,13 @@ type OfferForm = {
   postal_code: string;
   lat: string;
   lng: string;
+};
+
+type ListingImage = {
+  id: string;
+  url: string;
+  sort_order: number;
+  created_at?: string | null;
 };
 
 function toStr(v: unknown) {
@@ -74,18 +83,53 @@ const EMPTY_FORM: OfferForm = {
   lng: "",
 };
 
+function isHttpUrl(v: string) {
+  return /^https?:\/\//i.test(v.trim());
+}
+
 export default function OfferEditorPage() {
   const router = useRouter();
+
   const id = useMemo(
     () => (typeof router.query.id === "string" ? router.query.id : ""),
     [router.query.id]
   );
+
+  const lang = useMemo<LangKey>(() => {
+    const q = router.query.lang;
+    return typeof q === "string" ? (q as LangKey) : "pl";
+  }, [router.query.lang]);
 
   const [form, setForm] = useState<OfferForm>(EMPTY_FORM);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
+
+  const [images, setImages] = useState<ListingImage[]>([]);
+  const [imageUrl, setImageUrl] = useState("");
+  const [imagesLoading, setImagesLoading] = useState(false);
+  const [imagesBusy, setImagesBusy] = useState(false);
+
+  async function loadImages(listingId: string) {
+    setImagesLoading(true);
+    try {
+      const r = await fetch(`/api/offers/${encodeURIComponent(listingId)}/images`);
+      const j = await r.json().catch(() => null);
+
+      if (!r.ok) {
+        // jeśli endpoint jeszcze nie istnieje / nie jest gotowy, nie wywalaj całej strony
+        setImages([]);
+        return;
+      }
+
+      setImages(Array.isArray(j?.rows) ? j.rows : []);
+    } catch {
+      setImages([]);
+    } finally {
+      setImagesLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (!id) return;
@@ -137,6 +181,8 @@ export default function OfferEditorPage() {
           lat: toStr(row.lat),
           lng: toStr(row.lng),
         });
+
+        await loadImages(id);
       } catch (e: any) {
         if (!active) return;
         setErr(e?.message ?? "Load failed");
@@ -153,9 +199,35 @@ export default function OfferEditorPage() {
   function setField<K extends keyof OfferForm>(key: K, value: OfferForm[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
+    function validateForm(): string | null {
+    if (!form.title.trim()) return t(lang, "offerEditorValidationTitle" as any);
+    if (!form.description.trim()) return t(lang, "offerEditorValidationDescription" as any);
+    if (!form.property_type.trim()) return t(lang, "offerEditorValidationPropertyType" as any);
 
-  async function save() {
+    const price = Number(form.price_amount);
+    if (!Number.isFinite(price) || price <= 0) {
+      return t(lang, "offerEditorValidationPrice" as any);
+    }
+
+    const area = Number(form.area_m2);
+    if (!Number.isFinite(area) || area <= 0) {
+      return t(lang, "offerEditorValidationArea" as any);
+    }
+
+    if (!form.city.trim()) return t(lang, "offerEditorValidationCity" as any);
+
+    return null;
+  }
+
+    async function save() {
     if (!id) return;
+
+    const validationError = validateForm();
+    if (validationError) {
+        setErr(validationError);
+        setOkMsg(null);
+        return;
+    }
 
     setSaving(true);
     setErr(null);
@@ -200,7 +272,7 @@ export default function OfferEditorPage() {
       const j = await r.json().catch(() => null);
       if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
 
-      setOkMsg("Oferta zapisana.");
+      setOkMsg(t(lang, "offerEditorSaved" as any));
     } catch (e: any) {
       setErr(e?.message ?? "Save failed");
     } finally {
@@ -208,11 +280,101 @@ export default function OfferEditorPage() {
     }
   }
 
+  async function addImage() {
+    if (!id) return;
+
+    const url = imageUrl.trim();
+    if (!url) return;
+    if (!isHttpUrl(url)) {
+      alert("URL zdjęcia musi zaczynać się od http:// lub https://");
+      return;
+    }
+
+    setImagesBusy(true);
+    setErr(null);
+    setOkMsg(null);
+
+    try {
+      const r = await fetch(`/api/offers/${encodeURIComponent(id)}/images`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+
+      const j = await r.json().catch(() => null);
+      if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
+
+      setImageUrl("");
+      await loadImages(id);
+    } catch (e: any) {
+      setErr(e?.message ?? "Add image failed");
+    } finally {
+      setImagesBusy(false);
+    }
+  }
+
+  async function removeImage(imageId: string) {
+    if (!id || !imageId) return;
+
+    const confirmed = window.confirm(t(lang, "offerEditorRemoveImage" as any));
+    if (!confirmed) return;
+
+    setImagesBusy(true);
+    setErr(null);
+    setOkMsg(null);
+
+    try {
+      const r = await fetch(
+        `/api/offers/${encodeURIComponent(id)}/images?imageId=${encodeURIComponent(imageId)}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      const j = await r.json().catch(() => null);
+      if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
+
+      await loadImages(id);
+    } catch (e: any) {
+      setErr(e?.message ?? "Remove image failed");
+    } finally {
+      setImagesBusy(false);
+    }
+  }
+
+  async function moveImage(imageId: string, direction: "left" | "right") {
+    if (!id || !imageId) return;
+
+    setImagesBusy(true);
+    setErr(null);
+    setOkMsg(null);
+
+    try {
+      const r = await fetch(`/api/offers/${encodeURIComponent(id)}/images`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imageId,
+          direction,
+        }),
+      });
+
+      const j = await r.json().catch(() => null);
+      if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
+
+      await loadImages(id);
+    } catch (e: any) {
+      setErr(e?.message ?? "Reorder image failed");
+    } finally {
+      setImagesBusy(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#08131a] p-6 text-white">
-        <div className="mx-auto max-w-5xl rounded-3xl border border-white/10 bg-white/5 p-6">
-          Ładowanie oferty...
+        <div className="mx-auto max-w-6xl rounded-3xl border border-white/10 bg-white/5 p-6">
+          {t(lang, "offerEditorLoading" as any)}
         </div>
       </div>
     );
@@ -221,14 +383,14 @@ export default function OfferEditorPage() {
   return (
     <>
       <Head>
-        <title>Edycja oferty</title>
+        <title>{t(lang, "offerEditorTitle" as any)}</title>
       </Head>
 
       <div className="min-h-screen bg-[#08131a] p-6 text-white">
-        <div className="mx-auto max-w-5xl space-y-4">
+        <div className="mx-auto max-w-6xl space-y-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-bold">Edycja oferty</h1>
+              <h1 className="text-2xl font-bold">{t(lang, "offerEditorTitle" as any)}</h1>
               <div className="mt-1 text-sm text-white/60">ID: {form.id}</div>
             </div>
 
@@ -237,7 +399,7 @@ export default function OfferEditorPage() {
                 href="/panel"
                 className="rounded-xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15"
               >
-                ← Wróć do panelu
+                ← {t(lang, "offerEditorBackToPanel" as any)}
               </Link>
 
               <button
@@ -246,7 +408,7 @@ export default function OfferEditorPage() {
                 disabled={saving}
                 className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
               >
-                {saving ? "Zapisywanie..." : "Zapisz ofertę"}
+                {saving ? t(lang, "offerEditorSaving" as any) : t(lang, "offerEditorSave" as any)}
               </button>
             </div>
           </div>
@@ -265,11 +427,13 @@ export default function OfferEditorPage() {
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
-              <h2 className="mb-4 text-lg font-semibold">Podstawowe</h2>
+              <h2 className="mb-4 text-lg font-semibold">
+                {t(lang, "offerEditorSectionBasic" as any)}
+              </h2>
 
               <div className="grid grid-cols-1 gap-3">
                 <label className="text-sm">
-                  <div className="mb-1 text-white/70">Tytuł</div>
+                  <div className="mb-1 text-white/70">{t(lang, "offerEditorTitleLabel" as any)}</div>
                   <input
                     value={form.title}
                     onChange={(e) => setField("title", e.target.value)}
@@ -278,7 +442,7 @@ export default function OfferEditorPage() {
                 </label>
 
                 <label className="text-sm">
-                  <div className="mb-1 text-white/70">Opis</div>
+                  <div className="mb-1 text-white/70">{t(lang, "offerEditorDescriptionLabel" as any)}</div>
                   <textarea
                     value={form.description}
                     onChange={(e) => setField("description", e.target.value)}
@@ -289,7 +453,7 @@ export default function OfferEditorPage() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <label className="text-sm">
-                    <div className="mb-1 text-white/70">Typ transakcji</div>
+                    <div className="mb-1 text-white/70">{t(lang, "offerEditorTransactionTypeLabel" as any)}</div>
                     <select
                       value={form.transaction_type}
                       onChange={(e) => setField("transaction_type", e.target.value)}
@@ -301,7 +465,7 @@ export default function OfferEditorPage() {
                   </label>
 
                   <label className="text-sm">
-                    <div className="mb-1 text-white/70">Status</div>
+                    <div className="mb-1 text-white/70">{t(lang, "offerEditorStatusLabel" as any)}</div>
                     <select
                       value={form.status}
                       onChange={(e) => setField("status", e.target.value)}
@@ -317,7 +481,7 @@ export default function OfferEditorPage() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <label className="text-sm">
-                    <div className="mb-1 text-white/70">Property type</div>
+                    <div className="mb-1 text-white/70">{t(lang, "offerEditorPropertyTypeLabel" as any)}</div>
                     <input
                       value={form.property_type}
                       onChange={(e) => setField("property_type", e.target.value)}
@@ -326,7 +490,7 @@ export default function OfferEditorPage() {
                   </label>
 
                   <label className="text-sm">
-                    <div className="mb-1 text-white/70">Rynek</div>
+                    <div className="mb-1 text-white/70">{t(lang, "offerEditorMarketLabel" as any)}</div>
                     <input
                       value={form.market}
                       onChange={(e) => setField("market", e.target.value)}
@@ -337,7 +501,7 @@ export default function OfferEditorPage() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <label className="text-sm">
-                    <div className="mb-1 text-white/70">Cena</div>
+                    <div className="mb-1 text-white/70">{t(lang, "offerEditorPriceLabel" as any)}</div>
                     <input
                       value={form.price_amount}
                       onChange={(e) => setField("price_amount", e.target.value)}
@@ -346,7 +510,7 @@ export default function OfferEditorPage() {
                   </label>
 
                   <label className="text-sm">
-                    <div className="mb-1 text-white/70">Waluta</div>
+                    <div className="mb-1 text-white/70">{t(lang, "offerEditorCurrencyLabel" as any)}</div>
                     <input
                       value={form.currency}
                       onChange={(e) => setField("currency", e.target.value)}
@@ -358,11 +522,13 @@ export default function OfferEditorPage() {
             </section>
 
             <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
-              <h2 className="mb-4 text-lg font-semibold">Parametry</h2>
+              <h2 className="mb-4 text-lg font-semibold">
+                {t(lang, "offerEditorSectionParams" as any)}
+              </h2>
 
               <div className="grid grid-cols-2 gap-3">
                 <label className="text-sm">
-                  <div className="mb-1 text-white/70">Powierzchnia m²</div>
+                  <div className="mb-1 text-white/70">{t(lang, "offerEditorAreaLabel" as any)}</div>
                   <input
                     value={form.area_m2}
                     onChange={(e) => setField("area_m2", e.target.value)}
@@ -371,7 +537,7 @@ export default function OfferEditorPage() {
                 </label>
 
                 <label className="text-sm">
-                  <div className="mb-1 text-white/70">Pokoje</div>
+                  <div className="mb-1 text-white/70">{t(lang, "offerEditorRoomsLabel" as any)}</div>
                   <input
                     value={form.rooms}
                     onChange={(e) => setField("rooms", e.target.value)}
@@ -380,7 +546,7 @@ export default function OfferEditorPage() {
                 </label>
 
                 <label className="text-sm">
-                  <div className="mb-1 text-white/70">Piętro</div>
+                  <div className="mb-1 text-white/70">{t(lang, "offerEditorFloorLabel" as any)}</div>
                   <input
                     value={form.floor}
                     onChange={(e) => setField("floor", e.target.value)}
@@ -389,7 +555,7 @@ export default function OfferEditorPage() {
                 </label>
 
                 <label className="text-sm">
-                  <div className="mb-1 text-white/70">Rok budowy</div>
+                  <div className="mb-1 text-white/70">{t(lang, "offerEditorYearBuiltLabel" as any)}</div>
                   <input
                     value={form.year_built}
                     onChange={(e) => setField("year_built", e.target.value)}
@@ -400,11 +566,13 @@ export default function OfferEditorPage() {
             </section>
 
             <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
-              <h2 className="mb-4 text-lg font-semibold">Adres</h2>
+              <h2 className="mb-4 text-lg font-semibold">
+                {t(lang, "offerEditorSectionAddress" as any)}
+              </h2>
 
               <div className="grid grid-cols-1 gap-3">
                 <label className="text-sm">
-                  <div className="mb-1 text-white/70">Lokalizacja opisowa</div>
+                  <div className="mb-1 text-white/70">{t(lang, "offerEditorLocationTextLabel" as any)}</div>
                   <input
                     value={form.location_text}
                     onChange={(e) => setField("location_text", e.target.value)}
@@ -414,7 +582,7 @@ export default function OfferEditorPage() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <label className="text-sm">
-                    <div className="mb-1 text-white/70">Województwo</div>
+                    <div className="mb-1 text-white/70">{t(lang, "offerEditorVoivodeshipLabel" as any)}</div>
                     <input
                       value={form.voivodeship}
                       onChange={(e) => setField("voivodeship", e.target.value)}
@@ -423,7 +591,7 @@ export default function OfferEditorPage() {
                   </label>
 
                   <label className="text-sm">
-                    <div className="mb-1 text-white/70">Miasto</div>
+                    <div className="mb-1 text-white/70">{t(lang, "offerEditorCityLabel" as any)}</div>
                     <input
                       value={form.city}
                       onChange={(e) => setField("city", e.target.value)}
@@ -434,7 +602,7 @@ export default function OfferEditorPage() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <label className="text-sm">
-                    <div className="mb-1 text-white/70">Dzielnica</div>
+                    <div className="mb-1 text-white/70">{t(lang, "offerEditorDistrictLabel" as any)}</div>
                     <input
                       value={form.district}
                       onChange={(e) => setField("district", e.target.value)}
@@ -443,7 +611,7 @@ export default function OfferEditorPage() {
                   </label>
 
                   <label className="text-sm">
-                    <div className="mb-1 text-white/70">Kod pocztowy</div>
+                    <div className="mb-1 text-white/70">{t(lang, "offerEditorPostalCodeLabel" as any)}</div>
                     <input
                       value={form.postal_code}
                       onChange={(e) => setField("postal_code", e.target.value)}
@@ -453,7 +621,7 @@ export default function OfferEditorPage() {
                 </div>
 
                 <label className="text-sm">
-                  <div className="mb-1 text-white/70">Ulica</div>
+                  <div className="mb-1 text-white/70">{t(lang, "offerEditorStreetLabel" as any)}</div>
                   <input
                     value={form.street}
                     onChange={(e) => setField("street", e.target.value)}
@@ -463,7 +631,7 @@ export default function OfferEditorPage() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <label className="text-sm">
-                    <div className="mb-1 text-white/70">Lat</div>
+                    <div className="mb-1 text-white/70">{t(lang, "offerEditorLatLabel" as any)}</div>
                     <input
                       value={form.lat}
                       onChange={(e) => setField("lat", e.target.value)}
@@ -472,7 +640,7 @@ export default function OfferEditorPage() {
                   </label>
 
                   <label className="text-sm">
-                    <div className="mb-1 text-white/70">Lng</div>
+                    <div className="mb-1 text-white/70">{t(lang, "offerEditorLngLabel" as any)}</div>
                     <input
                       value={form.lng}
                       onChange={(e) => setField("lng", e.target.value)}
@@ -484,11 +652,13 @@ export default function OfferEditorPage() {
             </section>
 
             <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
-              <h2 className="mb-4 text-lg font-semibold">CRM</h2>
+              <h2 className="mb-4 text-lg font-semibold">
+                {t(lang, "offerEditorSectionCrm" as any)}
+              </h2>
 
               <div className="grid grid-cols-1 gap-3">
                 <label className="text-sm">
-                  <div className="mb-1 text-white/70">Typ umowy</div>
+                  <div className="mb-1 text-white/70">{t(lang, "offerEditorContractTypeLabel" as any)}</div>
                   <input
                     value={form.contract_type}
                     onChange={(e) => setField("contract_type", e.target.value)}
@@ -497,7 +667,7 @@ export default function OfferEditorPage() {
                 </label>
 
                 <label className="text-sm">
-                  <div className="mb-1 text-white/70">Notatki wewnętrzne</div>
+                  <div className="mb-1 text-white/70">{t(lang, "offerEditorInternalNotesLabel" as any)}</div>
                   <textarea
                     value={form.internal_notes}
                     onChange={(e) => setField("internal_notes", e.target.value)}
@@ -508,6 +678,102 @@ export default function OfferEditorPage() {
               </div>
             </section>
           </div>
+
+          <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
+            <h2 className="mb-4 text-lg font-semibold">
+              {t(lang, "offerEditorSectionImages" as any)}
+            </h2>
+
+            <p className="mb-4 text-sm text-white/60">
+              {t(lang, "offerEditorImagesHint" as any)}
+            </p>
+
+            <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto]">
+              <label className="text-sm">
+                <div className="mb-1 text-white/70">{t(lang, "offerEditorImageUrlLabel" as any)}</div>
+                <input
+                  value={imageUrl}
+                  onChange={(e) => setImageUrl(e.target.value)}
+                  placeholder="https://..."
+                  className="w-full rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-white outline-none"
+                />
+              </label>
+
+              <div className="flex items-end">
+                <button
+                  type="button"
+                  onClick={addImage}
+                  disabled={imagesBusy || !imageUrl.trim()}
+                  className="rounded-xl bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15 disabled:opacity-50"
+                >
+                  {t(lang, "offerEditorAddImage" as any)}
+                </button>
+              </div>
+            </div>
+
+            {imagesLoading ? (
+              <div className="text-sm text-white/50">{t(lang, "offerEditorLoading" as any)}</div>
+            ) : images.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 p-6 text-sm text-white/50">
+                {t(lang, "offerEditorNoImages" as any)}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {images.map((img, index) => (
+                  <div
+                    key={img.id}
+                    className="overflow-hidden rounded-2xl border border-white/10 bg-slate-950/40"
+                  >
+                    <div className="aspect-[4/3] bg-black/20">
+                      <img
+                        src={img.url}
+                        alt=""
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                    </div>
+
+                    <div className="space-y-3 p-3">
+                      <div className="text-xs text-white/60">
+                        #{index + 1}
+                      </div>
+
+                      <div className="truncate text-xs text-white/50">{img.url}</div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          disabled={imagesBusy || index === 0}
+                          onClick={() => moveImage(img.id, "left")}
+                          className="rounded-lg border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold text-white hover:bg-white/15 disabled:opacity-40"
+                        >
+                          {t(lang, "offerEditorMoveLeft" as any)}
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={imagesBusy || index === images.length - 1}
+                          onClick={() => moveImage(img.id, "right")}
+                          className="rounded-lg border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold text-white hover:bg-white/15 disabled:opacity-40"
+                        >
+                          {t(lang, "offerEditorMoveRight" as any)}
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={imagesBusy}
+                          onClick={() => removeImage(img.id)}
+                          className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs font-semibold text-red-200 hover:bg-red-500/15 disabled:opacity-40"
+                        >
+                          {t(lang, "offerEditorRemoveImage" as any)}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
         </div>
       </div>
     </>
