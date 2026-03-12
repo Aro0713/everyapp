@@ -352,6 +352,43 @@ const [botFilters, setBotFilters] = useState<EverybotFilters>({
   }
 }
 
+async function handleCrmListingAction(
+  listingId: string,
+  mode: "delete" | "archive"
+) {
+  if (!listingId) return;
+
+  const confirmed = window.confirm(
+    mode === "delete"
+      ? "Czy na pewno chcesz trwale usunąć tę ofertę CRM?"
+      : "Czy na pewno chcesz przenieść tę ofertę CRM do archiwum?"
+  );
+
+  if (!confirmed) return;
+
+  try {
+    const r = await fetch("/api/offers/delete-or-archive", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        listingId,
+        mode,
+      }),
+    });
+
+    const j = await r.json().catch(() => null);
+    if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
+
+    await load();
+  } catch (e: any) {
+    alert(
+      mode === "delete"
+        ? `Nie udało się usunąć oferty CRM: ${e?.message ?? "Unknown error"}`
+        : `Nie udało się przenieść oferty CRM do archiwum: ${e?.message ?? "Unknown error"}`
+    );
+  }
+}
+
 async function toggleSamePhoneOffers(row: ExternalRow) {
   if (!row?.id) return;
 
@@ -1431,20 +1468,41 @@ return (
                                 </button>
                               ) : null}
 
-                              <button
-                                type="button"
-                                className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-1 text-[11px] font-semibold text-red-200 shadow-sm transition hover:bg-red-500/15"
-                                onClick={() => {
-                                  if (isPortal && r.external_listing_id) {
-                                    removePortalListingFromMyList(r.external_listing_id);
-                                    return;
-                                  }
+                                                          {isPortal ? (
+                                <button
+                                  type="button"
+                                  className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-1 text-[11px] font-semibold text-red-200 shadow-sm transition hover:bg-red-500/15"
+                                  onClick={() => {
+                                    if (r.external_listing_id) {
+                                      removePortalListingFromMyList(r.external_listing_id);
+                                    }
+                                  }}
+                                >
+                                  {t(lang, "listingRemoveFromMyList" as any)}
+                                </button>
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold text-amber-200 shadow-sm transition hover:bg-amber-500/15"
+                                    onClick={() => {
+                                      handleCrmListingAction(r.id, "archive");
+                                    }}
+                                  >
+                                    Przenieś do archiwum
+                                  </button>
 
-                                  alert(t(lang, "listingRemoveFromMyListCrmTodo" as any));
-                                }}
-                              >
-                                {t(lang, "listingRemoveFromMyList" as any)}
-                              </button>
+                                  <button
+                                    type="button"
+                                    className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-1 text-[11px] font-semibold text-red-200 shadow-sm transition hover:bg-red-500/15"
+                                    onClick={() => {
+                                      handleCrmListingAction(r.id, "delete");
+                                    }}
+                                  >
+                                    Usuń z mojej listy
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </div>
                         </div>
