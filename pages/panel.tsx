@@ -9,6 +9,7 @@ import { useRouter } from "next/router";
 import TeamView from "@/components/TeamView";
 import OffersView from "@/components/OffersView";
 import Image from "next/image";
+import ContactsView from "@/components/ContactsView";
 
 function getCookie(name: string) {
   if (typeof document === "undefined") return null;
@@ -779,10 +780,9 @@ export default function PanelPage() {
                   <OffersView lang={lang} />
                 </div>
                 ) : activeView === "contacts" ? (
-                  <PlaceholderView
-                    title={t(lang, "panelNavClients" as any)}
-                    subtitle={t(lang, "panelContactsSub" as any)}
-                  />
+                  <div className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-4 sm:px-4 lg:px-6">
+                    <ContactsView lang={lang} />
+                  </div>
                 ) : activeView === "team" ? (
                   <div className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-4 sm:px-4 lg:px-6">
                     <TeamView />
