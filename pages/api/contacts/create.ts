@@ -178,12 +178,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         )
         VALUES (
           $1,
-          'phone'::party_contact_kind,
           $2,
+          $3,
           true
         )
         `,
-        [partyId, payload.phone]
+        [partyId, "phone", payload.phone]
       );
     }
 
@@ -198,12 +198,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         )
         VALUES (
           $1,
-          'email'::party_contact_kind,
           $2,
-          $3
+          $3,
+          $4
         )
         `,
-        [partyId, payload.email, payload.phone ? false : true]
+        [partyId, "email", payload.email, payload.phone ? false : true]
       );
     }
 
