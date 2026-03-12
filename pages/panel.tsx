@@ -649,7 +649,7 @@ export default function PanelPage() {
                     />
                 </div>
 
-                {/* Widgets grid */}
+                                {/* Widgets grid */}
                 <div className="mt-6 grid gap-6 md:grid-cols-12">
                   <div className="md:col-span-7">
                     <PanelCard
@@ -664,99 +664,253 @@ export default function PanelPage() {
                         </button>
                       }
                     >
-                      <div className="flex h-56 items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/5">
-                        <p className="text-sm text-white/60">{t(lang, "panelEmpty")}</p>
-                      </div>
+                      {dashboardData?.offersInProgress?.length ? (
+                        <div className="space-y-3">
+                          {dashboardData.offersInProgress.map((item) => (
+                            <div
+                              key={item.listing_id}
+                              className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur-md"
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-white">
+                                  {[item.record_type, item.transaction_type, item.status]
+                                    .filter(Boolean)
+                                    .join(" / ") || item.listing_id}
+                                </p>
+                                <p className="truncate text-xs text-white/60">
+                                  {item.parties_summary ||
+                                    item.case_owner_name ||
+                                    item.created_at ||
+                                    "—"}
+                                </p>
+                              </div>
+
+                              <div className="text-right">
+                                <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white/85">
+                                  {item.status}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex h-56 items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/5">
+                          <p className="text-sm text-white/60">{t(lang, "panelEmpty")}</p>
+                        </div>
+                      )}
                     </PanelCard>
                   </div>
 
                   <div className="md:col-span-5">
                     <PanelCard title={t(lang, "panelWidgetTopBuyersTitle")} subtitle={t(lang, "panelWidgetTopBuyersSub")}>
-                      <div className="flex h-56 items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/5">
-                        <p className="text-sm text-white/60">{t(lang, "panelEmpty")}</p>
-                      </div>
+                      {dashboardData?.topBuyers?.length ? (
+                        <div className="space-y-3">
+                          {dashboardData.topBuyers.map((item: any, idx: number) => (
+                            <div
+                              key={item?.id ?? idx}
+                              className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur-md"
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-white">
+                                  {item?.name ?? "—"}
+                                </p>
+                                <p className="truncate text-xs text-white/60">
+                                  {item?.meta ?? "—"}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex h-56 items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/5">
+                          <p className="text-sm text-white/60">{t(lang, "panelEmpty")}</p>
+                        </div>
+                      )}
                     </PanelCard>
                   </div>
 
                   <div className="md:col-span-7">
                     <PanelCard title={t(lang, "panelWidgetNewOffersTitle")} subtitle={t(lang, "panelWidgetNewOffersSub")}>
-                      <div className="flex h-64 items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/5">
-                        <p className="text-sm text-white/60">{t(lang, "panelEmpty")}</p>
-                      </div>
+                      {dashboardData?.newExternalListings?.length ? (
+                        <div className="space-y-3">
+                          {dashboardData.newExternalListings.map((item) => (
+                            <div
+                              key={item.id}
+                              className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur-md"
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-white">
+                                  {item.title || item.source_url || item.id}
+                                </p>
+                                <p className="truncate text-xs text-white/60">
+                                  {[item.location_text, item.source].filter(Boolean).join(" • ") || "—"}
+                                </p>
+                              </div>
+
+                              <div className="text-right">
+                                <p className="text-sm font-extrabold text-emerald-300">
+                                  {item.price_amount != null
+                                    ? `${item.price_amount} ${item.currency ?? ""}`.trim()
+                                    : "—"}
+                                </p>
+                                <p className="text-xs text-white/60">
+                                  {item.created_at ? new Date(item.created_at).toLocaleDateString() : "—"}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex h-64 items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/5">
+                          <p className="text-sm text-white/60">{t(lang, "panelEmpty")}</p>
+                        </div>
+                      )}
                     </PanelCard>
                   </div>
 
                   <div className="md:col-span-5">
                     <PanelCard title={t(lang, "panelWidgetTodayTitle")} subtitle={t(lang, "panelWidgetTodaySub")}>
-                      <div className="flex h-64 items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/5">
-                        <p className="text-sm text-white/60">{t(lang, "panelEmpty")}</p>
-                      </div>
+                      {dashboardData?.todayEvents?.length ? (
+                        <div className="space-y-3">
+                          {dashboardData.todayEvents.map((item) => (
+                            <div
+                              key={item.id}
+                              className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur-md"
+                            >
+                              <div className="flex items-center justify-between gap-4">
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-semibold text-white">{item.title}</p>
+                                  <p className="truncate text-xs text-white/60">
+                                    {item.location_text || item.description || "—"}
+                                  </p>
+                                </div>
+
+                                <div className="shrink-0 text-right">
+                                  <p className="text-sm font-extrabold text-white">
+                                    {item.start_at
+                                      ? new Date(item.start_at).toLocaleTimeString([], {
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })
+                                      : "—"}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex h-64 items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/5">
+                          <p className="text-sm text-white/60">{t(lang, "panelEmpty")}</p>
+                        </div>
+                      )}
                     </PanelCard>
                   </div>
 
                   {/* Recent changes / recent activated */}
                   <div className="md:col-span-7">
                     <PanelCard title={t(lang, "panelWidgetRecentPriceChangesTitle")} subtitle={t(lang, "panelWidgetRecent7Days")}>
-                      <div className="space-y-3">
-                        {[1, 2, 3].map((i) => (
-                          <div
-                            key={i}
-                            className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur-md"
-                          >
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-semibold text-white">{t(lang, "panelRowPlaceholderTitle")}</p>
-                              <p className="truncate text-xs text-white/60">{t(lang, "panelRowPlaceholderMeta")}</p>
+                      {dashboardData?.recentPriceChanges?.length ? (
+                        <div className="space-y-3">
+                          {dashboardData.recentPriceChanges.map((item) => (
+                            <div
+                              key={item.id}
+                              className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur-md"
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-white">
+                                  {item.title || item.id}
+                                </p>
+                                <p className="truncate text-xs text-white/60">
+                                  {[item.location_text, item.source].filter(Boolean).join(" • ") || "—"}
+                                </p>
+                              </div>
+
+                              <div className="text-right">
+                                <p className="text-sm font-extrabold text-emerald-300">
+                                  {item.price_amount != null
+                                    ? `${item.price_amount} ${item.currency ?? ""}`.trim()
+                                    : "—"}
+                                </p>
+                                <p className="text-xs text-white/60">
+                                  {item.updated_at ? new Date(item.updated_at).toLocaleDateString() : "—"}
+                                </p>
+                              </div>
                             </div>
-                            <div className="text-right">
-                              <p className="text-sm font-extrabold text-emerald-300">0 PLN</p>
-                              <p className="text-xs text-white/60">{t(lang, "panelRowPlaceholderDate")}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex h-56 items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/5">
+                          <p className="text-sm text-white/60">{t(lang, "panelEmpty")}</p>
+                        </div>
+                      )}
                     </PanelCard>
                   </div>
 
                   <div className="md:col-span-5">
                     <PanelCard title={t(lang, "panelWidgetRecentActivatedTitle")} subtitle={t(lang, "panelWidgetRecent7Days")}>
-                      <div className="space-y-3">
-                        {[1, 2, 3].map((i) => (
-                          <div
-                            key={i}
-                            className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur-md"
-                          >
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-semibold text-white">{t(lang, "panelRowPlaceholderTitle")}</p>
-                              <p className="truncate text-xs text-white/60">{t(lang, "panelRowPlaceholderMeta")}</p>
+                      {dashboardData?.recentActivatedOffers?.length ? (
+                        <div className="space-y-3">
+                          {dashboardData.recentActivatedOffers.map((item) => (
+                            <div
+                              key={item.listing_id}
+                              className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur-md"
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-white">
+                                  {[item.record_type, item.transaction_type]
+                                    .filter(Boolean)
+                                    .join(" / ") || item.listing_id}
+                                </p>
+                                <p className="truncate text-xs text-white/60">
+                                  {item.case_owner_name || item.parties_summary || "—"}
+                                </p>
+                              </div>
+
+                              <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white/85">
+                                {item.status}
+                              </span>
                             </div>
-                            <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white/85">
-                              {t(lang, "panelStatusActive")}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex h-56 items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/5">
+                          <p className="text-sm text-white/60">{t(lang, "panelEmpty")}</p>
+                        </div>
+                      )}
                     </PanelCard>
                   </div>
 
-                  {/* Bottom widgets */}
+                                   {/* Bottom widgets */}
                   <div className="md:col-span-7">
                     <PanelCard title={t(lang, "panelWidgetMetricsTitle")} subtitle={t(lang, "panelWidgetMetricsSub")}>
                       <div className="grid gap-4 sm:grid-cols-2">
                         <div className="rounded-3xl border border-white/10 bg-white/10 p-5 shadow-lg backdrop-blur-md">
                           <p className="text-xs text-white/60">{t(lang, "panelMetricDeals")}</p>
-                          <p className="mt-2 text-4xl font-extrabold text-white">0</p>
+                          <p className="mt-2 text-4xl font-extrabold text-white">
+                            {dashboardData?.goals?.visits ?? 0}
+                          </p>
                         </div>
+
                         <div className="rounded-3xl border border-white/10 bg-white/10 p-5 shadow-lg backdrop-blur-md">
                           <p className="text-xs text-white/60">{t(lang, "panelMetricRevenue")}</p>
-                          <p className="mt-2 text-4xl font-extrabold text-white">0</p>
+                          <p className="mt-2 text-4xl font-extrabold text-white">
+                            {dashboardData?.goals?.revenue ?? 0}
+                          </p>
                         </div>
+
                         <div className="rounded-3xl border border-white/10 bg-white/10 p-5 shadow-lg backdrop-blur-md">
                           <p className="text-xs text-white/60">{t(lang, "panelMetricNewListings")}</p>
-                          <p className="mt-2 text-4xl font-extrabold text-white">0</p>
+                          <p className="mt-2 text-4xl font-extrabold text-white">
+                            {dashboardData?.recentActivatedOffers?.length ?? 0}
+                          </p>
                         </div>
+
                         <div className="rounded-3xl border border-white/10 bg-white/10 p-5 shadow-lg backdrop-blur-md">
                           <p className="text-xs text-white/60">{t(lang, "panelMetricPresentations")}</p>
-                          <p className="mt-2 text-4xl font-extrabold text-white">0</p>
+                          <p className="mt-2 text-4xl font-extrabold text-white">
+                            {dashboardData?.goals?.calls ?? 0}
+                          </p>
                         </div>
                       </div>
                     </PanelCard>
@@ -764,9 +918,27 @@ export default function PanelPage() {
 
                   <div className="md:col-span-5">
                     <PanelCard title={t(lang, "panelWidgetExportErrorsTitle")} subtitle={t(lang, "panelWidgetExportErrorsSub")}>
-                      <div className="flex h-56 items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/5">
-                        <p className="text-sm text-white/60">{t(lang, "panelNoMessages")}</p>
-                      </div>
+                      {dashboardData?.exportErrors?.length ? (
+                        <div className="space-y-3">
+                          {dashboardData.exportErrors.map((item: any, idx: number) => (
+                            <div
+                              key={item?.id ?? idx}
+                              className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3"
+                            >
+                              <p className="text-sm font-semibold text-amber-100">
+                                {item?.title ?? item?.message ?? "Błąd eksportu"}
+                              </p>
+                              <p className="mt-1 text-xs text-amber-200/80">
+                                {item?.details ?? item?.code ?? "—"}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex h-56 items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/5">
+                          <p className="text-sm text-white/60">{t(lang, "panelNoMessages")}</p>
+                        </div>
+                      )}
                     </PanelCard>
                   </div>
                 </div>
