@@ -6504,6 +6504,71 @@ offerEditorValidationCity: {
   lt: "Miestas yra privalomas.",
   vi: "Thành phố là bắt buộc.",
 },
+panelContactsSub: {
+  pl: "Baza kontaktów i relacje z klientami",
+  en: "Contact database and client relations",
+  de: "Kontaktdatenbank und Kundenbeziehungen",
+  cs: "Databáze kontaktů a vztahy s klienty",
+  sk: "Databáza kontaktov a vzťahy s klientmi",
+  ua: "База контактів і взаємодія з клієнтами",
+  lt: "Kontaktų bazė ir santykiai su klientais",
+  vi: "Cơ sở dữ liệu liên hệ và quan hệ khách hàng",
+},
+
+panelOfficeDealsSub: {
+  pl: "Transakcje zrealizowane przez agentów biura",
+  en: "Deals completed by office agents",
+  de: "Von Büroagenten abgeschlossene Transaktionen",
+  cs: "Transakce realizované agenty kanceláře",
+  sk: "Transakcie realizované agentmi kancelárie",
+  ua: "Угоди, завершені агентами офісу",
+  lt: "Biuro agentų sudaryti sandoriai",
+  vi: "Giao dịch hoàn thành bởi nhân viên văn phòng",
+},
+
+panelDownloadsSub: {
+  pl: "Dokumenty, umowy i pliki do pobrania",
+  en: "Documents, contracts and downloadable files",
+  de: "Dokumente, Verträge und Downloads",
+  cs: "Dokumenty, smlouvy a soubory ke stažení",
+  sk: "Dokumenty, zmluvy a súbory na stiahnutie",
+  ua: "Документи, договори та файли для завантаження",
+  lt: "Dokumentai, sutartys ir atsisiunčiami failai",
+  vi: "Tài liệu, hợp đồng và tệp tải xuống",
+},
+
+panelNotesSub: {
+  pl: "Notatki agenta i zapisy rozmów z klientami",
+  en: "Agent notes and client interaction records",
+  de: "Agentennotizen und Kundeninteraktionen",
+  cs: "Poznámky agenta a záznamy komunikace s klienty",
+  sk: "Poznámky agenta a záznamy komunikácie s klientmi",
+  ua: "Нотатки агента та записи взаємодії з клієнтами",
+  lt: "Agentų pastabos ir klientų sąveikos įrašai",
+  vi: "Ghi chú của môi giới và lịch sử tương tác khách hàng",
+},
+
+panelMenuSettingsSub: {
+  pl: "Personalizacja i konfiguracja panelu",
+  en: "Panel personalization and configuration",
+  de: "Panelanpassung und Konfiguration",
+  cs: "Přizpůsobení a konfigurace panelu",
+  sk: "Prispôsobenie a konfigurácia panelu",
+  ua: "Налаштування та персоналізація панелі",
+  lt: "Skydelio personalizavimas ir konfigūracija",
+  vi: "Cá nhân hóa và cấu hình bảng điều khiển",
+},
+
+panelNavNotes: {
+  pl: "Notatki",
+  en: "Notes",
+  de: "Notizen",
+  cs: "Poznámky",
+  sk: "Poznámky",
+  ua: "Нотатки",
+  lt: "Pastabos",
+  vi: "Ghi chú",
+},
 } as const);
 
 export type TranslationKey = keyof typeof translations;
