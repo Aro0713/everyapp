@@ -263,7 +263,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         FROM office_listings_overview
         WHERE ${listingsScopeSql}
           AND status = 'active'
-          AND created_at >= now() - interval '7 days'
+          AND updated_at >= now() - interval '7 days'
         ORDER BY created_at DESC
         LIMIT 8
         `,
