@@ -7070,6 +7070,27 @@ panelAgentWelcome: {
   lt: "Laba diena. Aš esu EveryAgent. Pasakykite, ką turiu padaryti.",
   vi: "Xin chào. Tôi là EveryAgent. Hãy nói tôi cần làm gì.",
 },
+panelAgentOpenOffers: {
+  pl: "Otwórz oferty",
+  en: "Open offers",
+  de: "Angebote öffnen",
+  cs: "Otevřít nabídky",
+  sk: "Otvoriť ponuky",
+  ua: "Відкрити пропозиції",
+  lt: "Atidaryti pasiūlymus",
+  vi: "Mở danh sách tin",
+},
+
+panelAgentOpenListing: {
+  pl: "Otwórz ogłoszenie",
+  en: "Open listing",
+  de: "Anzeige öffnen",
+  cs: "Otevřít inzerát",
+  sk: "Otvoriť inzerát",
+  ua: "Відкрити оголошення",
+  lt: "Atidaryti skelbimą",
+  vi: "Mở tin đăng",
+},
 } as const);
 
 export type TranslationKey = keyof typeof translations;

@@ -135,6 +135,7 @@ function PlaceholderView({
 type AgentChatMessage = {
   role: "user" | "assistant";
   text: string;
+  actions?: any[];
 };
 
 export default function PanelPage() {
@@ -162,6 +163,7 @@ export default function PanelPage() {
       {
         role: "assistant",
         text: t(lang, "panelAgentWelcome" as any),
+        actions: [],
       },
     ]);
     type DashboardData = {
@@ -413,20 +415,24 @@ async function runEveryAgent() {
     const j = await r.json().catch(() => null);
 
     const reply =
-      typeof j?.reply === "string" && j.reply.trim()
-        ? j.reply.trim()
-        : t(lang, "panelAgentNoResult" as any);
+    typeof j?.reply === "string" && j.reply.trim()
+      ? j.reply.trim()
+      : t(lang, "panelAgentNoResult" as any);
 
-    setAgentMessages((prev) => [
-      ...prev,
-      { role: "assistant", text: reply },
-    ]);
+  const actions = Array.isArray(j?.actions) ? j.actions : [];
 
-    if (Array.isArray(j?.actions)) {
-      for (const action of j.actions) {
-        console.log("EVERYAGENT_ACTION", action);
-      }
-    }
+  setAgentMessages((prev) => [
+    ...prev,
+    {
+      role: "assistant",
+      text: reply,
+      actions,
+    },
+  ]);
+
+  for (const action of actions) {
+    console.log("EVERYAGENT_ACTION", action);
+  }
   } catch (e) {
     console.error("EVERYAGENT_RUN_ERROR", e);
 
@@ -439,6 +445,24 @@ async function runEveryAgent() {
     ]);
   } finally {
     setAgentLoading(false);
+  }
+}
+function handleAgentAction(action: any) {
+  if (!action || typeof action !== "object") return;
+
+  if (action.type === "open_listing" && typeof action.url === "string") {
+    window.open(action.url, "_blank", "noopener,noreferrer");
+    return;
+  }
+
+  if (
+    action.type === "set_filters" ||
+    action.type === "run_live" ||
+    action.type === "load_neon" ||
+    action.type === "refresh_map"
+  ) {
+    setActiveView("offers");
+    return;
   }
 }
 
@@ -716,7 +740,7 @@ async function runEveryAgent() {
                   >
                     <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
                       <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
-                        {agentMessages.map((msg, idx) => (
+                      {agentMessages.map((msg, idx) => (
                           <div
                             key={`${msg.role}-${idx}`}
                             className={clsx(
@@ -726,7 +750,46 @@ async function runEveryAgent() {
                                 : "mr-auto border border-white/10 bg-white/10 text-white/90"
                             )}
                           >
-                            {msg.text}
+                            <div>{msg.text}</div>
+
+                            {msg.role === "assistant" && Array.isArray(msg.actions) && msg.actions.length > 0 ? (
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {msg.actions.map((action, actionIdx) => {
+                                  if (
+                                    action?.type === "set_filters" ||
+                                    action?.type === "run_live" ||
+                                    action?.type === "load_neon" ||
+                                    action?.type === "refresh_map"
+                                  ) {
+                                    return (
+                                      <button
+                                        key={`action-${idx}-${actionIdx}`}
+                                        type="button"
+                                        onClick={() => handleAgentAction(action)}
+                                        className="rounded-xl border border-white/10 bg-white/15 px-3 py-2 text-xs font-semibold text-white hover:bg-white/20"
+                                      >
+                                        {t(lang, "panelAgentOpenOffers" as any)}
+                                      </button>
+                                    );
+                                  }
+
+                                  if (action?.type === "open_listing" && typeof action.url === "string") {
+                                    return (
+                                      <button
+                                        key={`action-${idx}-${actionIdx}`}
+                                        type="button"
+                                        onClick={() => handleAgentAction(action)}
+                                        className="rounded-xl border border-white/10 bg-white/15 px-3 py-2 text-xs font-semibold text-white hover:bg-white/20"
+                                      >
+                                        {t(lang, "panelAgentOpenListing" as any)}
+                                      </button>
+                                    );
+                                  }
+
+                                  return null;
+                                })}
+                              </div>
+                            ) : null}
                           </div>
                         ))}
 
