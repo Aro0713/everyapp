@@ -52,7 +52,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const listingsScopeSql =
       scope === "agent"
-        ? `office_id = $1::uuid AND LOWER(COALESCE(case_owner_name, '')) = LOWER(COALESCE($2::text, ''))`
+        ? `office_id = $1::uuid AND case_owner_user_id = $2::uuid`
         : `office_id = $1::uuid`;
 
     const meRes = await pool.query<{
@@ -114,17 +114,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         `
         SELECT COUNT(*)::text AS count
         FROM events e
-        JOIN calendars c
-          ON c.id = e.calendar_id
-        WHERE c.org_id = $1::uuid
-          AND (
-            $2::text <> 'agent'
-            OR c.owner_user_id = $3::uuid
-          )
-          AND e.start_at >= date_trunc('day', now())
-          AND e.start_at < date_trunc('day', now()) + interval '1 day'
+        WHERE e.org_id = $1::uuid
+          AND e.start_at >= ((date_trunc('day', now() AT TIME ZONE 'Europe/Warsaw')) AT TIME ZONE 'Europe/Warsaw')
+          AND e.start_at < (((date_trunc('day', now() AT TIME ZONE 'Europe/Warsaw')) + interval '1 day') AT TIME ZONE 'Europe/Warsaw')
         `,
-        [officeId, scope, userId]
+        [officeId]
       ),
 
       pool.query<{
@@ -136,6 +130,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         created_at: string;
         case_owner_name: string | null;
         parties_summary: string | null;
+        case_owner_user_id: string | null;
       }>(
         `
         SELECT
@@ -146,7 +141,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           status::text,
           created_at,
           case_owner_name,
-          parties_summary
+          parties_summary,
+          case_owner_user_id::text
         FROM office_listings_overview
         WHERE ${listingsScopeSql}
           AND status IN ('draft', 'active')
@@ -154,7 +150,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         LIMIT 8
         `,
         scope === "agent"
-          ? [officeId, me.full_name ?? null]
+          ? [officeId, userId]
           : [officeId]
       ),
 
@@ -218,21 +214,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           e.end_at,
           e.location_text,
           e.description,
-          c.owner_user_id::text
+          NULL::text AS owner_user_id
         FROM events e
-        JOIN calendars c
-          ON c.id = e.calendar_id
-        WHERE c.org_id = $1::uuid
-          AND (
-            $2::text <> 'agent'
-            OR c.owner_user_id = $3::uuid
-          )
-          AND e.start_at >= date_trunc('day', now())
-          AND e.start_at < date_trunc('day', now()) + interval '1 day'
+        WHERE e.org_id = $1::uuid
+          AND e.start_at >= ((date_trunc('day', now() AT TIME ZONE 'Europe/Warsaw')) AT TIME ZONE 'Europe/Warsaw')
+          AND e.start_at < (((date_trunc('day', now() AT TIME ZONE 'Europe/Warsaw')) + interval '1 day') AT TIME ZONE 'Europe/Warsaw')
         ORDER BY e.start_at ASC
         LIMIT 10
         `,
-        [officeId, scope, userId]
+        [officeId]
       ),
 
       pool.query<{
@@ -244,6 +234,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         created_at: string;
         case_owner_name: string | null;
         parties_summary: string | null;
+        case_owner_user_id: string | null;
       }>(
         `
         SELECT
@@ -254,7 +245,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           status::text,
           created_at,
           case_owner_name,
-          parties_summary
+          parties_summary,
+          case_owner_user_id::text
         FROM office_listings_overview
         WHERE ${listingsScopeSql}
           AND status = 'active'
@@ -263,7 +255,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         LIMIT 8
         `,
         scope === "agent"
-          ? [officeId, me.full_name ?? null]
+          ? [officeId, userId]
           : [officeId]
       ),
 
