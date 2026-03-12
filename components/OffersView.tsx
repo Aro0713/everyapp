@@ -6,6 +6,7 @@ import EverybotSearchPanel, {
   type EverybotSource,
 } from "@/components/EverybotSearchPanel";
 import dynamic from "next/dynamic";
+import { useRouter } from "next/router";
 import EverybotAgentPanel from "@/components/everybot/EverybotAgentPanel";
 import EventModal, {
   type EventDraft,
@@ -163,6 +164,7 @@ function normalizeVoivodeshipInput(v?: string | null): string | null {
 }
 
 export default function OffersView({ lang }: { lang: LangKey }) {
+  const router = useRouter();
   const searchIntervalRef = useRef<number | null>(null);
   const searchingRef = useRef(false);
 
@@ -1187,13 +1189,16 @@ return (
                   }),
                 });
 
+                const j = await r.json().catch(() => null);
+
                 if (!r.ok) {
-                  const j = await r.json().catch(() => null);
                   throw new Error(j?.error ?? `HTTP ${r.status}`);
                 }
 
-                await load();
-                setTab("office");
+                const newId = typeof j?.id === "string" ? j.id : null;
+                if (!newId) throw new Error("Brak id nowej oferty");
+
+                router.push(`/panel/offers/${newId}`);
               } catch (e: any) {
                 alert(`Nie udało się utworzyć oferty: ${e?.message ?? "Unknown error"}`);
               }
@@ -1414,12 +1419,12 @@ return (
                                 {t(lang, "listingOpen" as any)}
                               </button>
 
-                              {!isPortal ? (
+                                {!isPortal ? (
                                 <button
                                   type="button"
                                   className="rounded-xl border border-white/10 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:bg-white/15"
                                   onClick={() => {
-                                    alert(t(lang, "listingEditTodo" as any));
+                                    router.push(`/panel/offers/${r.id}`);
                                   }}
                                 >
                                   {t(lang, "listingEdit" as any)}
