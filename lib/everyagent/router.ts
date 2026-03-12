@@ -2,7 +2,14 @@ import { toolEverybotSearch } from "./tools/everybot";
 import { toolCalendarCreate } from "./tools/calendar";
 import { toolListingCreate } from "./tools/listing";
 
-export async function routeIntent(agentResult: any, message: string) {
+export async function routeIntent(
+  agentResult: any,
+  message: string,
+  context?: {
+    history?: any[];
+    uiContext?: any;
+  }
+) {
 
   const intent = agentResult?.intent;
 

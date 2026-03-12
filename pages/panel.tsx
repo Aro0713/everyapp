@@ -134,6 +134,7 @@ function PlaceholderView({
 }
 
 export default function PanelPage() {
+
   // -------------------- i18n --------------------
   const [lang, setLang] = useState<LangKey>(DEFAULT_LANG);
 
@@ -149,6 +150,11 @@ export default function PanelPage() {
 
   // -------------------- active view --------------------
   const [activeView, setActiveView] = useState<PanelView>("dashboard");
+
+  // -------------------- EveryAgent --------------------
+  const [agentText, setAgentText] = useState("");
+  const [agentReply, setAgentReply] = useState<string | null>(null);
+  const [agentLoading, setAgentLoading] = useState(false);
     type DashboardData = {
     scope: "agent" | "office";
     officeId: string;
@@ -361,6 +367,49 @@ export default function PanelPage() {
       setDashboardLoading(false);
     }
   }
+  async function runEveryAgent() {
+
+  const msg = agentText.trim();
+  if (!msg) return;
+
+  try {
+
+    setAgentLoading(true);
+    setAgentReply(null);
+
+    const r = await fetch("/api/everyagent", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ message: msg })
+    });
+
+    const j = await r.json().catch(() => null);
+
+    setAgentReply(j?.reply ?? null);
+
+    if (Array.isArray(j?.actions)) {
+
+      for (const action of j.actions) {
+
+        console.log("EVERYAGENT_ACTION", action);
+
+        // tu później podpinamy realne akcje
+      }
+
+    }
+
+  } catch (e) {
+
+    console.error("EVERYAGENT_RUN_ERROR", e);
+
+  } finally {
+
+    setAgentLoading(false);
+
+  }
+}
 
   return (
     <>
@@ -628,6 +677,44 @@ export default function PanelPage() {
                     >
                       {t(lang, "offersRefresh" as any)}
                     </button>
+                  </div>
+                  <div className="mb-6">
+                    <PanelCard
+                      title={t(lang, "panelAgentTitle" as any)}
+                      subtitle={t(lang, "panelAgentSubtitle" as any)}
+                    >
+
+                      <div className="flex gap-3">
+
+                        <input
+                          value={agentText}
+                          onChange={(e) => setAgentText(e.target.value)}
+                          placeholder={t(lang, "panelAgentPlaceholder" as any)}
+                          className="flex-1 rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white outline-none"
+                        />
+
+                        <button
+                          onClick={runEveryAgent}
+                          className="rounded-2xl border border-white/10 bg-white/20 px-4 py-2 text-sm font-semibold text-white hover:bg-white/30"
+                        >
+                          {t(lang, "panelAgentSend" as any)}
+                        </button>
+
+                      </div>
+
+                      {agentLoading && (
+                        <p className="mt-3 text-xs text-white/60">
+                          {t(lang, "panelAgentThinking" as any)}
+                        </p>
+                      )}
+
+                      {agentReply && (
+                        <div className="mt-4 rounded-xl border border-white/10 bg-white/10 p-3 text-sm text-white/90">
+                          {agentReply}
+                        </div>
+                      )}
+
+                    </PanelCard>
                   </div>
                 {/* KPI row */}
                 <div className="grid gap-4 md:grid-cols-4">

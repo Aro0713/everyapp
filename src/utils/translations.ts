@@ -6974,6 +6974,92 @@ contactsCreateError: {
   lt: "Nepavyko išsaugoti kontakto.",
   vi: "Không thể lưu liên hệ.",
 },
+panelAgentTitle: {
+  pl: "EveryAgent — osobisty asystent",
+  en: "EveryAgent — personal assistant",
+  de: "EveryAgent — persönlicher Assistent",
+  cs: "EveryAgent — osobní asistent",
+  sk: "EveryAgent — osobný asistent",
+  ua: "EveryAgent — персональний асистент",
+  lt: "EveryAgent — asmeninis asistentas",
+  vi: "EveryAgent — trợ lý cá nhân",
+},
+
+panelAgentSubtitle: {
+  pl: "Powiedz co mam zrobić",
+  en: "Tell me what to do",
+  de: "Sagen Sie mir, was ich tun soll",
+  cs: "Řekněte mi, co mám udělat",
+  sk: "Povedzte mi, čo mám urobiť",
+  ua: "Скажіть, що мені зробити",
+  lt: "Pasakykite, ką turiu padaryti",
+  vi: "Hãy nói tôi cần làm gì",
+},
+
+panelAgentPlaceholder: {
+  pl: "np. znajdź mieszkania w Katowicach do 600 tys",
+  en: "e.g. find apartments in Katowice up to 600k",
+  de: "z. B. Wohnungen in Katowice bis 600 000 finden",
+  cs: "např. najdi byty v Katovicích do 600 tis.",
+  sk: "napr. nájdi byty v Katoviciach do 600 tis.",
+  ua: "напр. знайди квартири в Катовіце до 600 тис.",
+  lt: "pvz. rask butus Katovicuose iki 600 tūkst.",
+  vi: "ví dụ: tìm căn hộ ở Katowice dưới 600k",
+},
+
+panelAgentSend: {
+  pl: "Wyślij",
+  en: "Send",
+  de: "Senden",
+  cs: "Odeslat",
+  sk: "Odoslať",
+  ua: "Надіслати",
+  lt: "Siųsti",
+  vi: "Gửi",
+},
+
+panelAgentThinking: {
+  pl: "EveryAgent myśli...",
+  en: "EveryAgent is thinking...",
+  de: "EveryAgent denkt nach...",
+  cs: "EveryAgent přemýšlí...",
+  sk: "EveryAgent premýšľa...",
+  ua: "EveryAgent думає...",
+  lt: "EveryAgent galvoja...",
+  vi: "EveryAgent đang suy nghĩ...",
+},
+panelAgentListening: {
+  pl: "EveryAgent słucha...",
+  en: "EveryAgent is listening...",
+  de: "EveryAgent hört zu...",
+  cs: "EveryAgent poslouchá...",
+  sk: "EveryAgent počúva...",
+  ua: "EveryAgent слухає...",
+  lt: "EveryAgent klausosi...",
+  vi: "EveryAgent đang lắng nghe...",
+},
+
+panelAgentError: {
+  pl: "Wystąpił błąd podczas działania EveryAgent.",
+  en: "An error occurred while running EveryAgent.",
+  de: "Beim Ausführen von EveryAgent ist ein Fehler aufgetreten.",
+  cs: "Při spuštění EveryAgent došlo k chybě.",
+  sk: "Pri spustení EveryAgent nastala chyba.",
+  ua: "Під час роботи EveryAgent сталася помилка.",
+  lt: "Įvyko klaida vykdant EveryAgent.",
+  vi: "Đã xảy ra lỗi khi chạy EveryAgent.",
+},
+
+panelAgentNoResult: {
+  pl: "EveryAgent nie znalazł wyników.",
+  en: "EveryAgent did not find any results.",
+  de: "EveryAgent hat keine Ergebnisse gefunden.",
+  cs: "EveryAgent nenašel žádné výsledky.",
+  sk: "EveryAgent nenašiel žiadne výsledky.",
+  ua: "EveryAgent не знайшов результатів.",
+  lt: "EveryAgent nerado rezultatų.",
+  vi: "EveryAgent không tìm thấy kết quả.",
+},
 } as const);
 
 export type TranslationKey = keyof typeof translations;
