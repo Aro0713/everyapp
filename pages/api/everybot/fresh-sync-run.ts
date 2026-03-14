@@ -59,12 +59,11 @@ async function fetchOffices(): Promise<string[]> {
   const { pool } = await import("../../../lib/neonDb");
 
   const { rows } = await pool.query(
-    `
-    select id
-    from offices
-    where status is null or status='active'
-    `
-  );
+  `
+  select id
+  from offices
+  `
+);
 
   return rows.map((r: any) => r.id);
 }
