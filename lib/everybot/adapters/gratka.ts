@@ -44,9 +44,25 @@ function inferTxFromText(s: string | null): "sale" | "rent" | null {
     t.includes("naj") ||
     t.includes("/mies") ||
     t.includes("miesiąc")
-  )
+  ) {
     return "rent";
+  }
   return "sale";
+}
+
+function normalizeGratkaOfferUrl(u: string): string {
+  try {
+    const x = new URL(u);
+    x.hash = "";
+    x.search = "";
+    return x.toString();
+  } catch {
+    return u;
+  }
+}
+
+function isSingleGratkaOfferUrl(u: string): boolean {
+  return /gratka\.pl\/nieruchomosci\/.+\/(ob|oi)\/\d+(?:\/)?$/i.test(u);
 }
 
 /* ---------------- search URL ---------------- */
@@ -104,18 +120,21 @@ function parseSearch(
     const full = absUrl(finalUrl, href);
     if (!full) return;
 
-    if (!/gratka\.pl\/nieruchomosci/i.test(full)) return;
+    const url = normalizeGratkaOfferUrl(full);
 
-    const url = full.split("#")[0];
+    // ✅ tylko pojedyncze oferty, żadnych kategorii / miast / listingów
+    if (!isSingleGratkaOfferUrl(url)) return;
+
     if (seen.has(url)) return;
     seen.add(url);
 
     const card = $(el).closest("article, li, div").first();
 
     const title =
-      optString(card.find("h2,h3").first().text()) ??
+      optString(card.find("h1,h2,h3,[class*='title']").first().text()) ??
       optString($(el).attr("title")) ??
       optString($(el).attr("aria-label")) ??
+      optString($(el).text()) ??
       null;
 
     const priceText =
@@ -127,9 +146,8 @@ function parseSearch(
     const currency = currencyFromText(priceText);
 
     const location_text =
-      optString(
-        card.find("[class*='address'],[class*='location']").first().text()
-      ) ?? null;
+      optString(card.find("[class*='address'],[class*='location']").first().text()) ??
+      null;
 
     const thumb =
       optString(card.find("img").first().attr("src")) ??
