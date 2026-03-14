@@ -188,7 +188,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 'active',
                 now()
               )
-                ON CONFLICT ON CONSTRAINT ux_external_listings_office_url
+                ON CONFLICT (office_id, source_url)
                 DO UPDATE SET
                 source_url = EXCLUDED.source_url,
                 title = COALESCE(EXCLUDED.title, external_listings.title),
