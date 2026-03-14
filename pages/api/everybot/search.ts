@@ -1492,7 +1492,17 @@ function normalizeVoivodeshipInput(v?: string | null): string | null {
 
   return out || null;
 }
+function resolveSearchLocation(filters: any | null, q?: string | null) {
+  const city = optString(filters?.city) ?? optString(q) ?? null;
+  const district = optString(filters?.district) ?? null;
+  const voivodeship = normalizeVoivodeshipInput(optString(filters?.voivodeship) ?? null);
 
+  return {
+    city,
+    district,
+    voivodeship,
+  };
+}
 function buildOtodomSearchUrl(
   q: string,
   voivodeship?: string | null,
@@ -1557,8 +1567,11 @@ function buildOlxSearchUrl(q: string, city?: string | null, district?: string | 
   const slug = encodeURIComponent(effectiveQ.replace(/\s+/g, "-"));
   return `https://www.olx.pl/nieruchomosci/q-${slug}/`;
 }
-function buildGratkaSearchUrl(filters: any | null): string {
-  const city = optString(filters?.city)?.trim() ?? "";
+function buildGratkaSearchUrl(
+  filters: any | null,
+  resolved: { city: string | null; district: string | null; voivodeship: string | null }
+): string {
+  const city = resolved.city?.trim() ?? "";
   if (!city) return "https://gratka.pl/nieruchomosci";
 
   const ptRaw = (optString(filters?.propertyType) ?? "").toLowerCase();
@@ -1567,18 +1580,18 @@ function buildGratkaSearchUrl(filters: any | null): string {
     ptRaw.includes("dom") || ptRaw.includes("house") ? "domy" :
     ptRaw.includes("dzial") || ptRaw.includes("dział") || ptRaw.includes("plot") || ptRaw.includes("grunt") ? "dzialki" :
     ptRaw.includes("komerc") || ptRaw.includes("lokal") || ptRaw.includes("biur") || ptRaw.includes("commercial") ? "lokale" :
-    // default: jak nie wiemy, nie robimy magii
     "";
 
   if (!seg) return "https://gratka.pl/nieruchomosci";
 
-  // ✅ Gratka listy mają format: /nieruchomosci/mieszkania/wroclaw
   return `https://gratka.pl/nieruchomosci/${seg}/${slugifyPl(city)}`;
 }
-function buildMorizonSearchUrl(filters: any | null): string {
-  const city = optString(filters?.city)?.trim() ?? "";
+function buildMorizonSearchUrl(
+  filters: any | null,
+  resolved: { city: string | null; district: string | null; voivodeship: string | null }
+): string {
+  const city = resolved.city?.trim() ?? "";
   if (!city) {
-    // bez miasta nie budujemy URL wyników (bezpiecznie)
     return "https://www.morizon.pl/";
   }
 
@@ -1588,12 +1601,10 @@ function buildMorizonSearchUrl(filters: any | null): string {
     ptRaw.includes("miesz") || ptRaw.includes("apartment") || ptRaw.includes("flat") ? "mieszkania" :
     ptRaw.includes("dzial") || ptRaw.includes("dział") || ptRaw.includes("plot") || ptRaw.includes("grunt") ? "dzialki" :
     ptRaw.includes("komerc") || ptRaw.includes("lokal") || ptRaw.includes("biur") || ptRaw.includes("commercial") ? "komercyjne" :
-    // default bez zgadywania transakcji: jeśli nie wiemy typu, nie budujemy “magii”
     "";
 
   if (!seg) return "https://www.morizon.pl/";
 
-  // ✅ Morizon listy mają format: /domy/katowice/
   return `https://www.morizon.pl/${seg}/${slugifyPl(city)}/`;
 }
 function withPage(url: string, page: number) {
@@ -1711,12 +1722,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const urlFromGet = req.method === "GET" ? optString(req.query.url) : null;
     const urlFromPost = req.method === "POST" ? optString((body as any).url) : null;
 
-    const q =
+     const q =
       req.method === "POST"
-        ? (optString(filters?.q) ?? optString((body as any).q))
-        : optString((req.query as any)?.q);
+            ? (optString(filters?.q) ?? optString((body as any).q))
+            : optString((req.query as any)?.q);
 
-    const sourceParam =
+      const resolvedLocation = resolveSearchLocation(filters, q);
+
+      const sourceParam =
       req.method === "POST"
         ? (optString(filters?.source) ?? optString((body as any).source) ?? "otodom")
         : (optString((req.query as any)?.source) ?? "otodom");
@@ -1732,6 +1745,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       sourceWanted !== "all"
     ) {
       return res.status(400).json({ error: `UNSUPPORTED_SOURCE ${sourceWanted}` });
+    }
+    const propertyType = optString(filters?.propertyType);
+
+    if (
+      (sourceWanted === "gratka" || sourceWanted === "morizon" || sourceWanted === "all") &&
+      !propertyType
+    ) {
+      return res.status(400).json({
+        error: "MISSING_PROPERTY_TYPE",
+      });
     }
 
     const harvestSources: SourceKey[] =
@@ -1749,18 +1772,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // ✅ istniejące, sprawdzone buildy:
       if (src === "olx") {
         return q
-          ? buildOlxSearchUrl(q, optString(filters?.city) ?? null, optString(filters?.district) ?? null)
-          : buildOlxSearchUrl("", optString(filters?.city) ?? null, optString(filters?.district) ?? null);
+          ? buildOlxSearchUrl(q, resolvedLocation.city, resolvedLocation.district)
+          : buildOlxSearchUrl("", resolvedLocation.city, resolvedLocation.district);
       }
 
       if (src === "otodom") {
         const phrase =
           (q ?? "") ||
-          [optString(filters?.city), optString(filters?.district)].filter(Boolean).join(" ").trim();
+          [resolvedLocation.city, resolvedLocation.district].filter(Boolean).join(" ").trim();
 
         return buildOtodomSearchUrl(
           phrase,
-          optString(filters?.voivodeship) ?? null,
+          resolvedLocation.voivodeship,
           (optString(filters?.transactionType) as any) ?? null,
           optString(filters?.propertyType) ?? null,
           optNumber(filters?.minPrice),
@@ -1771,14 +1794,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         );
       }
 
-      // ✅ morizon: startujemy od czystej strony głównej (bez UTM) – pozwala zebrać featured oferty.
-      // Filtry dołożymy dopiero po tym, jak podasz URL listy wyników (nie homepage).
-            if (src === "morizon") {
-        return buildMorizonSearchUrl(filters);
+      if (src === "morizon") {
+        return buildMorizonSearchUrl(filters, resolvedLocation);
       }
 
       if (src === "gratka") {
-        return buildGratkaSearchUrl(filters);
+        return buildGratkaSearchUrl(filters, resolvedLocation);
       }
 
       if (src === "odwlasciciela") {

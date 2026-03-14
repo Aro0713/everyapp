@@ -121,8 +121,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 AND last_checked_at < now() - interval '60 minutes'
               )
             )
-          ORDER BY enriched_at NULLS FIRST, last_seen_at DESC NULLS LAST, updated_at DESC
-          LIMIT $2
+            ORDER BY
+              enriched_at NULLS FIRST,
+              first_seen_at DESC NULLS LAST,
+              last_seen_at DESC NULLS LAST,
+              matched_at DESC NULLS LAST,
+              updated_at DESC
+            LIMIT $2
         `,
       onlyId || onlyUrl ? [officeId, (onlyId ?? onlyUrl)!] : [officeId, limit]
     );
