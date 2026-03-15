@@ -315,7 +315,6 @@ function buildListSql(whereSql: string, orderBy: string, pLimit: number, pOffset
 
         l.owner_phone,
         l.source_status,
-        l.phone_last9,
 
         l.lat,
         l.lng,
@@ -354,14 +353,19 @@ function buildListSql(whereSql: string, orderBy: string, pLimit: number, pOffset
         AND ela.external_listing_id IN (SELECT id FROM base_rows)
       GROUP BY ela.external_listing_id
     ),
+    base_rows_norm AS (
+      SELECT
+        b.*,
+        RIGHT(REGEXP_REPLACE(COALESCE(b.owner_phone, ''), '[^0-9]', '', 'g'), 9) AS phone_last9
+      FROM base_rows b
+    ),
     phone_counts AS (
       SELECT
         b.id AS external_listing_id,
         GREATEST(COUNT(x.id)::int - 1, 0) AS same_phone_offers_count
-      FROM base_rows b
+      FROM base_rows_norm b
       LEFT JOIN external_listings x
-        ON x.phone_last9 = b.phone_last9
-       AND b.phone_last9 IS NOT NULL
+        ON RIGHT(REGEXP_REPLACE(COALESCE(x.owner_phone, x.phone, ''), '[^0-9]', '', 'g'), 9) = b.phone_last9
        AND b.phone_last9 <> ''
       GROUP BY b.id
     )
@@ -427,7 +431,7 @@ function buildListSql(whereSql: string, orderBy: string, pLimit: number, pOffset
       a.last_interaction_at,
       a.last_action,
       COALESCE(ms.my_office_saved, FALSE) AS my_office_saved
-    FROM base_rows b
+    FROM base_rows_norm b
     LEFT JOIN action_agg a ON a.external_listing_id = b.id
     LEFT JOIN my_saved ms ON ms.external_listing_id = b.id
     LEFT JOIN phone_counts pc ON pc.external_listing_id = b.id
