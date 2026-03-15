@@ -184,18 +184,27 @@ function mapRoomsEnum(v: unknown): number | null {
 }
 
 function buildOfferUrlFromAd(ad: any, finalUrl: string): string | null {
-  const href = optString(ad?.href);
-  if (href) {
-    const full = absUrl(finalUrl, href);
-    if (full) return normalizeOfferUrl(full);
-  }
-
   const slug = optString(ad?.slug);
   if (slug) {
     return normalizeOfferUrl(`https://www.otodom.pl/pl/oferta/${slug}`);
   }
 
-  const url = optString(ad?.url) ?? optString(ad?.link) ?? optString(ad?.canonicalURL);
+  const href = optString(ad?.href);
+  if (href) {
+    const cleanedHref = href
+      .replace(/^hpr\//i, "")
+      .replace(/^\[lang\]\//i, "pl/")
+      .replace(/\/ad\//i, "/oferta/");
+
+    const full = absUrl(finalUrl, cleanedHref);
+    if (full) return normalizeOfferUrl(full);
+  }
+
+  const url =
+    optString(ad?.url) ??
+    optString(ad?.link) ??
+    optString(ad?.canonicalURL);
+
   if (url) {
     const full = absUrl(finalUrl, url);
     if (full) return normalizeOfferUrl(full);
@@ -234,11 +243,18 @@ function parseItemsFromNextData(finalUrl: string, next: any, limit = 200): Searc
             optNumber((o as any).price?.value) ??
             optNumber((o as any).price?.amount);
 
-          const looksLikeOffer =
-            (href && /\/oferta\//i.test(href)) ||
-            !!slug;
+          const hasOfferHref =
+            typeof href === "string" &&
+            /(?:\/ad\/|\/oferta\/|\[lang\]\/ad\/|hpr\/\[lang\]\/ad\/)/i.test(href);
 
-          return looksLikeOffer && (!!title || price != null);
+            const looksLikeOffer = Boolean(slug) || hasOfferHref;
+
+            const numericId = optNumber((o as any).id);
+            const saneId =
+              numericId == null ||
+              (Number.isInteger(numericId) && numericId > 0 && numericId < 10000000000);
+
+            return looksLikeOffer && saneId && (!!title || price != null);
         },
         []
       );
