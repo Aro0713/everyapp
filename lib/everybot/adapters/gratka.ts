@@ -65,6 +65,16 @@ function isSingleGratkaOfferUrl(u: string): boolean {
   return /gratka\.pl\/nieruchomosci\/.+\/(ob|oi)\/\d+(?:\/)?$/i.test(u);
 }
 
+function sanitizeGratkaPrice(priceText: string | null): number | null {
+  const raw = parseNumberLoose(priceText);
+  if (raw == null) return null;
+
+  // twardy bezpiecznik: odetnij telefony, ID i śmieci z layoutu
+  if (raw < 500 || raw > 100_000_000) return null;
+
+  return raw;
+}
+
 /* ---------------- search URL ---------------- */
 
 function buildSearchUrl(ctx: AdapterContext): string {
@@ -139,10 +149,10 @@ function parseSearch(
 
     const priceText =
       optString(card.find("[class*='price']").first().text()) ??
-      optString(card.find("strong").first().text()) ??
+      optString(card.find("[data-testid*='price']").first().text()) ??
       null;
 
-    const price_amount = parseNumberLoose(priceText);
+    const price_amount = sanitizeGratkaPrice(priceText);
     const currency = currencyFromText(priceText);
 
     const location_text =
