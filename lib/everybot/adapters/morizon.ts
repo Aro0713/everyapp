@@ -22,17 +22,67 @@ function absUrl(base: string, href: string | null | undefined): string | null {
   }
 }
 
+function normalizeText(s: string | null | undefined): string {
+  return String(s ?? "")
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function looksLikePricePerSqm(s: string | null | undefined): boolean {
+  if (!s) return false;
+  const t = normalizeText(s).toLowerCase().replace(/\s/g, "");
+  return (
+    t.includes("zł/m²") ||
+    t.includes("zł/m2") ||
+    t.includes("pln/m²") ||
+    t.includes("pln/m2") ||
+    t.includes("/m²") ||
+    t.includes("/m2")
+  );
+}
+
 function parseNumberLoose(s: string | null | undefined): number | null {
   if (!s) return null;
-  const cleaned = s.replace(/\s/g, "").replace(",", ".").replace(/[^\d.]/g, "");
-  const n = Number(cleaned);
-  return Number.isFinite(n) ? n : null;
+
+  const text = normalizeText(s);
+  if (!text) return null;
+
+  const matches = text.match(/\d[\d\s.,]{2,}\d/g);
+  if (!matches?.length) return null;
+
+  let best: number | null = null;
+
+  for (const raw of matches) {
+    const candidate = raw
+      .replace(/\s/g, "")
+      .replace(/,(?=\d{1,2}$)/, ".")
+      .replace(/[^\d.]/g, "");
+
+    const normalized =
+      (candidate.match(/\./g) || []).length > 1
+        ? candidate.replace(/\./g, "")
+        : candidate;
+
+    const n = Number(normalized);
+    if (!Number.isFinite(n) || n <= 0) continue;
+
+    if (best == null || n > best) best = n;
+  }
+
+  if (best == null) return null;
+
+  // sanity guard pod constraint ceny
+  if (best <= 0 || best > 100_000_000) return null;
+
+  return best;
 }
 
 function currencyFromText(s: string | null): string | null {
   if (!s) return null;
-  if (s.includes("€")) return "EUR";
-  if (s.toLowerCase().includes("zł")) return "PLN";
+  const t = s.toLowerCase();
+  if (t.includes("€")) return "EUR";
+  if (t.includes("zł") || t.includes("pln")) return "PLN";
   return null;
 }
 
@@ -43,9 +93,12 @@ function inferTxFromText(s: string | null): "sale" | "rent" | null {
     t.includes("wynajem") ||
     t.includes("naj") ||
     t.includes("/mies") ||
-    t.includes("miesiąc")
-  )
+    t.includes("miesiąc") ||
+    t.includes("miesiecznie") ||
+    t.includes("miesięcznie")
+  ) {
     return "rent";
+  }
   return "sale";
 }
 
@@ -104,7 +157,6 @@ function parseSearch(
     const full = absUrl(finalUrl, href);
     if (!full) return;
 
-    // heurystyka: oferty zwykle mają /oferta/ lub /ogloszenie/ albo podobne
     if (!/morizon\.pl/i.test(full)) return;
     if (!/ofert|oglosz|nieruchomosci/i.test(full)) return;
 
@@ -115,18 +167,29 @@ function parseSearch(
     const card = $(el).closest("article, li, div").first();
 
     const title =
-      optString(card.find("h2,h3").first().text()) ??
+      optString(normalizeText(card.find("h2,h3").first().text())) ??
       optString($(el).attr("title")) ??
       optString($(el).attr("aria-label")) ??
       null;
 
-    const priceText = optString(card.find("[class*='price']").first().text()) ?? null;
+    const rawPriceText =
+      optString(normalizeText(card.find("[class*='price']").first().text())) ??
+      optString(normalizeText(card.text())) ??
+      null;
 
-    const price_amount = parseNumberLoose(priceText);
-    const currency = currencyFromText(priceText);
+    let price_amount = parseNumberLoose(rawPriceText);
+    const currency = currencyFromText(rawPriceText);
+
+    if (looksLikePricePerSqm(rawPriceText)) {
+      price_amount = null;
+    }
 
     const location_text =
-      optString(card.find("[class*='address'],[class*='location']").first().text()) ?? null;
+      optString(
+        normalizeText(
+          card.find("[class*='address'],[class*='location']").first().text()
+        )
+      ) ?? null;
 
     const thumb =
       optString(card.find("img").first().attr("src")) ??
@@ -141,7 +204,10 @@ function parseSearch(
       currency,
       location_text,
       thumb_url: thumb,
-      transaction_type: inferTxFromText(priceText),
+      transaction_type:
+        inferTxFromText(rawPriceText) ??
+        inferTxFromText(title) ??
+        null,
     });
   });
 
