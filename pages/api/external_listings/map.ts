@@ -1,21 +1,24 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { pool } from "../../../lib/neonDb";
 import { getUserIdFromRequest } from "../../../lib/session";
-import { getOfficeIdForUserId } from "../../../lib/office";
 
 function parseBbox(v: unknown) {
   if (typeof v !== "string") return null;
   const parts = v.split(",").map(Number);
   if (parts.length !== 4) return null;
+
   const [minLng, minLat, maxLng, maxLat] = parts;
   if (![minLng, minLat, maxLng, maxLat].every(Number.isFinite)) return null;
   if (minLng > maxLng || minLat > maxLat) return null;
+
   return { minLng, minLat, maxLng, maxLat };
 }
 
 function optNumber(v: unknown): number | null {
   if (typeof v === "number" && Number.isFinite(v)) return v;
-  if (typeof v === "string" && v.trim() && Number.isFinite(Number(v))) return Number(v);
+  if (typeof v === "string" && v.trim() && Number.isFinite(Number(v))) {
+    return Number(v);
+  }
   return null;
 }
 
@@ -29,27 +32,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.setHeader("Cache-Control", "no-store");
 
     const userId = getUserIdFromRequest(req);
-    if (!userId) return res.status(401).json({ error: "UNAUTHORIZED" });
-
-    const officeId = await getOfficeIdForUserId(userId);
-    if (!officeId) return res.status(400).json({ error: "MISSING_OFFICE_ID" });
+    if (!userId) {
+      return res.status(401).json({ error: "UNAUTHORIZED" });
+    }
 
     const bbox = parseBbox(req.query.bbox);
-    const limitRaw = optNumber(req.query.limit) ?? 2000;
-    const limit = Math.min(Math.max(limitRaw, 1), 5000);
 
-    const params: any[] = [officeId];
+    const limitRaw = optNumber(req.query.limit) ?? 300;
+    const requestedLimit = Math.min(Math.max(limitRaw, 1), 1000);
+    const limit = bbox ? requestedLimit : Math.min(requestedLimit, 300);
+
+    const params: any[] = [];
     let where = `
-      el.office_id = $1::uuid
-      AND el.lat IS NOT NULL
+      el.lat IS NOT NULL
       AND el.lng IS NOT NULL
     `;
 
     if (bbox) {
       params.push(bbox.minLng, bbox.maxLng, bbox.minLat, bbox.maxLat);
       where += `
-        AND el.lng BETWEEN $2 AND $3
-        AND el.lat BETWEEN $4 AND $5
+        AND el.lng BETWEEN $1 AND $2
+        AND el.lat BETWEEN $3 AND $4
       `;
     }
 
@@ -77,7 +80,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(200).json({
       ok: true,
-      officeId,
       count: rows.length,
       pins: rows,
     });

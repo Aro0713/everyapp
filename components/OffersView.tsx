@@ -687,7 +687,7 @@ async function refreshEverybotList() {
 async function loadMapPins() {
   try {
     const qs = new URLSearchParams();
-    qs.set("limit", "5000");
+    qs.set("limit", "500");
 
     const r = await fetch(`/api/external_listings/map?${qs.toString()}`);
     const j = await r.json().catch(() => null);
@@ -1083,7 +1083,7 @@ function EverybotLoadingGlass({ title, subtitle }: { title: string; subtitle: st
         <div className="relative h-14 w-14">
           <div className="absolute inset-0 rounded-full border border-white/10 bg-white/10 shadow-inner" />
           <img
-            src="/brand/everyapp-logo.svg"
+            src="/everyapp-logo.svg"
             alt="EveryAPP"
             className="absolute inset-[8px] h-[calc(100%-16px)] w-[calc(100%-16px)] animate-[spinSlow_1.8s_linear_infinite]"
             draggable={false}

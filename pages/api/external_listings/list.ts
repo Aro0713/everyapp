@@ -270,102 +270,168 @@ function scoreFiltersWithRelax(scoreFilters: any, relaxed: RelaxedFlags) {
 
 function buildListSql(whereSql: string, orderBy: string, pLimit: number, pOffset?: number) {
   return `
-    WITH action_agg AS (
+    WITH base_rows AS (
       SELECT
-        external_listing_id,
-        (ARRAY_AGG(office_id ORDER BY created_at DESC))[1] AS handled_by_office_id,
-        MAX(created_at) AS last_interaction_at,
-        (ARRAY_AGG(action ORDER BY created_at DESC))[1] AS last_action,
-        MIN(created_at) FILTER (WHERE action = 'save') AS handled_since
-      FROM external_listing_actions
-      GROUP BY external_listing_id
+        l.id,
+        l.office_id,
+
+        l.source,
+        l.source_listing_id,
+        l.source_url,
+
+        l.status,
+        l.shortlisted,
+
+        l.title,
+        l.description,
+
+        l.price_amount,
+        l.currency,
+        l.location_text,
+
+        l.thumb_url,
+
+        l.imported_at,
+        l.matched_at,
+        l.first_seen_at,
+        l.last_seen_at,
+        l.last_checked_at,
+        l.enriched_at,
+        l.updated_at,
+
+        l.transaction_type,
+        l.property_type,
+
+        l.area_m2,
+        l.price_per_m2,
+        l.rooms,
+        l.floor,
+        l.year_built,
+
+        l.voivodeship,
+        l.city,
+        l.district,
+        l.street,
+
+        l.owner_phone,
+        l.source_status,
+        l.phone_last9,
+
+        l.lat,
+        l.lng,
+        l.geocoded_at,
+        l.geocode_source,
+        l.geocode_confidence,
+
+        l.rcn_last_price,
+        l.rcn_last_date,
+        l.rcn_link,
+        l.rcn_enriched_at
+      FROM external_listings l
+      WHERE ${whereSql}
+      ORDER BY ${orderBy}
+      LIMIT $${pLimit}::int
+      ${typeof pOffset === "number" ? `OFFSET $${pOffset}::int` : ``}
+    ),
+    action_agg AS (
+      SELECT
+        ela.external_listing_id,
+        (ARRAY_AGG(ela.office_id ORDER BY ela.created_at DESC))[1] AS handled_by_office_id,
+        MAX(ela.created_at) AS last_interaction_at,
+        (ARRAY_AGG(ela.action ORDER BY ela.created_at DESC))[1] AS last_action,
+        MIN(ela.created_at) FILTER (WHERE ela.action = 'save') AS handled_since
+      FROM external_listing_actions ela
+      WHERE ela.external_listing_id IN (SELECT id FROM base_rows)
+      GROUP BY ela.external_listing_id
     ),
     my_saved AS (
       SELECT
-        external_listing_id,
+        ela.external_listing_id,
         TRUE AS my_office_saved
-      FROM external_listing_actions
-      WHERE office_id = $1::uuid AND action = 'save'
-      GROUP BY external_listing_id
+      FROM external_listing_actions ela
+      WHERE ela.office_id = $1::uuid
+        AND ela.action = 'save'
+        AND ela.external_listing_id IN (SELECT id FROM base_rows)
+      GROUP BY ela.external_listing_id
+    ),
+    phone_counts AS (
+      SELECT
+        b.id AS external_listing_id,
+        GREATEST(COUNT(x.id)::int - 1, 0) AS same_phone_offers_count
+      FROM base_rows b
+      LEFT JOIN external_listings x
+        ON x.phone_last9 = b.phone_last9
+       AND b.phone_last9 IS NOT NULL
+       AND b.phone_last9 <> ''
+      GROUP BY b.id
     )
     SELECT
-      l.id,
-      l.office_id,
+      b.id,
+      b.office_id,
 
-      l.source,
-      l.source_listing_id,
-      l.source_url,
+      b.source,
+      b.source_listing_id,
+      b.source_url,
 
-      l.status,
-      l.shortlisted,
+      b.status,
+      b.shortlisted,
 
-      l.title,
-      l.description,
+      b.title,
+      b.description,
 
-      l.price_amount,
-      l.currency,
-      l.location_text,
+      b.price_amount,
+      b.currency,
+      b.location_text,
 
-      l.thumb_url,
+      b.thumb_url,
 
-      l.imported_at,
-      l.matched_at,
-      l.first_seen_at,
-      l.last_seen_at,
-      l.last_checked_at,
-      l.enriched_at,
-      l.updated_at,
+      b.imported_at,
+      b.matched_at,
+      b.first_seen_at,
+      b.last_seen_at,
+      b.last_checked_at,
+      b.enriched_at,
+      b.updated_at,
 
-      l.transaction_type,
-      l.property_type,
+      b.transaction_type,
+      b.property_type,
 
-      l.area_m2,
-      l.price_per_m2,
-      l.rooms,
-      l.floor,
-      l.year_built,
+      b.area_m2,
+      b.price_per_m2,
+      b.rooms,
+      b.floor,
+      b.year_built,
 
-      l.voivodeship,
-      l.city,
-      l.district,
-      l.street,
+      b.voivodeship,
+      b.city,
+      b.district,
+      b.street,
 
-      l.owner_phone,
-      l.source_status,
-      COALESCE(ph.same_phone_offers_count, 0) AS same_phone_offers_count,
+      b.owner_phone,
+      b.source_status,
+      COALESCE(pc.same_phone_offers_count, 0) AS same_phone_offers_count,
 
-      l.lat,
-      l.lng,
-      l.geocoded_at,
-      l.geocode_source,
-      l.geocode_confidence,
+      b.lat,
+      b.lng,
+      b.geocoded_at,
+      b.geocode_source,
+      b.geocode_confidence,
 
-      l.rcn_last_price,
-      l.rcn_last_date,
-      l.rcn_link,
-      l.rcn_enriched_at,
+      b.rcn_last_price,
+      b.rcn_last_date,
+      b.rcn_link,
+      b.rcn_enriched_at,
 
       a.handled_by_office_id,
       a.handled_since,
       a.last_interaction_at,
       a.last_action,
       COALESCE(ms.my_office_saved, FALSE) AS my_office_saved
-      
-      FROM external_listings l
-      LEFT JOIN action_agg a ON a.external_listing_id = l.id
-      LEFT JOIN my_saved ms ON ms.external_listing_id = l.id
-      LEFT JOIN LATERAL (
-      SELECT COUNT(*)::int AS same_phone_offers_count
-      FROM external_listings x
-      WHERE x.id <> l.id
-        AND RIGHT(REGEXP_REPLACE(COALESCE(x.owner_phone, x.phone, ''), '[^0-9]', '', 'g'), 9) <> ''
-        AND RIGHT(REGEXP_REPLACE(COALESCE(x.owner_phone, x.phone, ''), '[^0-9]', '', 'g'), 9) =
-            RIGHT(REGEXP_REPLACE(COALESCE(l.owner_phone, l.phone, ''), '[^0-9]', '', 'g'), 9)
-      ) ph ON TRUE
-      WHERE ${whereSql}
-      ORDER BY ${orderBy}
-      LIMIT $${pLimit}::int
-    ${typeof pOffset === "number" ? `OFFSET $${pOffset}::int` : ``}
+    FROM base_rows b
+    LEFT JOIN action_agg a ON a.external_listing_id = b.id
+    LEFT JOIN my_saved ms ON ms.external_listing_id = b.id
+    LEFT JOIN phone_counts pc ON pc.external_listing_id = b.id
+    ORDER BY ${orderBy}
   `;
 }
 
@@ -674,7 +740,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const total = Number(countRes.rows?.[0]?.cnt ?? "0");
       const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
 
-      const overfetch = Math.min(limit * 10, 2000);
+      const overfetch = Math.min(limit * 3, 200);
       const offset = (page - 1) * limit;
 
       const sql = buildListSql(where.join(" AND "), orderBy, p, p + 1);
@@ -755,7 +821,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       p += 2;
     }
 
-    const overfetch = Math.min(limit * 10, 2000);
+    const overfetch = Math.min(limit * 3, 200);
     params.push(overfetch);
 
     const sql = buildListSql(where.join(" AND "), orderBy, p);
