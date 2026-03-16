@@ -20,6 +20,11 @@ type Props = {
   onSelectId?: (id: string) => void;
 };
 
+type UserLocation = {
+  lat: number;
+  lng: number;
+} | null;
+
 function escapeHtml(s: string) {
   return s
     .replaceAll("&", "&amp;")
@@ -28,6 +33,7 @@ function escapeHtml(s: string) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 }
+
 function fmtPrice(v: unknown, currency?: unknown) {
   const cur = String(currency ?? "").trim();
   if (v === null || v === undefined || v === "") return "";
@@ -47,6 +53,7 @@ export default function EverybotMap({ pins, onSelectId }: Props) {
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
+  const [userLocation, setUserLocation] = useState<UserLocation>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -60,9 +67,7 @@ export default function EverybotMap({ pins, onSelectId }: Props) {
 
     mapRef.current = map;
 
-    // DIAG: jeśli styl/tiles są blokowane (np. CSP), zobaczysz to w konsoli
     map.on("error", (ev) => {
-      // eslint-disable-next-line no-console
       console.error("[EveryBOT][MAP_ERROR]", (ev as any)?.error ?? ev);
     });
 
@@ -83,7 +88,24 @@ export default function EverybotMap({ pins, onSelectId }: Props) {
           "circle-stroke-color": "#ffffff",
         },
       });
-      
+
+      map.addSource("user-location", {
+        type: "geojson",
+        data: buildUserLocationGeoJson(userLocation),
+      });
+
+      map.addLayer({
+        id: "user-location-layer",
+        type: "circle",
+        source: "user-location",
+        paint: {
+          "circle-radius": 8,
+          "circle-color": "#ef4444",
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#ffffff",
+        },
+      });
+
       map.on("mousemove", "pins-layer", (e) => {
         const f = e.features?.[0];
         const pid = String((f as any)?.properties?.id ?? "");
@@ -111,9 +133,9 @@ export default function EverybotMap({ pins, onSelectId }: Props) {
         const props: any = feature.properties ?? {};
         console.log("[EveryBOT][POPUP] props keys:", Object.keys(props));
         console.log("[EveryBOT][POPUP] props:", props);
+
         const id = String(props.id ?? "");
         if (!id) return;
-
         if (feature.geometry.type !== "Point") return;
 
         const coords = (feature.geometry as Point).coordinates;
@@ -133,7 +155,6 @@ export default function EverybotMap({ pins, onSelectId }: Props) {
 
         if (onSelectId) onSelectId(id);
 
-        // === POPUP z danych feature.properties ===
         const titleRaw = String(props.title ?? "").trim();
         const title = escapeHtml(titleRaw || String(props.id ?? "Oferta"));
 
@@ -187,7 +208,6 @@ export default function EverybotMap({ pins, onSelectId }: Props) {
           .addTo(map);
       });
 
-      // auto-fit przy starcie
       if (pins.length > 0) {
         const bounds = new maplibregl.LngLatBounds();
         pins.forEach((p) => bounds.extend([p.lng, p.lat]));
@@ -202,11 +222,40 @@ export default function EverybotMap({ pins, onSelectId }: Props) {
   }, []);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!navigator.geolocation) return;
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserLocation({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        });
+      },
+      (err) => {
+        console.warn("[EveryBOT][GEOLOCATION_ERROR]", err);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000,
+      }
+    );
+  }, []);
+
+  useEffect(() => {
     if (!mapRef.current) return;
     const source = mapRef.current.getSource("pins") as maplibregl.GeoJSONSource;
     if (!source) return;
     source.setData(buildGeoJson(pins));
   }, [pins]);
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const source = mapRef.current.getSource("user-location") as maplibregl.GeoJSONSource;
+    if (!source) return;
+    source.setData(buildUserLocationGeoJson(userLocation));
+  }, [userLocation]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -216,19 +265,19 @@ export default function EverybotMap({ pins, onSelectId }: Props) {
     map.setPaintProperty("pins-layer", "circle-color", [
       "case",
       ["==", ["get", "id"], selectedId],
-      "#ef4444", // selected
+      "#ef4444",
       ["==", ["get", "id"], hoverId],
-      "#f59e0b", // hover
-      "#2563eb", // normal
+      "#f59e0b",
+      "#2563eb",
     ]);
 
     map.setPaintProperty("pins-layer", "circle-radius", [
       "case",
       ["==", ["get", "id"], selectedId],
-      11, // selected
+      11,
       ["==", ["get", "id"], hoverId],
-      9, // hover
-      6, // normal
+      9,
+      6,
     ]);
   }, [selectedId, hoverId]);
 
@@ -250,6 +299,26 @@ export default function EverybotMap({ pins, onSelectId }: Props) {
           currency: pin.currency ?? "",
         },
       })),
+    };
+  }
+
+  function buildUserLocationGeoJson(userLocation: UserLocation): FeatureCollection<Point> {
+    return {
+      type: "FeatureCollection",
+      features: userLocation
+        ? [
+            {
+              type: "Feature",
+              geometry: {
+                type: "Point",
+                coordinates: [userLocation.lng, userLocation.lat],
+              },
+              properties: {
+                id: "user-location",
+              },
+            },
+          ]
+        : [],
     };
   }
 
