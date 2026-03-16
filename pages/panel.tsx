@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
 import { DEFAULT_LANG, isLangKey, t } from "@/utils/i18n";
@@ -258,6 +258,7 @@ export default function PanelPage() {
   const [statsError, setStatsError] = useState<string | null>(null);
   const [runStatus, setRunStatus] = useState<"idle" | "running" | "success" | "error">("idle");
   const [runMessage, setRunMessage] = useState<string | null>(null);
+  const statsRequestSeqRef = useRef(0);
 
   async function runCrawlerBackfill() {
     try {
@@ -285,12 +286,14 @@ export default function PanelPage() {
     }
   }
 
-  async function fetchPhoneBackfillStats(scope: BackfillScope) {
+async function fetchPhoneBackfillStats(scope: BackfillScope) {
+  const requestSeq = ++statsRequestSeqRef.current;
+
   try {
     setStatsLoading(true);
     setStatsError(null);
 
-    console.log("PHONE_BACKFILL_FETCH_SCOPE_REQUEST", scope);
+    console.log("PHONE_BACKFILL_FETCH_SCOPE_REQUEST", { scope, requestSeq });
 
     const res = await fetch(`/api/external_listings/phone-backfill-stats?scope=${scope}`, {
       method: "GET",
@@ -303,7 +306,14 @@ export default function PanelPage() {
       requestedScope: scope,
       responseScope: data?.scope ?? null,
       allListings: data?.allListings ?? null,
+      requestSeq,
+      latestRequestSeq: statsRequestSeqRef.current,
     });
+
+    if (requestSeq !== statsRequestSeqRef.current) {
+      console.log("PHONE_BACKFILL_FETCH_SCOPE_IGNORED", { scope, requestSeq });
+      return;
+    }
 
     if (!res.ok) {
       setStatsError(data?.error ?? "STATS_ERROR");
@@ -312,16 +322,22 @@ export default function PanelPage() {
 
     setStats(data);
   } catch (err) {
+    if (requestSeq !== statsRequestSeqRef.current) {
+      console.log("PHONE_BACKFILL_FETCH_ERROR_IGNORED", { scope, requestSeq });
+      return;
+    }
+
     console.error("PHONE_BACKFILL_FETCH_ERROR", err);
     setStatsError("STATS_ERROR");
   } finally {
-    setStatsLoading(false);
+    if (requestSeq === statsRequestSeqRef.current) {
+      setStatsLoading(false);
+    }
   }
 }
-async function switchBackfillScope(scope: BackfillScope) {
+function switchBackfillScope(scope: BackfillScope) {
   console.log("PHONE_BACKFILL_SWITCH_SCOPE_CLICK", scope);
   setBackfillScope(scope);
-  await fetchPhoneBackfillStats(scope);
 }
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 1024); // <lg
@@ -340,11 +356,11 @@ async function switchBackfillScope(scope: BackfillScope) {
     const c = getCookie("lang");
     if (isLangKey(c)) setLang(c);
   }, []);
-  useEffect(() => {
+ useEffect(() => {
     if (activeView === "reports") {
       fetchPhoneBackfillStats(backfillScope);
     }
-  }, [activeView]);
+  }, [activeView, backfillScope]);
 
     const nav = useMemo<NavItem[]>(
     () => [
@@ -1206,9 +1222,6 @@ function handleAgentAction(action: any) {
                     }
                   >
                    <div className="space-y-5">
-                      <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-xs text-amber-100">
-                        UI scope: <strong>{backfillScope}</strong> | API scope: <strong>{stats?.scope ?? "-"}</strong> | listings: <strong>{stats?.allListings ?? 0}</strong>
-                      </div>
                         {statsLoading ? (
                           <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 px-4 py-10 text-sm text-white/60">
                             {t(lang, "panelCrawlerLoading" as any)}
