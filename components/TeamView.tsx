@@ -1,4 +1,3 @@
-// components/TeamView.tsx
 import { useEffect, useMemo, useState } from "react";
 import { DEFAULT_LANG, isLangKey, t } from "@/utils/i18n";
 import type { LangKey } from "@/utils/translations";
@@ -8,6 +7,10 @@ function getCookie(name: string) {
   if (typeof document === "undefined") return null;
   const m = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
   return m ? decodeURIComponent(m[2]) : null;
+}
+
+function clsx(...xs: Array<string | false | null | undefined>) {
+  return xs.filter(Boolean).join(" ");
 }
 
 type Me = {
@@ -27,6 +30,14 @@ type MemberRow = {
   role: string;
   status: string;
   created_at: string;
+};
+
+type ProfilePermRow = {
+  key: string;
+  category: string;
+  allowed: boolean;
+  profileAllowed: boolean;
+  source: "profile" | "override" | "default";
 };
 
 const ROLE_OPTIONS = [
@@ -67,7 +78,22 @@ const STATUS_LABEL_KEY: Record<string, string> = {
   revoked: "teamStatusRevoked",
 };
 
-type ProfilePermRow = { key: string; category: string; allowed: boolean };
+function getProfileNameForRole(role: string | null | undefined) {
+  if (role === "agent") return "Agent";
+  if (role === "manager") return "Manager";
+  if (["office_admin", "admin", "owner", "company_admin"].includes(role ?? "")) return "Office Admin";
+  return "—";
+}
+
+function getSourceBadgeClasses(source: ProfilePermRow["source"]) {
+  if (source === "override") {
+    return "border-amber-400/30 bg-amber-400/15 text-amber-200";
+  }
+  if (source === "profile") {
+    return "border-emerald-400/30 bg-emerald-400/15 text-emerald-200";
+  }
+  return "border-white/10 bg-white/10 text-white/65";
+}
 
 export default function TeamView() {
   const [me, setMe] = useState<Me>({ userId: null });
@@ -106,15 +132,28 @@ export default function TeamView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, me.userId, me.membershipRole, canManage]);
 
+  const selectedRows = useMemo(() => {
+    const selectedSet = new Set(selectedMembershipIds);
+    return rows.filter((r) => selectedSet.has(r.membership_id));
+  }, [rows, selectedMembershipIds]);
+
+  const selectedProfileSummary = useMemo(() => {
+    if (selectedRows.length === 0) return "—";
+    const names = Array.from(new Set(selectedRows.map((r) => getProfileNameForRole(r.role))));
+    if (names.length === 1) return names[0];
+    return `${t(lang, "teamSelectedCount" as any) ?? "Wybrano"}: ${selectedRows.length}`;
+  }, [selectedRows, lang]);
+
   async function load() {
     setLoading(true);
     setError(null);
+
     try {
-      const rMe = await fetch("/api/me");
+      const rMe = await fetch("/api/me", { cache: "no-store" });
       const meData = await rMe.json();
       setMe(meData);
 
-      const r = await fetch("/api/team/members");
+      const r = await fetch("/api/team/members", { cache: "no-store" });
       if (!r.ok) {
         throw new Error(t(lang, "teamErrorFetchMembers" as any) ?? "Failed to load team");
       }
@@ -166,6 +205,7 @@ export default function TeamView() {
   async function updateMembership(membershipId: string, patch: { role?: string; status?: string }) {
     setSavingId(membershipId);
     setError(null);
+
     try {
       const r = await fetch("/api/team/update-membership", {
         method: "PATCH",
@@ -177,6 +217,12 @@ export default function TeamView() {
       if (!r.ok) throw new Error(j?.error || (t(lang, "teamErrorSave" as any) ?? "Save failed"));
 
       await load();
+
+      if (selectedMembershipIds.includes(membershipId)) {
+        await loadMembershipPerms(membershipId);
+      }
+
+      setSuccessMessage(t(lang, "teamPermissionsSaved" as any) ?? "Zmiany zapisane.");
     } catch (e: any) {
       setError(e?.message ?? (t(lang, "teamErrorGeneric" as any) ?? "Error"));
     } finally {
@@ -203,7 +249,7 @@ export default function TeamView() {
         const j = await r.json().catch(() => null);
         if (!r.ok) throw new Error(j?.error || "Błąd zapisu uprawnień");
 
-        setPermSaved({ ...permDraft });
+        await loadMembershipPerms(id);
         setSuccessMessage(t(lang, "teamPermissionsSaved" as any) ?? "Zmiany zapisane.");
         return;
       }
@@ -217,7 +263,7 @@ export default function TeamView() {
       const j = await r.json().catch(() => null);
       if (!r.ok) throw new Error(j?.error || "Błąd zapisu uprawnień (batch)");
 
-      setPermSaved({ ...permDraft });
+      await loadMembershipPerms(selectedMembershipIds[0]);
       setSuccessMessage(t(lang, "teamPermissionsSaved" as any) ?? "Zmiany zapisane.");
     } catch (e: any) {
       setError(e?.message ?? (t(lang, "teamErrorGeneric" as any) ?? "Error"));
@@ -229,6 +275,7 @@ export default function TeamView() {
   async function loadMembershipPerms(membershipId: string) {
     setPermBusy(true);
     setError(null);
+
     try {
       const r = await fetch(`/api/permissions/membership?id=${encodeURIComponent(membershipId)}`, {
         cache: "no-store",
@@ -252,24 +299,19 @@ export default function TeamView() {
     }
   }
 
-  function cancelPermissions() {
-    setPermDraft({ ...permSaved });
-  }
-
   return (
-    // UWAGA: usuwamy twarde p-6, bo padding robi panel. Zostawiamy tylko tło i typografię.
-    <div className="min-h-screen text-ew-primary">
-      <div className="mx-auto max-w-6xl">
+    <div className="min-h-screen text-white">
+      <div className="mx-auto max-w-7xl">
         {/* HEADER */}
-        <div className="mb-6 flex items-start justify-between gap-4">
+        <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h1 className="text-2xl font-extrabold tracking-tight">
+            <h1 className="text-2xl font-extrabold tracking-tight text-white">
               {t(lang, "teamTitle" as any) ?? "Team management"}
             </h1>
 
-            <p className="mt-1 text-sm text-gray-600">
-              {me.fullName ? `${me.fullName} (${me.email})` : "—"}{" "}
-              {me.officeName ? `• ${me.officeName}` : ""}
+            <p className="mt-1 text-sm text-white/60">
+              {me.fullName ? `${me.fullName} (${me.email})` : "—"}
+              {me.officeName ? ` • ${me.officeName}` : ""}
               {me.membershipRole
                 ? ` • ${t(lang, ROLE_LABEL_KEY[me.membershipRole] as any) ?? me.membershipRole}`
                 : ""}
@@ -277,37 +319,53 @@ export default function TeamView() {
           </div>
 
           <button
-            className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold shadow-sm hover:bg-ew-accent/10"
+            type="button"
+            className="inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-white/15"
             onClick={load}
           >
             {t(lang, "teamRefresh" as any) ?? "Refresh"}
           </button>
         </div>
 
-        {/* ERROR */}
+        {/* ALERTS */}
         {error ? (
-          <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <div className="mb-4 rounded-2xl border border-rose-500/20 bg-rose-500/10 p-4 text-sm text-rose-200">
             {error}
           </div>
         ) : null}
 
         {successMessage ? (
-          <div className="mb-4 rounded-2xl border border-green-200 bg-green-50 p-3 text-sm text-green-700">
+          <div className="mb-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-200">
             {successMessage}
           </div>
         ) : null}
 
         {/* TEAM TABLE */}
-        <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="rounded-3xl border border-white/10 bg-slate-950/55 p-4 shadow-2xl backdrop-blur-xl">
+          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-base font-extrabold tracking-tight text-white">
+                {t(lang, "panelNavTeam" as any) ?? "Team"}
+              </h2>
+              <p className="mt-0.5 text-xs text-white/50">
+                {t(lang, "teamSubtitle" as any) ?? "Members, roles and statuses"}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white/75">
+              {t(lang, "teamSelectedCount" as any) ?? "Selected"}: {selectedMembershipIds.length}
+            </div>
+          </div>
+
           {loading ? (
-            <div className="p-6 text-sm text-gray-600">
+            <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 p-6 text-sm text-white/60">
               {t(lang, "teamLoading" as any) ?? "Loading…"}
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="text-left text-gray-600">
-                  <tr className="border-b">
+              <table className="min-w-full text-sm text-white">
+                <thead className="text-left text-white/60">
+                  <tr className="border-b border-white/10">
                     <th className="py-3 pr-4">
                       <input
                         type="checkbox"
@@ -320,7 +378,7 @@ export default function TeamView() {
                         onChange={(e) => {
                           setSelectedMembershipIds(e.target.checked ? selectableMembershipIds : []);
                         }}
-                        className="h-4 w-4 rounded border-gray-300"
+                        className="h-4 w-4 rounded border-white/20 bg-transparent"
                       />
                     </th>
 
@@ -339,8 +397,8 @@ export default function TeamView() {
                     const disabled = !canManage || isSelf || rank(r.role) >= rank(me.membershipRole);
 
                     return (
-                      <tr key={r.membership_id} className="border-b last:border-b-0">
-                        <td className="py-3 pr-4">
+                      <tr key={r.membership_id} className="border-b border-white/10 last:border-b-0">
+                        <td className="py-3 pr-4 align-top">
                           <input
                             type="checkbox"
                             aria-label="Select member"
@@ -353,46 +411,57 @@ export default function TeamView() {
                                   : prev.filter((id) => id !== r.membership_id)
                               );
                             }}
-                            className="h-4 w-4 rounded border-gray-300 disabled:opacity-50"
+                            className="mt-1 h-4 w-4 rounded border-white/20 bg-transparent disabled:opacity-40"
                           />
                         </td>
 
-                        <td className="py-3 pr-4 font-semibold">{r.user_full_name ?? "—"}</td>
-                        <td className="py-3 pr-4">{r.user_email ?? "—"}</td>
-                        <td className="py-3 pr-4">{r.user_phone ?? "—"}</td>
+                        <td className="py-3 pr-4 align-top">
+                          <div className="font-semibold text-white">{r.user_full_name ?? "—"}</div>
+                          <div className="mt-1 text-xs text-white/45">
+                            {getProfileNameForRole(r.role)}
+                          </div>
+                        </td>
 
-                        <td className="py-3 pr-4">
+                        <td className="py-3 pr-4 align-top text-white/80">{r.user_email ?? "—"}</td>
+                        <td className="py-3 pr-4 align-top text-white/80">{r.user_phone ?? "—"}</td>
+
+                        <td className="py-3 pr-4 align-top">
                           <select
-                            className="w-56 rounded-xl border border-gray-200 bg-white px-3 py-2"
+                            className="w-56 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm text-white outline-none transition focus:border-white/30"
                             value={r.role}
                             disabled={disabled || savingId === r.membership_id}
                             onChange={(e) => updateMembership(r.membership_id, { role: e.target.value })}
                           >
                             {ROLE_OPTIONS.map((opt) => (
-                              <option key={opt} value={opt} disabled={rank(opt) >= rank(me.membershipRole)}>
+                              <option
+                                key={opt}
+                                value={opt}
+                                disabled={rank(opt) >= rank(me.membershipRole)}
+                                className="bg-slate-900 text-white"
+                              >
                                 {t(lang, (ROLE_LABEL_KEY[opt] ?? opt) as any) ?? opt}
                               </option>
                             ))}
                           </select>
                         </td>
 
-                        <td className="py-3 pr-4">
+                        <td className="py-3 pr-4 align-top">
                           <select
-                            className="w-40 rounded-xl border border-gray-200 bg-white px-3 py-2"
+                            className="w-40 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm text-white outline-none transition focus:border-white/30"
                             value={r.status}
                             disabled={disabled || savingId === r.membership_id}
                             onChange={(e) => updateMembership(r.membership_id, { status: e.target.value })}
                           >
                             {["active", "pending", "rejected", "revoked"].map((s) => (
-                              <option key={s} value={s}>
+                              <option key={s} value={s} className="bg-slate-900 text-white">
                                 {t(lang, (STATUS_LABEL_KEY[s] ?? s) as any) ?? s}
                               </option>
                             ))}
                           </select>
                         </td>
 
-                        <td className="py-3 pr-0">
-                          <span className="text-xs text-gray-500">
+                        <td className="py-3 pr-0 align-top">
+                          <span className="text-xs text-white/50">
                             {isSelf
                               ? t(lang, "teamSelfLabel" as any) ?? "You"
                               : disabled
@@ -407,7 +476,7 @@ export default function TeamView() {
               </table>
 
               {!rows.length ? (
-                <div className="p-6 text-sm text-gray-600">
+                <div className="p-6 text-sm text-white/60">
                   {t(lang, "teamNoMembers" as any) ?? "No team members."}
                 </div>
               ) : null}
@@ -416,29 +485,73 @@ export default function TeamView() {
         </div>
 
         {/* PERMISSIONS */}
-        <div className="mt-6 rounded-3xl border border-ew-accent/30 bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-lg font-extrabold tracking-tight text-ew-primary flex items-center gap-2">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-ew-accent/20 text-ew-accent">
-                ⚙️
-              </span>
-              {t(lang, "teamPermissionsTitle" as any) ?? "Uprawnienia"}
-            </h2>
+        <div className="mt-6 rounded-3xl border border-white/10 bg-slate-950/55 p-6 shadow-2xl backdrop-blur-xl">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <h2 className="flex items-center gap-2 text-lg font-extrabold tracking-tight text-white">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-ew-accent/20 text-ew-accent">
+                  ⚙️
+                </span>
+                {t(lang, "teamPermissionsTitle" as any) ?? "Permissions"}
+              </h2>
 
-            <div className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-ew-primary shadow-sm">
+              <p className="mt-1 text-sm text-white/55">
+                {selectedMembershipIds.length === 0
+                  ? (t(lang, "teamPermissionsSelectMembers" as any) ??
+                    "Select one or more members from the table above.")
+                  : selectedMembershipIds.length === 1
+                  ? `${t(lang, "teamColumnRole" as any) ?? "Role"}: ${
+                      t(
+                        lang,
+                        (ROLE_LABEL_KEY[selectedRows[0]?.role ?? ""] ?? selectedRows[0]?.role ?? "") as any
+                      ) ?? selectedRows[0]?.role ?? "—"
+                    } • ${t(lang, "teamPermissionsTitle" as any) ?? "Permissions profile"}: ${selectedProfileSummary}`
+                  : `${t(lang, "teamSelectedCount" as any) ?? "Selected"}: ${selectedMembershipIds.length}`}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white/85 shadow-sm">
               {selectedMembershipIds.length === 0
                 ? (t(lang, "teamPermissionsSelectMembers" as any) ??
-                    "Zaznacz użytkownika(ów) z listy powyżej.")
-                : `${t(lang, "teamSelectedCount" as any) ?? "Wybrano"}: ${selectedMembershipIds.length}`}
+                  "Select one or more members from the table above.")
+                : `${t(lang, "teamSelectedCount" as any) ?? "Selected"}: ${selectedMembershipIds.length}`}
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <p className="text-xs text-white/50">{t(lang, "teamColumnRole" as any) ?? "Role"}</p>
+              <p className="mt-1 text-sm font-bold text-white">
+                {selectedMembershipIds.length === 1
+                  ? t(
+                      lang,
+                      (ROLE_LABEL_KEY[selectedRows[0]?.role ?? ""] ?? selectedRows[0]?.role ?? "") as any
+                    ) ?? selectedRows[0]?.role ?? "—"
+                  : "—"}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <p className="text-xs text-white/50">Permission profile</p>
+              <p className="mt-1 text-sm font-bold text-white">{selectedProfileSummary}</p>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <p className="text-xs text-white/50">Edit mode</p>
+              <p className="mt-1 text-sm font-bold text-white">
+                {selectedMembershipIds.length > 1 ? "Batch update" : "Single member"}
+              </p>
             </div>
           </div>
 
           {permBusy ? (
-            <div className="p-4 text-sm text-gray-600">{t(lang, "teamLoading" as any) ?? "Ładuję…"}</div>
+            <div className="mt-5 rounded-2xl border border-dashed border-white/15 bg-white/5 p-4 text-sm text-white/60">
+              {t(lang, "teamLoading" as any) ?? "Loading…"}
+            </div>
           ) : selectedMembershipIds.length === 0 ? (
-            <div className="p-4 text-sm text-gray-600">
+            <div className="mt-5 rounded-2xl border border-dashed border-white/15 bg-white/5 p-4 text-sm text-white/60">
               {t(lang, "teamPermissionsSelectMembers" as any) ??
-                "Zaznacz użytkownika(ów) z listy powyżej."}
+                "Select one or more members from the table above."}
             </div>
           ) : profilePerms.length ? (
             Object.entries(
@@ -447,48 +560,90 @@ export default function TeamView() {
                 return acc;
               }, {})
             ).map(([category, items]) => (
-              <div key={category} className="mt-5">
-                <div className="flex items-center gap-3">
+              <div key={category} className="mt-6">
+                <div className="mb-3 flex items-center gap-3">
                   <div className="h-6 w-1 rounded-full bg-ew-accent" />
-                  <div className="text-sm font-extrabold text-ew-primary uppercase tracking-wide">
+                  <div className="text-sm font-extrabold uppercase tracking-wide text-white">
                     {t(lang, (PERMISSION_CATEGORY_KEY[category] ?? category) as any) ?? category}
                   </div>
                 </div>
 
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {items.map((p) => (
-                    <label
-                      key={p.key}
-                      className="flex items-center gap-3 rounded-2xl border border-ew-accent/30 bg-ew-accent/5 px-4 py-3 transition hover:bg-ew-accent/10"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={!!permDraft[p.key]}
-                        onChange={(e) => setPermDraft((d) => ({ ...d, [p.key]: e.target.checked }))}
-                        className="h-5 w-5 rounded-md border-gray-300 text-ew-accent focus:ring-ew-accent"
-                      />
-                      <span className="text-sm font-semibold text-ew-primary">
-                        {t(lang, (PERMISSION_LABEL_KEY[p.key] ?? p.key) as any) ?? p.key}
-                      </span>
-                    </label>
-                  ))}
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {items.map((p) => {
+                    const isDirty = permDraft[p.key] !== permSaved[p.key];
+
+                    return (
+                      <label
+                        key={p.key}
+                        className={clsx(
+                          "rounded-2xl border p-4 transition",
+                          "bg-white/5 hover:bg-white/8",
+                          isDirty ? "border-ew-accent/50 ring-1 ring-ew-accent/20" : "border-white/10"
+                        )}
+                      >
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="checkbox"
+                            checked={!!permDraft[p.key]}
+                            onChange={(e) =>
+                              setPermDraft((d) => ({ ...d, [p.key]: e.target.checked }))
+                            }
+                            className="mt-0.5 h-5 w-5 rounded-md border-white/20 bg-transparent text-ew-accent focus:ring-ew-accent"
+                          />
+
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-semibold text-white">
+                              {t(lang, (PERMISSION_LABEL_KEY[p.key] ?? p.key) as any) ?? p.key}
+                            </div>
+
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <span
+                                className={clsx(
+                                  "rounded-full border px-2.5 py-1 text-[11px] font-semibold",
+                                  getSourceBadgeClasses(p.source)
+                                )}
+                              >
+                                {p.source === "override"
+                                  ? "Override"
+                                  : p.source === "profile"
+                                  ? "Profile"
+                                  : "Default"}
+                              </span>
+
+                              <span className="rounded-full border border-white/10 bg-white/10 px-2.5 py-1 text-[11px] font-semibold text-white/70">
+                                Profile: {p.profileAllowed ? "ON" : "OFF"}
+                              </span>
+
+                              {isDirty ? (
+                                <span className="rounded-full border border-ew-accent/30 bg-ew-accent/15 px-2.5 py-1 text-[11px] font-semibold text-ew-accent">
+                                  Changed
+                                </span>
+                              ) : null}
+                            </div>
+
+                            <div className="mt-2 text-[11px] text-white/45">{p.key}</div>
+                          </div>
+                        </div>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
             ))
           ) : (
-            <div className="p-4 text-sm text-gray-600">
-              {t(lang, "teamPermissionsEmpty" as any) ?? "Brak zdefiniowanych uprawnień."}
+            <div className="mt-5 rounded-2xl border border-dashed border-white/15 bg-white/5 p-4 text-sm text-white/60">
+              {t(lang, "teamPermissionsEmpty" as any) ?? "No permissions defined."}
             </div>
           )}
 
-          <div className="mt-6 flex items-center justify-end gap-3">
+          <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
             <button
               type="button"
-              className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-ew-primary shadow-sm transition hover:bg-ew-accent/10 disabled:opacity-60"
+              className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-white/15 disabled:opacity-60"
               onClick={() => setPermDraft({ ...permSaved })}
               disabled={permBusy || selectedMembershipIds.length === 0}
             >
-              {t(lang, "teamCancel" as any) ?? "Anuluj"}
+              {t(lang, "teamCancel" as any) ?? "Cancel"}
             </button>
 
             <button
@@ -497,7 +652,7 @@ export default function TeamView() {
               onClick={savePermissions}
               disabled={permBusy || selectedMembershipIds.length === 0}
             >
-              {t(lang, "teamSave" as any) ?? "Zapisz zmiany"}
+              {t(lang, "teamSave" as any) ?? "Save changes"}
             </button>
           </div>
         </div>
