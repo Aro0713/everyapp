@@ -87,12 +87,14 @@ function getProfileNameForRole(role: string | null | undefined) {
 
 function getSourceBadgeClasses(source: ProfilePermRow["source"]) {
   if (source === "override") {
-    return "border-amber-400/30 bg-amber-400/15 text-amber-200";
+    return "border-amber-400/40 bg-amber-400/20 text-amber-200";
   }
+
   if (source === "profile") {
-    return "border-emerald-400/30 bg-emerald-400/15 text-emerald-200";
+    return "border-emerald-400/40 bg-emerald-400/20 text-emerald-200";
   }
-  return "border-white/10 bg-white/10 text-white/65";
+
+  return "border-rose-400/40 bg-rose-400/20 text-rose-200";
 }
 
 export default function TeamView() {
@@ -110,6 +112,9 @@ export default function TeamView() {
   const [permSaved, setPermSaved] = useState<Record<string, boolean>>({});
   const [permBusy, setPermBusy] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const [searchPerm, setSearchPerm] = useState("");
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const c = getCookie("lang");
@@ -201,6 +206,13 @@ export default function TeamView() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMembershipIds]);
+
+    function toggleSection(cat: string) {
+    setOpenSections((s) => ({
+      ...s,
+      [cat]: !s[cat],
+    }));
+  }
 
   async function updateMembership(membershipId: string, patch: { role?: string; status?: string }) {
     setSavingId(membershipId);
@@ -488,6 +500,18 @@ export default function TeamView() {
         <div className="mt-6 rounded-3xl border border-white/10 bg-slate-950/55 p-6 shadow-2xl backdrop-blur-xl">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
+              <div className="mt-4 flex items-center gap-3">
+                  <input
+                    value={searchPerm}
+                    onChange={(e) => setSearchPerm(e.target.value)}
+                    placeholder="Search permissions..."
+                    className="w-full max-w-md rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white outline-none"
+                  />
+
+                  <span className="text-xs text-white/50">
+                    {profilePerms.length} permissions
+                  </span>
+                </div>
               <h2 className="flex items-center gap-2 text-lg font-extrabold tracking-tight text-white">
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-ew-accent/20 text-ew-accent">
                   ⚙️
@@ -544,7 +568,7 @@ export default function TeamView() {
             </div>
           </div>
 
-          {permBusy ? (
+         {permBusy ? (
             <div className="mt-5 rounded-2xl border border-dashed border-white/15 bg-white/5 p-4 text-sm text-white/60">
               {t(lang, "teamLoading" as any) ?? "Loading…"}
             </div>
@@ -555,79 +579,109 @@ export default function TeamView() {
             </div>
           ) : profilePerms.length ? (
             Object.entries(
-              profilePerms.reduce<Record<string, ProfilePermRow[]>>((acc, p) => {
-                (acc[p.category] ||= []).push(p);
-                return acc;
-              }, {})
+              profilePerms
+                .filter((p) => {
+                  if (!searchPerm.trim()) return true;
+                  const label = t(lang, (`permission.${p.key}` as any)) ?? p.key;
+                  return label.toLowerCase().includes(searchPerm.toLowerCase());
+                })
+                .reduce<Record<string, ProfilePermRow[]>>((acc, p) => {
+                  (acc[p.category] ||= []).push(p);
+                  return acc;
+                }, {})
             ).map(([category, items]) => (
               <div key={category} className="mt-6">
-                <div className="mb-3 flex items-center gap-3">
+                <div
+                  className="mb-3 flex cursor-pointer items-center gap-3"
+                  onClick={() =>
+                    setOpenSections((prev) => ({
+                      ...prev,
+                      [category]: prev[category] === false ? true : !prev[category],
+                    }))
+                  }
+                >
                   <div className="h-6 w-1 rounded-full bg-ew-accent" />
                   <div className="text-sm font-extrabold uppercase tracking-wide text-white">
                     {t(lang, (PERMISSION_CATEGORY_KEY[category] ?? category) as any) ?? category}
                   </div>
+                  <span className="ml-auto text-lg leading-none text-white/40">
+                    {openSections[category] === false ? "+" : "−"}
+                  </span>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  {items.map((p) => {
-                    const isDirty = permDraft[p.key] !== permSaved[p.key];
+                {openSections[category] !== false && (
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    {items.map((p) => {
+                      const isDirty = permDraft[p.key] !== permSaved[p.key];
 
-                    return (
-                      <label
-                        key={p.key}
-                        className={clsx(
-                          "rounded-2xl border p-4 transition",
-                          "bg-white/5 hover:bg-white/8",
-                          isDirty ? "border-ew-accent/50 ring-1 ring-ew-accent/20" : "border-white/10"
-                        )}
-                      >
-                        <div className="flex items-start gap-3">
-                          <input
-                            type="checkbox"
-                            checked={!!permDraft[p.key]}
-                            onChange={(e) =>
-                              setPermDraft((d) => ({ ...d, [p.key]: e.target.checked }))
-                            }
-                            className="mt-0.5 h-5 w-5 rounded-md border-white/20 bg-transparent text-ew-accent focus:ring-ew-accent"
-                          />
+                      return (
+                        <label
+                          key={p.key}
+                          className={clsx(
+                            "rounded-2xl border p-4 transition",
+                            "bg-white/5 hover:bg-white/8",
+                            isDirty ? "border-ew-accent/50 ring-1 ring-ew-accent/20" : "border-white/10"
+                          )}
+                        >
+                          <div className="flex items-start gap-3">
+                            <input
+                              type="checkbox"
+                              checked={!!permDraft[p.key]}
+                              onChange={(e) =>
+                                setPermDraft((d) => ({ ...d, [p.key]: e.target.checked }))
+                              }
+                              className="mt-0.5 h-5 w-5 rounded-md border-white/20 bg-transparent text-ew-accent focus:ring-ew-accent"
+                            />
 
-                          <div className="min-w-0 flex-1">
-                            <div className="text-sm font-semibold text-white">
-                              {t(lang, (PERMISSION_LABEL_KEY[p.key] ?? p.key) as any) ?? p.key}
-                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm font-semibold text-white">
+                                {t(lang, (`permission.${p.key}` as any)) ?? p.key}
+                              </div>
 
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              <span
-                                className={clsx(
-                                  "rounded-full border px-2.5 py-1 text-[11px] font-semibold",
-                                  getSourceBadgeClasses(p.source)
-                                )}
-                              >
-                                {p.source === "override"
-                                  ? "Override"
-                                  : p.source === "profile"
-                                  ? "Profile"
-                                  : "Default"}
-                              </span>
-
-                              <span className="rounded-full border border-white/10 bg-white/10 px-2.5 py-1 text-[11px] font-semibold text-white/70">
-                                Profile: {p.profileAllowed ? "ON" : "OFF"}
-                              </span>
-
-                              {isDirty ? (
-                                <span className="rounded-full border border-ew-accent/30 bg-ew-accent/15 px-2.5 py-1 text-[11px] font-semibold text-ew-accent">
-                                  Changed
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                <span
+                                  className={clsx(
+                                    "rounded-full border px-2.5 py-1 text-[11px] font-semibold",
+                                    p.source === "override"
+                                      ? "border-amber-400/40 bg-amber-400/20 text-amber-200"
+                                      : p.source === "profile"
+                                      ? "border-emerald-400/40 bg-emerald-400/20 text-emerald-200"
+                                      : "border-slate-400/30 bg-slate-400/15 text-slate-200"
+                                  )}
+                                >
+                                  {p.source === "override"
+                                    ? "Override"
+                                    : p.source === "profile"
+                                    ? "Profile"
+                                    : "Default"}
                                 </span>
-                              ) : null}
-                            </div>
 
-                            <div className="mt-2 text-[11px] text-white/45">{p.key}</div>
+                                <span
+                                  className={clsx(
+                                    "rounded-full border px-2.5 py-1 text-[11px] font-semibold",
+                                    p.profileAllowed
+                                      ? "border-emerald-400/40 bg-emerald-400/20 text-emerald-200"
+                                      : "border-rose-400/40 bg-rose-400/20 text-rose-200"
+                                  )}
+                                >
+                                  {p.profileAllowed ? "Active" : "Inactive"}
+                                </span>
+
+                                {isDirty ? (
+                                  <span className="rounded-full border border-ew-accent/30 bg-ew-accent/15 px-2.5 py-1 text-[11px] font-semibold text-ew-accent">
+                                    Changed
+                                  </span>
+                                ) : null}
+                              </div>
+
+                              <div className="mt-2 font-mono text-[11px] text-white/30">{p.key}</div>
+                            </div>
                           </div>
-                        </div>
-                      </label>
-                    );
-                  })}
-                </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             ))
           ) : (
@@ -636,7 +690,7 @@ export default function TeamView() {
             </div>
           )}
 
-          <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
+          <div className="sticky bottom-0 mt-6 flex flex-col-reverse gap-3 border-t border-white/10 bg-slate-950/80 pt-4 backdrop-blur sm:flex-row sm:items-center sm:justify-end">
             <button
               type="button"
               className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-white/15 disabled:opacity-60"
