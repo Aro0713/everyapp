@@ -329,10 +329,10 @@ export default function PanelPage() {
     if (isLangKey(c)) setLang(c);
   }, []);
   useEffect(() => {
-  if (activeView === "reports") {
-    fetchPhoneBackfillStats(backfillScope);
-  }
-  }, [activeView, backfillScope]);
+    if (activeView === "reports") {
+      fetchPhoneBackfillStats(backfillScope);
+    }
+  }, [activeView]);
 
     const nav = useMemo<NavItem[]>(
     () => [
@@ -1168,7 +1168,10 @@ function handleAgentAction(action: any) {
                       <div className="inline-flex rounded-2xl border border-white/10 bg-white/5 p-1">
                         <button
                           type="button"
-                          onClick={() => setBackfillScope("office")}
+                          onClick={async () => {
+                            setBackfillScope("office");
+                            await fetchPhoneBackfillStats("office");
+                          }}
                           className={clsx(
                             "rounded-xl px-3 py-2 text-xs font-semibold transition",
                             backfillScope === "office"
@@ -1180,7 +1183,10 @@ function handleAgentAction(action: any) {
                         </button>
                         <button
                           type="button"
-                          onClick={() => setBackfillScope("global")}
+                          onClick={async () => {
+                            setBackfillScope("global");
+                            await fetchPhoneBackfillStats("global");
+                          }}
                           className={clsx(
                             "rounded-xl px-3 py-2 text-xs font-semibold transition",
                             backfillScope === "global"
