@@ -286,31 +286,43 @@ export default function PanelPage() {
   }
 
   async function fetchPhoneBackfillStats(scope: BackfillScope) {
-    try {
-      setStatsLoading(true);
-      setStatsError(null);
+  try {
+    setStatsLoading(true);
+    setStatsError(null);
 
-      const res = await fetch(`/api/external_listings/phone-backfill-stats?scope=${scope}`, {
-        method: "GET",
-        cache: "no-store",
-      });
+    console.log("PHONE_BACKFILL_FETCH_SCOPE_REQUEST", scope);
 
-      const data = await res.json();
+    const res = await fetch(`/api/external_listings/phone-backfill-stats?scope=${scope}`, {
+      method: "GET",
+      cache: "no-store",
+    });
 
-      if (!res.ok) {
-        setStatsError(data?.error ?? "STATS_ERROR");
-        return;
-      }
+    const data = await res.json();
 
-      setStats(data);
-    } catch (err) {
-      console.error(err);
-      setStatsError("STATS_ERROR");
-    } finally {
-      setStatsLoading(false);
+    console.log("PHONE_BACKFILL_FETCH_SCOPE_RESPONSE", {
+      requestedScope: scope,
+      responseScope: data?.scope ?? null,
+      allListings: data?.allListings ?? null,
+    });
+
+    if (!res.ok) {
+      setStatsError(data?.error ?? "STATS_ERROR");
+      return;
     }
-  }
 
+    setStats(data);
+  } catch (err) {
+    console.error("PHONE_BACKFILL_FETCH_ERROR", err);
+    setStatsError("STATS_ERROR");
+  } finally {
+    setStatsLoading(false);
+  }
+}
+async function switchBackfillScope(scope: BackfillScope) {
+  console.log("PHONE_BACKFILL_SWITCH_SCOPE_CLICK", scope);
+  setBackfillScope(scope);
+  await fetchPhoneBackfillStats(scope);
+}
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 1024); // <lg
     onResize();
@@ -1168,10 +1180,7 @@ function handleAgentAction(action: any) {
                       <div className="inline-flex rounded-2xl border border-white/10 bg-white/5 p-1">
                         <button
                           type="button"
-                          onClick={async () => {
-                            setBackfillScope("office");
-                            await fetchPhoneBackfillStats("office");
-                          }}
+                          onClick={() => switchBackfillScope("office")}
                           className={clsx(
                             "rounded-xl px-3 py-2 text-xs font-semibold transition",
                             backfillScope === "office"
@@ -1183,10 +1192,7 @@ function handleAgentAction(action: any) {
                         </button>
                         <button
                           type="button"
-                          onClick={async () => {
-                            setBackfillScope("global");
-                            await fetchPhoneBackfillStats("global");
-                          }}
+                          onClick={() => switchBackfillScope("global")}
                           className={clsx(
                             "rounded-xl px-3 py-2 text-xs font-semibold transition",
                             backfillScope === "global"
@@ -1200,6 +1206,9 @@ function handleAgentAction(action: any) {
                     }
                   >
                    <div className="space-y-5">
+                      <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-xs text-amber-100">
+                        UI scope: <strong>{backfillScope}</strong> | API scope: <strong>{stats?.scope ?? "-"}</strong> | listings: <strong>{stats?.allListings ?? 0}</strong>
+                      </div>
                         {statsLoading ? (
                           <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 px-4 py-10 text-sm text-white/60">
                             {t(lang, "panelCrawlerLoading" as any)}
