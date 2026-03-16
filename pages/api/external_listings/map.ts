@@ -38,9 +38,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const bbox = parseBbox(req.query.bbox);
 
-    const limitRaw = optNumber(req.query.limit) ?? 300;
-    const requestedLimit = Math.min(Math.max(limitRaw, 1), 1000);
-    const limit = bbox ? requestedLimit : Math.min(requestedLimit, 300);
+    const limitRaw = optNumber(req.query.limit) ?? 5000;
+    const limit = Math.min(Math.max(limitRaw, 1), 25000);
 
     const params: any[] = [];
     let where = `

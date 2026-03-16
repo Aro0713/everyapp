@@ -500,7 +500,7 @@ async function loadEverybot(opts?: {
 
   try {
     const qs = new URLSearchParams();
-    qs.set("limit", "50");
+    qs.set("limit", "25000");
     qs.set("includeInactive", "1");
     qs.set("includePreview", "1");
     qs.set("onlyEnriched", "0");

@@ -265,9 +265,9 @@ export default function EverybotMap({ pins, onSelectId }: Props) {
     map.setPaintProperty("pins-layer", "circle-color", [
       "case",
       ["==", ["get", "id"], selectedId],
-      "#ef4444",
-      ["==", ["get", "id"], hoverId],
       "#f59e0b",
+      ["==", ["get", "id"], hoverId],
+      "#facc15",
       "#2563eb",
     ]);
 
