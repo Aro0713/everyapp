@@ -23,13 +23,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const userId = getUserIdFromRequest(req);
     if (!userId) return res.status(401).json({ error: "UNAUTHORIZED" });
 
-    const officeId = await getOfficeIdForUserId(userId);
-    if (!officeId) return res.status(400).json({ error: "MISSING_OFFICE_ID" });
-
     const scope = (optString(req.query.scope) === "global" ? "global" : "office") as Scope;
 
+    let officeId: string | null = null;
+
+    if (scope === "office") {
+      officeId = await getOfficeIdForUserId(userId);
+      if (!officeId) return res.status(400).json({ error: "MISSING_OFFICE_ID" });
+    }
+
     const whereSql = scope === "office" ? `WHERE office_id = $1::uuid` : ``;
-    const params = scope === "office" ? [officeId] : [];
+    const params = scope === "office" && officeId ? [officeId] : [];
 
     const sql = `
       SELECT
