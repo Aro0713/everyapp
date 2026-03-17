@@ -124,3 +124,22 @@ input, select, textarea {
   border-top-color: #ffffff !important;
   border-bottom-color: #ffffff !important;
 }
+/* FIX SELECT DARK MODE */
+select {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: white !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* dropdown lista */
+select option {
+  background-color: #020617 !important; /* slate-950 */
+  color: white !important;
+}
+
+/* focus */
+select:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.2);
+  border-color: rgba(255,255,255,0.4);
+}

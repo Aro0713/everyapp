@@ -1203,7 +1203,7 @@ export default function ContactsView({ lang }: { lang: LangKey }) {
             <select
               value={partyType}
               onChange={(e) => setPartyType(e.target.value)}
-              className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white outline-none transition focus:border-white/40 focus:ring-2 focus:ring-white/20"
+              className="rounded-2xl border border-white/10 bg-slate-900 px-4 py-2 text-sm text-white outline-none transition appearance-none focus:border-white/40 focus:ring-2 focus:ring-white/20"
             >
               <option value="">{t(lang, "contactsFilterAllTypes" as any) ?? "Wszystkie typy"}</option>
               <option value="person">{t(lang, "contactsTypePerson" as any) ?? "Osoba"}</option>
@@ -1213,7 +1213,7 @@ export default function ContactsView({ lang }: { lang: LangKey }) {
             <select
               value={clientRole}
               onChange={(e) => setClientRole(e.target.value)}
-              className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white outline-none transition focus:border-white/40 focus:ring-2 focus:ring-white/20"
+              className="rounded-2xl border border-white/10 bg-slate-900 px-4 py-2 text-sm text-white outline-none transition appearance-none focus:border-white/40 focus:ring-2 focus:ring-white/20"
             >
               <option value="">{t(lang, "contactsFilterAllRoles" as any) ?? "Wszystkie role"}</option>
               <option value="buyer">{t(lang, "contactsRoleBuyer" as any) ?? "Kupujący"}</option>
@@ -1231,7 +1231,7 @@ export default function ContactsView({ lang }: { lang: LangKey }) {
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value)}
-              className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white outline-none transition focus:border-white/40 focus:ring-2 focus:ring-white/20"
+              className="rounded-2xl border border-white/10 bg-slate-900 px-4 py-2 text-sm text-white outline-none transition appearance-none focus:border-white/40 focus:ring-2 focus:ring-white/20"
             >
               <option value="">{t(lang, "contactsFilterAllStatuses" as any) ?? "Wszystkie statusy"}</option>
               <option value="new">{t(lang, "contactsStatusNew" as any) ?? "Nowy"}</option>
@@ -1246,7 +1246,7 @@ export default function ContactsView({ lang }: { lang: LangKey }) {
             <select
               value={pipelineStage}
               onChange={(e) => setPipelineStage(e.target.value)}
-              className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white outline-none transition focus:border-white/40 focus:ring-2 focus:ring-white/20"
+              className="rounded-2xl border border-white/10 bg-slate-900 px-4 py-2 text-sm text-white outline-none transition appearance-none focus:border-white/40 focus:ring-2 focus:ring-white/20"
             >
               <option value="">
                 {t(lang, "contactsFilterAllPipelineStages" as any) ?? "Wszystkie etapy"}
