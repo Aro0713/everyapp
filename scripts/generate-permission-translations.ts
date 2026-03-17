@@ -112,83 +112,83 @@ const CATEGORY_LABELS: Record<string, LangMap> = {
   "permissionCategory.calendar": {
     pl: "Kalendarz",
     en: "Calendar",
-    de: "Calendar",
-    cs: "Calendar",
-    sk: "Calendar",
-    ua: "Calendar",
-    lt: "Calendar",
-    vi: "Calendar",
+    de: "Kalender",
+    cs: "Kalendář",
+    sk: "Kalendár",
+    ua: "Календар",
+    lt: "Kalendorius",
+    vi: "Lịch",
   },
   "permissionCategory.offers": {
     pl: "Oferty",
     en: "Offers",
-    de: "Offers",
-    cs: "Offers",
-    sk: "Offers",
-    ua: "Offers",
-    lt: "Offers",
-    vi: "Offers",
+    de: "Angebote",
+    cs: "Nabídky",
+    sk: "Ponuky",
+    ua: "Пропозиції",
+    lt: "Pasiūlymai",
+    vi: "Tin đăng",
   },
   "permissionCategory.clients": {
     pl: "Klienci",
     en: "Clients",
-    de: "Clients",
-    cs: "Clients",
-    sk: "Clients",
-    ua: "Clients",
-    lt: "Clients",
-    vi: "Clients",
+    de: "Kunden",
+    cs: "Klienti",
+    sk: "Klienti",
+    ua: "Клієнти",
+    lt: "Klientai",
+    vi: "Khách hàng",
   },
   "permissionCategory.team": {
     pl: "Zespół",
     en: "Team",
     de: "Team",
-    cs: "Team",
-    sk: "Team",
-    ua: "Team",
-    lt: "Team",
-    vi: "Team",
+    cs: "Tým",
+    sk: "Tím",
+    ua: "Команда",
+    lt: "Komanda",
+    vi: "Nhóm",
   },
   "permissionCategory.reports": {
     pl: "Raporty",
     en: "Reports",
-    de: "Reports",
-    cs: "Reports",
-    sk: "Reports",
-    ua: "Reports",
-    lt: "Reports",
-    vi: "Reports",
+    de: "Berichte",
+    cs: "Reporty",
+    sk: "Reporty",
+    ua: "Звіти",
+    lt: "Ataskaitos",
+    vi: "Báo cáo",
   },
   "permissionCategory.files": {
     pl: "Pliki",
     en: "Files",
-    de: "Files",
-    cs: "Files",
-    sk: "Files",
-    ua: "Files",
-    lt: "Files",
-    vi: "Files",
+    de: "Dateien",
+    cs: "Soubory",
+    sk: "Súbory",
+    ua: "Файли",
+    lt: "Failai",
+    vi: "Tệp",
   },
   "permissionCategory.external_listings": {
     pl: "Oferty zewnętrzne",
     en: "External listings",
-    de: "External listings",
-    cs: "External listings",
-    sk: "External listings",
-    ua: "External listings",
-    lt: "External listings",
-    vi: "External listings",
+    de: "Externe Angebote",
+    cs: "Externí nabídky",
+    sk: "Externé ponuky",
+    ua: "Зовнішні оголошення",
+    lt: "Išoriniai skelbimai",
+    vi: "Tin đăng bên ngoài",
   },
 };
 
 const MODULE_LABELS_PL: Record<string, string> = {
-  calendar: "kalendarza",
-  offers: "ofert",
-  clients: "klientów",
-  team: "zespołu",
-  reports: "raportów",
-  files: "plików",
-  external_listings: "ofert zewnętrznych",
+  calendar: "kalendarz",
+  offers: "oferty",
+  clients: "klienci",
+  team: "zespół",
+  reports: "raporty",
+  files: "pliki",
+  external_listings: "oferty zewnętrzne",
 };
 
 const MODULE_LABELS_EN: Record<string, string> = {
@@ -201,22 +201,46 @@ const MODULE_LABELS_EN: Record<string, string> = {
   external_listings: "external listings",
 };
 
-const SCOPE_LABELS_PL: Record<string, string> = {
-  own: "własnych",
-  office: "biura",
-  organization: "organizacji",
-  global: "globalnych",
+const SUBRESOURCE_LABELS_PL: Record<string, string> = {
+  integrations: "integracje",
+  images: "zdjęcia",
+  notes: "notatki",
+  contacts: "dane kontaktowe",
+  addresses: "adresy",
+  consents: "zgody",
 };
 
-const SCOPE_LABELS_EN: Record<string, string> = {
-  own: "own",
-  office: "office",
-  organization: "organization",
-  global: "global",
+const SUBRESOURCE_LABELS_EN: Record<string, string> = {
+  integrations: "integrations",
+  images: "images",
+  notes: "notes",
+  contacts: "contact details",
+  addresses: "addresses",
+  consents: "consents",
 };
 
 function toTranslationKey(permissionKey: string): string {
   return `permission.${permissionKey}`;
+}
+
+function capitalize(s: string): string {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
+
+function joinScopePL(scope: string): string {
+  if (scope === "own") return "własnych";
+  if (scope === "office") return "biura";
+  if (scope === "organization") return "organizacji";
+  if (scope === "global") return "globalnych";
+  return scope;
+}
+
+function joinScopeEN(scope: string): string {
+  if (scope === "own") return "own";
+  if (scope === "office") return "office";
+  if (scope === "organization") return "organization";
+  if (scope === "global") return "global";
+  return scope;
 }
 
 function buildPermissionLabel(permissionKey: string): LangMap {
@@ -253,47 +277,175 @@ function buildPermissionLabel(permissionKey: string): LangMap {
 }
 
 function buildPolishLabel(moduleName: string, action: string, scope: string): string {
+  const scopeLabel = joinScopePL(scope);
+
+  if (moduleName === "calendar") {
+    const map: Record<string, string> = {
+      view: scope === "own" ? "Podgląd własnego kalendarza" : `Podgląd kalendarza ${scopeLabel}`,
+      create: scope === "own"
+        ? "Tworzenie wydarzeń we własnym kalendarzu"
+        : `Tworzenie wydarzeń w kalendarzu ${scopeLabel}`,
+      edit: scope === "own" ? "Edycja własnego kalendarza" : `Edycja kalendarza ${scopeLabel}`,
+      delete: scope === "own"
+        ? "Usuwanie z własnego kalendarza"
+        : `Usuwanie z kalendarza ${scopeLabel}`,
+    };
+    return map[action] ?? `${capitalize(action)} kalendarza ${scopeLabel}`;
+  }
+
+  if (moduleName === "offers") {
+    const map: Record<string, string> = {
+      view: scope === "own" ? "Podgląd własnych ofert" : `Podgląd ofert ${scopeLabel}`,
+      create: `Tworzenie ofert ${scope === "office" ? "w biurze" : "w organizacji"}`,
+      edit: scope === "own" ? "Edycja własnych ofert" : `Edycja ofert ${scopeLabel}`,
+      delete: `Usuwanie ofert ${scopeLabel}`,
+      archive: `Archiwizacja ofert ${scopeLabel}`,
+      publish: `Publikacja ofert ${scopeLabel}`,
+      export: `Eksport ofert ${scopeLabel}`,
+    };
+    return map[action] ?? `${capitalize(action)} ofert ${scopeLabel}`;
+  }
+
+  if (moduleName === "clients") {
+    const map: Record<string, string> = {
+      view: scope === "own" ? "Podgląd własnych klientów" : `Podgląd klientów ${scopeLabel}`,
+      view_sensitive: `Podgląd wrażliwych danych klientów ${scope === "office" ? "w biurze" : scopeLabel}`,
+      create: `Tworzenie klientów ${scope === "office" ? "w biurze" : `w ${scopeLabel}`}`,
+      edit: scope === "own" ? "Edycja własnych klientów" : `Edycja klientów ${scopeLabel}`,
+      delete: `Usuwanie klientów ${scopeLabel}`,
+      export: `Eksport klientów ${scopeLabel}`,
+    };
+    return map[action] ?? `${capitalize(action)} klientów ${scopeLabel}`;
+  }
+
+  if (moduleName === "team") {
+    const map: Record<string, string> = {
+      view: `Podgląd zespołu ${scopeLabel}`,
+      invite: scope === "office" ? "Zapraszanie użytkowników do biura" : `Zapraszanie użytkowników do ${scopeLabel}`,
+      deactivate: `Dezaktywacja członków zespołu ${scopeLabel}`,
+    };
+    return map[action] ?? `${capitalize(action)} zespołu ${scopeLabel}`;
+  }
+
+  if (moduleName === "reports") {
+    const map: Record<string, string> = {
+      view: scope === "own" ? "Podgląd własnych raportów" : `Podgląd raportów ${scopeLabel}`,
+      export: `Eksport raportów ${scopeLabel}`,
+    };
+    return map[action] ?? `${capitalize(action)} raportów ${scopeLabel}`;
+  }
+
+  if (moduleName === "files") {
+    const map: Record<string, string> = {
+      view: `Podgląd plików ${scopeLabel}`,
+      upload: `Przesyłanie plików ${scopeLabel}`,
+      delete: `Usuwanie plików ${scopeLabel}`,
+      export: `Eksport plików ${scopeLabel}`,
+    };
+    return map[action] ?? `${capitalize(action)} plików ${scopeLabel}`;
+  }
+
+  if (moduleName === "external_listings") {
+    const map: Record<string, string> = {
+      view: `Podgląd ofert zewnętrznych ${scopeLabel}`,
+      import: `Import ofert zewnętrznych ${scopeLabel}`,
+      assign: `Przypisywanie ofert zewnętrznych ${scopeLabel}`,
+      archive: `Archiwizacja ofert zewnętrznych ${scopeLabel}`,
+      enrich: `Wzbogacanie ofert zewnętrznych ${scopeLabel}`,
+      run_backfill:
+        scope === "global"
+          ? "Uruchamianie globalnego backfillu ofert zewnętrznych"
+          : "Uruchamianie backfillu ofert zewnętrznych w biurze",
+    };
+    return map[action] ?? `${capitalize(action)} ofert zewnętrznych ${scopeLabel}`;
+  }
+
   const moduleLabel = MODULE_LABELS_PL[moduleName] ?? moduleName;
-  const scopeLabel = SCOPE_LABELS_PL[scope] ?? scope;
-
-  const actionMap: Record<string, string> = {
-    view: `Podgląd ${scopeLabel} ${moduleLabel}`,
-    create: `Tworzenie ${moduleLabel} w zakresie ${scopeLabel}`,
-    edit: `Edycja ${scopeLabel} ${moduleLabel}`,
-    delete: `Usuwanie ${scopeLabel} ${moduleLabel}`,
-    archive: `Archiwizacja ${scopeLabel} ${moduleLabel}`,
-    publish: `Publikacja ${scopeLabel} ${moduleLabel}`,
-    export: `Eksport ${scopeLabel} ${moduleLabel}`,
-    import: `Import ${scopeLabel} ${moduleLabel}`,
-    assign: `Przypisywanie ${scopeLabel} ${moduleLabel}`,
-    enrich: `Wzbogacanie ${scopeLabel} ${moduleLabel}`,
-    invite: `Zapraszanie użytkowników w zakresie ${scopeLabel}`,
-    deactivate: `Dezaktywacja ${scopeLabel} ${moduleLabel}`,
-  };
-
-  return actionMap[action] ?? `${action} ${scopeLabel} ${moduleLabel}`;
+  return `${capitalize(action)} ${moduleLabel} ${scopeLabel}`;
 }
 
 function buildEnglishLabel(moduleName: string, action: string, scope: string): string {
+  const scopeLabel = joinScopeEN(scope);
+
+  if (moduleName === "calendar") {
+    const map: Record<string, string> = {
+      view: `View ${scopeLabel} calendar`,
+      create: scope === "own" ? "Create events in own calendar" : `Create events in ${scopeLabel} calendar`,
+      edit: `Edit ${scopeLabel} calendar`,
+      delete: scope === "own" ? "Delete from own calendar" : `Delete from ${scopeLabel} calendar`,
+    };
+    return map[action] ?? `${capitalize(action)} ${scopeLabel} calendar`;
+  }
+
+  if (moduleName === "offers") {
+    const map: Record<string, string> = {
+      view: `View ${scopeLabel} offers`,
+      create: `Create ${scopeLabel} offers`,
+      edit: `Edit ${scopeLabel} offers`,
+      delete: `Delete ${scopeLabel} offers`,
+      archive: `Archive ${scopeLabel} offers`,
+      publish: `Publish ${scopeLabel} offers`,
+      export: `Export ${scopeLabel} offers`,
+    };
+    return map[action] ?? `${capitalize(action)} ${scopeLabel} offers`;
+  }
+
+  if (moduleName === "clients") {
+    const map: Record<string, string> = {
+      view: `View ${scopeLabel} clients`,
+      view_sensitive: `View sensitive client data in ${scopeLabel}`,
+      create: `Create ${scopeLabel} clients`,
+      edit: `Edit ${scopeLabel} clients`,
+      delete: `Delete ${scopeLabel} clients`,
+      export: `Export ${scopeLabel} clients`,
+    };
+    return map[action] ?? `${capitalize(action)} ${scopeLabel} clients`;
+  }
+
+  if (moduleName === "team") {
+    const map: Record<string, string> = {
+      view: `View ${scopeLabel} team`,
+      invite: scope === "office" ? "Invite users to office" : `Invite users to ${scopeLabel}`,
+      deactivate: `Deactivate ${scopeLabel} team members`,
+    };
+    return map[action] ?? `${capitalize(action)} ${scopeLabel} team`;
+  }
+
+  if (moduleName === "reports") {
+    const map: Record<string, string> = {
+      view: `View ${scopeLabel} reports`,
+      export: `Export ${scopeLabel} reports`,
+    };
+    return map[action] ?? `${capitalize(action)} ${scopeLabel} reports`;
+  }
+
+  if (moduleName === "files") {
+    const map: Record<string, string> = {
+      view: `View ${scopeLabel} files`,
+      upload: `Upload ${scopeLabel} files`,
+      delete: `Delete ${scopeLabel} files`,
+      export: `Export ${scopeLabel} files`,
+    };
+    return map[action] ?? `${capitalize(action)} ${scopeLabel} files`;
+  }
+
+  if (moduleName === "external_listings") {
+    const map: Record<string, string> = {
+      view: `View ${scopeLabel} external listings`,
+      import: `Import ${scopeLabel} external listings`,
+      assign: `Assign ${scopeLabel} external listings`,
+      archive: `Archive ${scopeLabel} external listings`,
+      enrich: `Enrich ${scopeLabel} external listings`,
+      run_backfill:
+        scope === "global"
+          ? "Run global external listings backfill"
+          : "Run external listings backfill for office",
+    };
+    return map[action] ?? `${capitalize(action)} ${scopeLabel} external listings`;
+  }
+
   const moduleLabel = MODULE_LABELS_EN[moduleName] ?? moduleName;
-  const scopeLabel = SCOPE_LABELS_EN[scope] ?? scope;
-
-  const actionMap: Record<string, string> = {
-    view: `View ${scopeLabel} ${moduleLabel}`,
-    create: `Create ${scopeLabel} ${moduleLabel}`,
-    edit: `Edit ${scopeLabel} ${moduleLabel}`,
-    delete: `Delete ${scopeLabel} ${moduleLabel}`,
-    archive: `Archive ${scopeLabel} ${moduleLabel}`,
-    publish: `Publish ${scopeLabel} ${moduleLabel}`,
-    export: `Export ${scopeLabel} ${moduleLabel}`,
-    import: `Import ${scopeLabel} ${moduleLabel}`,
-    assign: `Assign ${scopeLabel} ${moduleLabel}`,
-    enrich: `Enrich ${scopeLabel} ${moduleLabel}`,
-    invite: `Invite users in ${scopeLabel} scope`,
-    deactivate: `Deactivate ${scopeLabel} ${moduleLabel}`,
-  };
-
-  return actionMap[action] ?? `${action} ${scopeLabel} ${moduleLabel}`;
+  return `${capitalize(action)} ${scopeLabel} ${moduleLabel}`;
 }
 
 function buildPolishSubresourceLabel(
@@ -302,37 +454,65 @@ function buildPolishSubresourceLabel(
   action: string,
   scope: string
 ): string {
-  const scopeLabel = SCOPE_LABELS_PL[scope] ?? scope;
+  const scopeLabel = joinScopePL(scope);
 
-  const plSubresources: Record<string, string> = {
-    integrations: "integracji",
-    images: "zdjęć",
-    notes: "notatek",
-    contacts: "kontaktów",
-    addresses: "adresów",
-    consents: "zgód",
-    edit_membership: "członkostwem",
-    manage_roles: "rolami",
-    manage_permissions: "uprawnieniami",
-    manage_profiles: "profilami uprawnień",
-    run_backfill: "uzupełniania numerów",
-  };
+  if (moduleName === "calendar" && subresource === "integrations") {
+    if (action === "view") return "Podgląd integracji kalendarza biura";
+    if (action === "manage") return "Zarządzanie integracjami kalendarza biura";
+  }
 
-  const subject = plSubresources[subresource] ?? subresource;
+  if (moduleName === "offers" && subresource === "images") {
+    if (action === "view") return "Podgląd zdjęć ofert w biurze";
+    if (action === "manage") return "Zarządzanie zdjęciami ofert w biurze";
+  }
 
-  const actionMap: Record<string, string> = {
-    view: `Podgląd ${subject} w zakresie ${scopeLabel}`,
-    manage: `Zarządzanie ${subject} w zakresie ${scopeLabel}`,
-    run: `Uruchamianie ${subject} w zakresie ${scopeLabel}`,
-  };
+  if (moduleName === "offers" && subresource === "notes") {
+    if (action === "view") return "Podgląd notatek do ofert w biurze";
+    if (action === "manage") return "Zarządzanie notatkami do ofert w biurze";
+  }
 
-  if (subresource === "edit_membership") return `Edycja członkostwa w zakresie ${scopeLabel}`;
-  if (subresource === "manage_roles") return `Zarządzanie rolami w zakresie ${scopeLabel}`;
-  if (subresource === "manage_permissions") return `Zarządzanie uprawnieniami w zakresie ${scopeLabel}`;
-  if (subresource === "manage_profiles") return `Zarządzanie profilami uprawnień w zakresie ${scopeLabel}`;
-  if (subresource === "run_backfill") return `Uruchamianie backfillu w zakresie ${scopeLabel}`;
+  if (moduleName === "clients" && subresource === "contacts") {
+    if (action === "view") return "Podgląd danych kontaktowych klientów w biurze";
+    if (action === "manage") return "Zarządzanie danymi kontaktowymi klientów w biurze";
+  }
 
-  return actionMap[action] ?? `${action} ${subject} ${scopeLabel} (${moduleName})`;
+  if (moduleName === "clients" && subresource === "addresses") {
+    if (action === "view") return "Podgląd adresów klientów w biurze";
+    if (action === "manage") return "Zarządzanie adresami klientów w biurze";
+  }
+
+  if (moduleName === "clients" && subresource === "consents") {
+    if (action === "view") return "Podgląd zgód klientów w biurze";
+    if (action === "manage") return "Zarządzanie zgodami klientów w biurze";
+  }
+
+  if (moduleName === "team" && action === "edit_membership") {
+    return "Edycja członkostwa w zespole biura";
+  }
+
+  if (moduleName === "team" && action === "manage_roles") {
+    return "Zarządzanie rolami w zespole biura";
+  }
+
+  if (moduleName === "team" && action === "manage_permissions") {
+    return "Zarządzanie uprawnieniami w zespole biura";
+  }
+
+  if (moduleName === "team" && action === "manage_profiles") {
+    return "Zarządzanie profilami uprawnień w biurze";
+  }
+
+  if (moduleName === "external_listings" && action === "run_backfill") {
+    return scope === "global"
+      ? "Uruchamianie globalnego backfillu ofert zewnętrznych"
+      : "Uruchamianie backfillu ofert zewnętrznych w biurze";
+  }
+
+  const subLabel = SUBRESOURCE_LABELS_PL[subresource] ?? subresource;
+  if (action === "view") return `Podgląd ${subLabel} ${scopeLabel}`;
+  if (action === "manage") return `Zarządzanie ${subLabel} ${scopeLabel}`;
+
+  return `${capitalize(action)} ${subLabel} ${scopeLabel}`;
 }
 
 function buildEnglishSubresourceLabel(
@@ -341,37 +521,65 @@ function buildEnglishSubresourceLabel(
   action: string,
   scope: string
 ): string {
-  const scopeLabel = SCOPE_LABELS_EN[scope] ?? scope;
+  const scopeLabel = joinScopeEN(scope);
 
-  const enSubresources: Record<string, string> = {
-    integrations: "integrations",
-    images: "images",
-    notes: "notes",
-    contacts: "contacts",
-    addresses: "addresses",
-    consents: "consents",
-    edit_membership: "memberships",
-    manage_roles: "roles",
-    manage_permissions: "permissions",
-    manage_profiles: "permission profiles",
-    run_backfill: "backfill",
-  };
+  if (moduleName === "calendar" && subresource === "integrations") {
+    if (action === "view") return "View office calendar integrations";
+    if (action === "manage") return "Manage office calendar integrations";
+  }
 
-  const subject = enSubresources[subresource] ?? subresource;
+  if (moduleName === "offers" && subresource === "images") {
+    if (action === "view") return "View office offer images";
+    if (action === "manage") return "Manage office offer images";
+  }
 
-  const actionMap: Record<string, string> = {
-    view: `View ${subject} in ${scopeLabel} scope`,
-    manage: `Manage ${subject} in ${scopeLabel} scope`,
-    run: `Run ${subject} in ${scopeLabel} scope`,
-  };
+  if (moduleName === "offers" && subresource === "notes") {
+    if (action === "view") return "View office offer notes";
+    if (action === "manage") return "Manage office offer notes";
+  }
 
-  if (subresource === "edit_membership") return `Edit memberships in ${scopeLabel} scope`;
-  if (subresource === "manage_roles") return `Manage roles in ${scopeLabel} scope`;
-  if (subresource === "manage_permissions") return `Manage permissions in ${scopeLabel} scope`;
-  if (subresource === "manage_profiles") return `Manage permission profiles in ${scopeLabel} scope`;
-  if (subresource === "run_backfill") return `Run backfill in ${scopeLabel} scope`;
+  if (moduleName === "clients" && subresource === "contacts") {
+    if (action === "view") return "View client contact details in office";
+    if (action === "manage") return "Manage client contact details in office";
+  }
 
-  return actionMap[action] ?? `${action} ${subject} ${scopeLabel} (${moduleName})`;
+  if (moduleName === "clients" && subresource === "addresses") {
+    if (action === "view") return "View client addresses in office";
+    if (action === "manage") return "Manage client addresses in office";
+  }
+
+  if (moduleName === "clients" && subresource === "consents") {
+    if (action === "view") return "View client consents in office";
+    if (action === "manage") return "Manage client consents in office";
+  }
+
+  if (moduleName === "team" && action === "edit_membership") {
+    return "Edit office team membership";
+  }
+
+  if (moduleName === "team" && action === "manage_roles") {
+    return "Manage office team roles";
+  }
+
+  if (moduleName === "team" && action === "manage_permissions") {
+    return "Manage office team permissions";
+  }
+
+  if (moduleName === "team" && action === "manage_profiles") {
+    return "Manage office permission profiles";
+  }
+
+  if (moduleName === "external_listings" && action === "run_backfill") {
+    return scope === "global"
+      ? "Run global external listings backfill"
+      : "Run external listings backfill for office";
+  }
+
+  const subLabel = SUBRESOURCE_LABELS_EN[subresource] ?? subresource;
+  if (action === "view") return `View ${scopeLabel} ${subLabel}`;
+  if (action === "manage") return `Manage ${scopeLabel} ${subLabel}`;
+
+  return `${capitalize(action)} ${scopeLabel} ${subLabel}`;
 }
 
 function renderTranslationEntry(key: string, value: LangMap): string {

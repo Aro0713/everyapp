@@ -85,16 +85,24 @@ function getProfileNameForRole(role: string | null | undefined) {
   return "—";
 }
 
-function getSourceBadgeClasses(source: ProfilePermRow["source"]) {
-  if (source === "override") {
-    return "border-amber-400/40 bg-amber-400/20 text-amber-200";
-  }
+function getPermissionLabel(lang: LangKey, permissionKey: string) {
+  const translationKey = PERMISSION_LABEL_KEY[permissionKey];
+  if (!translationKey) return null;
 
-  if (source === "profile") {
-    return "border-emerald-400/40 bg-emerald-400/20 text-emerald-200";
-  }
+  const translated = t(lang, translationKey as any);
+  if (!translated || translated === translationKey) return null;
 
-  return "border-rose-400/40 bg-rose-400/20 text-rose-200";
+  return translated;
+}
+
+function getPermissionCategoryLabel(lang: LangKey, category: string) {
+  const translationKey = PERMISSION_CATEGORY_KEY[category];
+  if (!translationKey) return category;
+
+  const translated = t(lang, translationKey as any);
+  if (!translated || translated === translationKey) return category;
+
+  return translated;
 }
 
 export default function TeamView() {
@@ -207,13 +215,6 @@ export default function TeamView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMembershipIds]);
 
-    function toggleSection(cat: string) {
-    setOpenSections((s) => ({
-      ...s,
-      [cat]: !s[cat],
-    }));
-  }
-
   async function updateMembership(membershipId: string, patch: { role?: string; status?: string }) {
     setSavingId(membershipId);
     setError(null);
@@ -259,7 +260,7 @@ export default function TeamView() {
         });
 
         const j = await r.json().catch(() => null);
-        if (!r.ok) throw new Error(j?.error || "Błąd zapisu uprawnień");
+        if (!r.ok) throw new Error(j?.error || (t(lang, "teamErrorSave" as any) ?? "Błąd zapisu uprawnień"));
 
         await loadMembershipPerms(id);
         setSuccessMessage(t(lang, "teamPermissionsSaved" as any) ?? "Zmiany zapisane.");
@@ -273,7 +274,9 @@ export default function TeamView() {
       });
 
       const j = await r.json().catch(() => null);
-      if (!r.ok) throw new Error(j?.error || "Błąd zapisu uprawnień (batch)");
+      if (!r.ok) {
+        throw new Error(j?.error || (t(lang, "teamErrorSave" as any) ?? "Błąd zapisu uprawnień"));
+      }
 
       await loadMembershipPerms(selectedMembershipIds[0]);
       setSuccessMessage(t(lang, "teamPermissionsSaved" as any) ?? "Zmiany zapisane.");
@@ -295,7 +298,7 @@ export default function TeamView() {
       const data = await r.json().catch(() => null);
 
       if (!r.ok) {
-        throw new Error(data?.error || "Nie udało się pobrać uprawnień");
+        throw new Error(data?.error || (t(lang, "teamErrorFetchPermissions" as any) ?? "Nie udało się pobrać uprawnień"));
       }
 
       const rows: ProfilePermRow[] = Array.isArray(data) ? data : [];
@@ -306,15 +309,38 @@ export default function TeamView() {
 
       setPermDraft({ ...map });
       setPermSaved({ ...map });
+
+      setOpenSections((prev) => {
+        const next = { ...prev };
+        for (const row of rows) {
+          if (!(row.category in next)) next[row.category] = true;
+        }
+        return next;
+      });
     } finally {
       setPermBusy(false);
     }
   }
 
+  const filteredPermGroups = useMemo(() => {
+    return Object.entries(
+      profilePerms
+        .filter((p) => {
+          if (!searchPerm.trim()) return true;
+
+          const label = getPermissionLabel(lang, p.key) ?? "";
+          return label.toLowerCase().includes(searchPerm.toLowerCase());
+        })
+        .reduce<Record<string, ProfilePermRow[]>>((acc, p) => {
+          (acc[p.category] ||= []).push(p);
+          return acc;
+        }, {})
+    );
+  }, [profilePerms, searchPerm, lang]);
+
   return (
     <div className="min-h-screen text-white">
       <div className="mx-auto max-w-7xl">
-        {/* HEADER */}
         <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <h1 className="text-2xl font-extrabold tracking-tight text-white">
@@ -339,7 +365,6 @@ export default function TeamView() {
           </button>
         </div>
 
-        {/* ALERTS */}
         {error ? (
           <div className="mb-4 rounded-2xl border border-rose-500/20 bg-rose-500/10 p-4 text-sm text-rose-200">
             {error}
@@ -352,7 +377,6 @@ export default function TeamView() {
           </div>
         ) : null}
 
-        {/* TEAM TABLE */}
         <div className="rounded-3xl border border-white/10 bg-slate-950/55 p-4 shadow-2xl backdrop-blur-xl">
           <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -381,7 +405,7 @@ export default function TeamView() {
                     <th className="py-3 pr-4">
                       <input
                         type="checkbox"
-                        aria-label="Select all"
+                        aria-label={t(lang, "teamSelectAll" as any) ?? "Select all"}
                         disabled={!canManage || selectableMembershipIds.length === 0}
                         checked={
                           selectableMembershipIds.length > 0 &&
@@ -413,7 +437,7 @@ export default function TeamView() {
                         <td className="py-3 pr-4 align-top">
                           <input
                             type="checkbox"
-                            aria-label="Select member"
+                            aria-label={t(lang, "teamSelectMember" as any) ?? "Select member"}
                             disabled={disabled}
                             checked={selectedMembershipIds.includes(r.membership_id)}
                             onChange={(e) => {
@@ -496,22 +520,22 @@ export default function TeamView() {
           )}
         </div>
 
-        {/* PERMISSIONS */}
         <div className="mt-6 rounded-3xl border border-white/10 bg-slate-950/55 p-6 shadow-2xl backdrop-blur-xl">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <div className="mt-4 flex items-center gap-3">
-                  <input
-                    value={searchPerm}
-                    onChange={(e) => setSearchPerm(e.target.value)}
-                    placeholder="Search permissions..."
-                    className="w-full max-w-md rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white outline-none"
-                  />
+                <input
+                  value={searchPerm}
+                  onChange={(e) => setSearchPerm(e.target.value)}
+                  placeholder={t(lang, "teamSearchPermissions" as any) ?? "Search permissions..."}
+                  className="w-full max-w-md rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white outline-none"
+                />
 
-                  <span className="text-xs text-white/50">
-                    {profilePerms.length} permissions
-                  </span>
-                </div>
+                <span className="text-xs text-white/50">
+                  {profilePerms.length} {t(lang, "teamPermissionsCount" as any) ?? "permissions"}
+                </span>
+              </div>
+
               <h2 className="flex items-center gap-2 text-lg font-extrabold tracking-tight text-white">
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-ew-accent/20 text-ew-accent">
                   ⚙️
@@ -529,7 +553,7 @@ export default function TeamView() {
                         lang,
                         (ROLE_LABEL_KEY[selectedRows[0]?.role ?? ""] ?? selectedRows[0]?.role ?? "") as any
                       ) ?? selectedRows[0]?.role ?? "—"
-                    } • ${t(lang, "teamPermissionsTitle" as any) ?? "Permissions profile"}: ${selectedProfileSummary}`
+                    } • ${t(lang, "teamPermissionProfile" as any) ?? "Permission profile"}: ${selectedProfileSummary}`
                   : `${t(lang, "teamSelectedCount" as any) ?? "Selected"}: ${selectedMembershipIds.length}`}
               </p>
             </div>
@@ -556,19 +580,25 @@ export default function TeamView() {
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <p className="text-xs text-white/50">Permission profile</p>
+              <p className="text-xs text-white/50">
+                {t(lang, "teamPermissionProfile" as any) ?? "Permission profile"}
+              </p>
               <p className="mt-1 text-sm font-bold text-white">{selectedProfileSummary}</p>
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <p className="text-xs text-white/50">Edit mode</p>
+              <p className="text-xs text-white/50">
+                {t(lang, "teamEditMode" as any) ?? "Edit mode"}
+              </p>
               <p className="mt-1 text-sm font-bold text-white">
-                {selectedMembershipIds.length > 1 ? "Batch update" : "Single member"}
+                {selectedMembershipIds.length > 1
+                  ? (t(lang, "teamEditModeBatch" as any) ?? "Batch update")
+                  : (t(lang, "teamEditModeSingle" as any) ?? "Single member")}
               </p>
             </div>
           </div>
 
-         {permBusy ? (
+          {permBusy ? (
             <div className="mt-5 rounded-2xl border border-dashed border-white/15 bg-white/5 p-4 text-sm text-white/60">
               {t(lang, "teamLoading" as any) ?? "Loading…"}
             </div>
@@ -577,19 +607,8 @@ export default function TeamView() {
               {t(lang, "teamPermissionsSelectMembers" as any) ??
                 "Select one or more members from the table above."}
             </div>
-          ) : profilePerms.length ? (
-            Object.entries(
-              profilePerms
-                .filter((p) => {
-                  if (!searchPerm.trim()) return true;
-                  const label = t(lang, (`permission.${p.key}` as any)) ?? p.key;
-                  return label.toLowerCase().includes(searchPerm.toLowerCase());
-                })
-                .reduce<Record<string, ProfilePermRow[]>>((acc, p) => {
-                  (acc[p.category] ||= []).push(p);
-                  return acc;
-                }, {})
-            ).map(([category, items]) => (
+          ) : filteredPermGroups.length ? (
+            filteredPermGroups.map(([category, items]) => (
               <div key={category} className="mt-6">
                 <div
                   className="mb-3 flex cursor-pointer items-center gap-3"
@@ -602,7 +621,7 @@ export default function TeamView() {
                 >
                   <div className="h-6 w-1 rounded-full bg-ew-accent" />
                   <div className="text-sm font-extrabold uppercase tracking-wide text-white">
-                    {t(lang, (PERMISSION_CATEGORY_KEY[category] ?? category) as any) ?? category}
+                    {getPermissionCategoryLabel(lang, category)}
                   </div>
                   <span className="ml-auto text-lg leading-none text-white/40">
                     {openSections[category] === false ? "+" : "−"}
@@ -635,7 +654,8 @@ export default function TeamView() {
 
                             <div className="min-w-0 flex-1">
                               <div className="text-sm font-semibold text-white">
-                                {t(lang, (`permission.${p.key}` as any)) ?? p.key}
+                                {getPermissionLabel(lang, p.key) ??
+                                  (t(lang, "teamPermissionUnnamed" as any) ?? "Uprawnienie")}
                               </div>
 
                               <div className="mt-2 flex flex-wrap gap-2">
@@ -650,10 +670,10 @@ export default function TeamView() {
                                   )}
                                 >
                                   {p.source === "override"
-                                    ? "Override"
+                                    ? (t(lang, "teamPermissionSourceOverride" as any) ?? "Override")
                                     : p.source === "profile"
-                                    ? "Profile"
-                                    : "Default"}
+                                    ? (t(lang, "teamPermissionSourceProfile" as any) ?? "Profile")
+                                    : (t(lang, "teamPermissionSourceDefault" as any) ?? "Default")}
                                 </span>
 
                                 <span
@@ -664,17 +684,17 @@ export default function TeamView() {
                                       : "border-rose-400/40 bg-rose-400/20 text-rose-200"
                                   )}
                                 >
-                                  {p.profileAllowed ? "Active" : "Inactive"}
+                                  {p.profileAllowed
+                                    ? (t(lang, "teamPermissionActive" as any) ?? "Active")
+                                    : (t(lang, "teamPermissionInactive" as any) ?? "Inactive")}
                                 </span>
 
                                 {isDirty ? (
                                   <span className="rounded-full border border-ew-accent/30 bg-ew-accent/15 px-2.5 py-1 text-[11px] font-semibold text-ew-accent">
-                                    Changed
+                                    {t(lang, "teamPermissionChanged" as any) ?? "Changed"}
                                   </span>
                                 ) : null}
                               </div>
-
-                              <div className="mt-2 font-mono text-[11px] text-white/30">{p.key}</div>
                             </div>
                           </div>
                         </label>
