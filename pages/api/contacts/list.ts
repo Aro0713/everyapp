@@ -18,6 +18,28 @@ function optInt(v: unknown, fallback: number) {
   return Number.isFinite(n) && n > 0 ? Math.trunc(n) : fallback;
 }
 
+function normalizeClientRoles(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((v): v is string => typeof v === "string" && v.trim().length > 0);
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+
+    if (!trimmed || trimmed === "{}") return [];
+
+    if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+      return trimmed
+        .slice(1, -1)
+        .split(",")
+        .map((x) => x.trim().replace(/^"(.*)"$/, "$1"))
+        .filter(Boolean);
+    }
+  }
+
+  return [];
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     const userId = mustUserId(req);
@@ -31,32 +53,53 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const q = optString(req.query.q) ?? "";
     const partyType = optString(req.query.partyType);
+    const clientRole = optString(req.query.clientRole);
+    const status = optString(req.query.status);
+    const pipelineStage = optString(req.query.pipelineStage);
     const limit = Math.min(optInt(req.query.limit, 50), 200);
 
     const params: any[] = [officeId];
-    let idx = params.length + 1;
+    let idx = 2;
 
-    const where: string[] = [`p.office_id = $1`];
+    const where: string[] = [`c.office_id = $1`];
 
     if (partyType) {
-      where.push(`p.party_type::text = $${idx}`);
+      where.push(`c.party_type::text = $${idx}`);
       params.push(partyType);
+      idx++;
+    }
+
+    if (clientRole) {
+      where.push(`$${idx} = ANY(c.client_roles)`);
+      params.push(clientRole);
+      idx++;
+    }
+
+    if (status) {
+      where.push(`c.status::text = $${idx}`);
+      params.push(status);
+      idx++;
+    }
+
+    if (pipelineStage) {
+      where.push(`c.pipeline_stage::text = $${idx}`);
+      params.push(pipelineStage);
       idx++;
     }
 
     if (q.length >= 2) {
       where.push(`
         (
-          p.full_name ILIKE '%' || $${idx} || '%'
-          OR p.pesel = $${idx}
-          OR p.nip = $${idx}
-          OR p.krs = $${idx}
-          OR EXISTS (
-            SELECT 1
-            FROM party_contacts pcx
-            WHERE pcx.party_id = p.party_id
-              AND pcx.value ILIKE '%' || $${idx} || '%'
-          )
+          c.full_name ILIKE '%' || $${idx} || '%'
+          OR coalesce(c.first_name, '') ILIKE '%' || $${idx} || '%'
+          OR coalesce(c.last_name, '') ILIKE '%' || $${idx} || '%'
+          OR coalesce(c.company_name, '') ILIKE '%' || $${idx} || '%'
+          OR coalesce(c.phone, '') ILIKE '%' || $${idx} || '%'
+          OR coalesce(c.email, '') ILIKE '%' || $${idx} || '%'
+          OR coalesce(c.pesel, '') = $${idx}
+          OR coalesce(c.nip, '') = $${idx}
+          OR coalesce(c.regon, '') = $${idx}
+          OR coalesce(c.krs, '') = $${idx}
         )
       `);
       params.push(q);
@@ -67,51 +110,68 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const sql = `
       SELECT
-        p.party_id AS id,
-        p.office_id,
-        p.party_type::text AS party_type,
-        p.full_name,
-        p.pesel,
-        p.nip,
-        p.krs,
-        p.created_at,
+        c.id,
+        c.office_id,
+        c.party_type::text AS party_type,
+        c.full_name,
+        c.notes,
+        c.source,
+        c.created_by_user_id,
+        c.assigned_user_id,
+        c.status::text AS status,
+        c.pipeline_stage::text AS pipeline_stage,
+        c.created_at,
+        c.updated_at,
 
-        MAX(CASE WHEN pc.kind::text = 'phone' AND pc.is_primary = true THEN pc.value END) AS phone_primary,
-        MAX(CASE WHEN pc.kind::text = 'email' AND pc.is_primary = true THEN pc.value END) AS email_primary,
-        MAX(CASE WHEN pc.kind::text = 'phone' THEN pc.value END) AS phone_fallback,
-        MAX(CASE WHEN pc.kind::text = 'email' THEN pc.value END) AS email_fallback,
+        c.first_name,
+        c.last_name,
+        c.pesel,
 
-        COUNT(pc.id)::int AS contacts_count
-      FROM office_parties p
-      LEFT JOIN party_contacts pc
-        ON pc.party_id = p.party_id
+        c.company_name,
+        c.nip,
+        c.regon,
+        c.krs,
+
+        c.phone,
+        c.email,
+
+        c.client_roles,
+        c.has_interactions,
+        c.interactions_count
+
+      FROM public.crm_contacts_view c
       WHERE ${where.join(" AND ")}
-      GROUP BY
-        p.party_id,
-        p.office_id,
-        p.party_type,
-        p.full_name,
-        p.pesel,
-        p.nip,
-        p.krs,
-        p.created_at
-      ORDER BY p.created_at DESC, p.full_name ASC
+      ORDER BY c.updated_at DESC, c.created_at DESC, c.full_name ASC
       LIMIT $${params.length}
     `;
 
     const { rows } = await pool.query(sql, params);
 
-    const normalized = rows.map((row) => ({
-      ...row,
-      phone: row.phone_primary ?? row.phone_fallback ?? null,
-      email: row.email_primary ?? row.email_fallback ?? null,
-    }));
+    const normalized = rows.map((row) => {
+      const clientRoles = normalizeClientRoles(row.client_roles);
+
+      return {
+        ...row,
+        client_roles: clientRoles,
+        has_interactions:
+          typeof row.has_interactions === "boolean"
+            ? row.has_interactions
+            : Number(row.interactions_count ?? 0) > 0,
+        interactions_count: Number(row.interactions_count ?? 0),
+        phone_primary: row.phone ?? null,
+        email_primary: row.email ?? null,
+        phone_fallback: row.phone ?? null,
+        email_fallback: row.email ?? null,
+        contacts_count: [row.phone, row.email].filter(Boolean).length,
+      };
+    });
 
     return res.status(200).json({ rows: normalized });
   } catch (e: any) {
     if (e?.message === "UNAUTHORIZED") {
       return res.status(401).json({ error: "UNAUTHORIZED" });
     }
+
     if (e?.message === "NO_OFFICE_MEMBERSHIP") {
       return res.status(403).json({ error: "NO_OFFICE_MEMBERSHIP" });
     }

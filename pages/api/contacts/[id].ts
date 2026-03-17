@@ -24,31 +24,6 @@ const ALLOWED_CLIENT_ROLES = new Set([
   "external_agent",
 ] as const);
 
-const ALLOWED_STATUSES = new Set([
-  "new",
-  "active",
-  "in_progress",
-  "won",
-  "lost",
-  "inactive",
-  "archived",
-] as const);
-
-const ALLOWED_PIPELINE_STAGES = new Set([
-  "lead",
-  "qualified",
-  "contacted",
-  "meeting_scheduled",
-  "needs_analysis",
-  "property_match",
-  "offer_preparation",
-  "offer_sent",
-  "negotiation",
-  "contract_preparation",
-  "closed_won",
-  "closed_lost",
-] as const);
-
 type ClientRole =
   | "buyer"
   | "seller"
@@ -59,34 +34,10 @@ type ClientRole =
   | "developer"
   | "external_agent";
 
-type ClientStatus =
-  | "new"
-  | "active"
-  | "in_progress"
-  | "won"
-  | "lost"
-  | "inactive"
-  | "archived";
-
-type ClientPipelineStage =
-  | "lead"
-  | "qualified"
-  | "contacted"
-  | "meeting_scheduled"
-  | "needs_analysis"
-  | "property_match"
-  | "offer_preparation"
-  | "offer_sent"
-  | "negotiation"
-  | "contract_preparation"
-  | "closed_won"
-  | "closed_lost";
-
 type ContactPayload = {
+  id: string | null;
   partyType: "person" | "company";
   clientRoles: ClientRole[];
-  status: ClientStatus;
-  pipelineStage: ClientPipelineStage;
   fullName: string | null;
   firstName: string | null;
   lastName: string | null;
@@ -118,22 +69,6 @@ function normalizeRoles(value: unknown): ClientRole[] {
   return Array.from(unique);
 }
 
-function normalizeStatus(value: unknown): ClientStatus {
-  const raw = optString(value);
-  if (raw && ALLOWED_STATUSES.has(raw as ClientStatus)) {
-    return raw as ClientStatus;
-  }
-  return "new";
-}
-
-function normalizePipelineStage(value: unknown): ClientPipelineStage {
-  const raw = optString(value);
-  if (raw && ALLOWED_PIPELINE_STAGES.has(raw as ClientPipelineStage)) {
-    return raw as ClientPipelineStage;
-  }
-  return "lead";
-}
-
 function normalizePayload(body: any): ContactPayload {
   const partyType = optString(body?.partyType) === "company" ? "company" : "person";
 
@@ -147,10 +82,9 @@ function normalizePayload(body: any): ContactPayload {
       : [firstName, lastName].filter(Boolean).join(" ").trim() || null;
 
   return {
+    id: optString(body?.id),
     partyType,
     clientRoles: normalizeRoles(body?.clientRoles),
-    status: normalizeStatus(body?.status),
-    pipelineStage: normalizePipelineStage(body?.pipelineStage),
     fullName: optString(body?.fullName) ?? derivedFullName,
     firstName,
     lastName,
@@ -172,13 +106,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const userId = mustUserId(req);
 
-    if (req.method !== "POST") {
-      res.setHeader("Allow", "POST");
+    if (req.method !== "PUT") {
+      res.setHeader("Allow", "PUT");
       return res.status(405).json({ error: "Method not allowed" });
     }
 
     const officeId = await getOfficeIdForUserId(userId);
     const payload = normalizePayload(req.body ?? {});
+
+    if (!payload.id) {
+      return res.status(400).json({ error: "MISSING_ID" });
+    }
 
     if (!payload.fullName) {
       return res.status(400).json({ error: "MISSING_FULL_NAME" });
@@ -198,54 +136,54 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     await client.query("BEGIN");
 
-    const partyInsert = await client.query(
+    const existing = await client.query(
       `
-      INSERT INTO public.parties (
-        office_id,
-        party_type,
-        full_name,
-        notes,
-        source,
-        created_by_user_id,
-        status,
-        pipeline_stage
-      )
-      VALUES (
-        $1,
-        $2::public.party_type,
-        $3,
-        $4,
-        $5,
-        $6,
-        $7::public.party_status_type,
-        $8::public.party_pipeline_stage_type
-      )
-      RETURNING
-        id,
-        office_id,
-        party_type,
-        full_name,
-        status,
-        pipeline_stage,
-        created_at,
-        updated_at
+      SELECT id, office_id, party_type::text AS party_type
+      FROM public.parties
+      WHERE id = $1
+        AND office_id = $2
+      LIMIT 1
+      `,
+      [payload.id, officeId]
+    );
+
+    if (!existing.rowCount) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "NOT_FOUND" });
+    }
+
+    await client.query(
+      `
+      UPDATE public.parties
+      SET
+        party_type = $2::public.party_type,
+        full_name = $3,
+        notes = $4,
+        source = $5,
+        updated_at = now()
+      WHERE id = $1
+        AND office_id = $6
       `,
       [
-        officeId,
+        payload.id,
         payload.partyType,
         payload.fullName,
         payload.notes,
         payload.source,
-        userId,
-        payload.status,
-        payload.pipelineStage,
+        officeId,
       ]
     );
 
-    const party = partyInsert.rows[0];
-    const partyId = party.id as string;
-
     if (payload.partyType === "person") {
+      await client.query(
+        `
+        DELETE FROM public.party_company_details
+        WHERE party_id = $1
+          AND office_id = $2
+        `,
+        [payload.id, officeId]
+      );
+
       await client.query(
         `
         INSERT INTO public.party_person_details (
@@ -260,12 +198,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         VALUES (
           $1, $2, $3, $4, $5, NULL, NULL
         )
+        ON CONFLICT (party_id) DO UPDATE
+        SET
+          office_id = EXCLUDED.office_id,
+          first_name = EXCLUDED.first_name,
+          last_name = EXCLUDED.last_name,
+          pesel = EXCLUDED.pesel
         `,
-        [partyId, officeId, payload.firstName, payload.lastName, payload.pesel]
+        [
+          payload.id,
+          officeId,
+          payload.firstName,
+          payload.lastName,
+          payload.pesel,
+        ]
       );
     }
 
     if (payload.partyType === "company") {
+      await client.query(
+        `
+        DELETE FROM public.party_person_details
+        WHERE party_id = $1
+          AND office_id = $2
+        `,
+        [payload.id, officeId]
+      );
+
       await client.query(
         `
         INSERT INTO public.party_company_details (
@@ -279,9 +238,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         VALUES (
           $1, $2, $3, $4, $5, $6
         )
+        ON CONFLICT (party_id) DO UPDATE
+        SET
+          office_id = EXCLUDED.office_id,
+          company_name = EXCLUDED.company_name,
+          nip = EXCLUDED.nip,
+          regon = EXCLUDED.regon,
+          krs = EXCLUDED.krs
         `,
         [
-          partyId,
+          payload.id,
           officeId,
           payload.companyName ?? payload.fullName,
           payload.nip,
@@ -290,6 +256,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ]
       );
     }
+
+    await client.query(
+      `
+      DELETE FROM public.party_contacts
+      WHERE party_id = $1
+      `,
+      [payload.id]
+    );
 
     if (payload.phone) {
       await client.query(
@@ -307,7 +281,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           true
         )
         `,
-        [partyId, payload.phone]
+        [payload.id, payload.phone]
       );
     }
 
@@ -327,9 +301,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           $3
         )
         `,
-        [partyId, payload.email, payload.phone ? false : true]
+        [payload.id, payload.email, payload.phone ? false : true]
       );
     }
+
+    await client.query(
+      `
+      DELETE FROM public.party_roles
+      WHERE party_id = $1
+        AND office_id = $2
+      `,
+      [payload.id, officeId]
+    );
 
     if (payload.clientRoles.length > 0) {
       for (const role of payload.clientRoles) {
@@ -347,7 +330,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           )
           ON CONFLICT (office_id, party_id, role) DO NOTHING
           `,
-          [officeId, partyId, role]
+          [officeId, payload.id, role]
         );
       }
     }
@@ -362,9 +345,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         notes,
         source,
         created_by_user_id,
-        assigned_user_id,
-        status::text AS status,
-        pipeline_stage::text AS pipeline_stage,
         created_at,
         updated_at,
         first_name,
@@ -384,28 +364,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         AND office_id = $2
       LIMIT 1
       `,
-      [partyId, officeId]
+      [payload.id, officeId]
     );
 
     await client.query("COMMIT");
 
     return res.status(200).json({
       ok: true,
-      row: refreshed.rows[0] ?? {
-        id: party.id,
-        office_id: party.office_id,
-        party_type: party.party_type,
-        full_name: party.full_name,
-        status: party.status,
-        pipeline_stage: party.pipeline_stage,
-        created_at: party.created_at,
-        updated_at: party.updated_at,
-        phone: payload.phone,
-        email: payload.email,
-        client_roles: payload.clientRoles,
-        has_interactions: false,
-        interactions_count: 0,
-      },
+      row: refreshed.rows[0] ?? null,
     });
   } catch (e: any) {
     await client.query("ROLLBACK").catch(() => null);
@@ -413,11 +379,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (e?.message === "UNAUTHORIZED") {
       return res.status(401).json({ error: "UNAUTHORIZED" });
     }
+
     if (e?.message === "NO_OFFICE_MEMBERSHIP") {
       return res.status(403).json({ error: "NO_OFFICE_MEMBERSHIP" });
     }
 
-    console.error("CONTACTS_CREATE_ERROR", e);
+    console.error("CONTACTS_UPDATE_ERROR", e);
     return res.status(400).json({ error: e?.message ?? "Bad request" });
   } finally {
     client.release();
