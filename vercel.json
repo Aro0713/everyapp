@@ -1,6 +1,6 @@
 {
   "crons": [
-    { "path": "/api/everybot/fresh-sync-run", "schedule": "*/5 * * * *" },
+    { "path": "/api/everybot/fresh-sync-run", "schedule": "0 */6 * * *" },
     { "path": "/api/everybot/enrich-run", "schedule": "*/5 * * * *" },
     { "path": "/api/everybot/verify-run", "schedule": "*/10 * * * *" },
     { "path": "/api/everybot/geocode-cron", "schedule": "*/15 * * * *" },
