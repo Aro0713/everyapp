@@ -13,6 +13,26 @@ function optString(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null;
 }
 
+function optBool(v: unknown, fallback = false): boolean {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "string") {
+    const x = v.trim().toLowerCase();
+    if (["true", "1", "yes", "y", "on"].includes(x)) return true;
+    if (["false", "0", "no", "n", "off"].includes(x)) return false;
+  }
+  return fallback;
+}
+
+function optInt(v: unknown): number | null {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.trunc(n) : null;
+}
+
+function optNumeric(v: unknown): number | null {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 const ALLOWED_CLIENT_ROLES = new Set([
   "buyer",
   "seller",
@@ -49,6 +69,57 @@ const ALLOWED_PIPELINE_STAGES = new Set([
   "closed_lost",
 ] as const);
 
+const ALLOWED_CASE_TYPES = new Set([
+  "seller",
+  "buyer",
+  "landlord",
+  "tenant",
+  "credit",
+  "insurance",
+  "offer_inquiry",
+  "unspecified",
+  "other",
+] as const);
+
+const ALLOWED_VISIBILITY_SCOPES = new Set([
+  "everywhere",
+  "network",
+  "office",
+  "group",
+  "mine",
+] as const);
+
+const ALLOWED_PROPERTY_KINDS = new Set([
+  "apartment",
+  "house",
+  "plot",
+  "commercial_unit",
+  "tenement",
+  "warehouse",
+  "other_commercial",
+  "other",
+] as const);
+
+const ALLOWED_MARKET_TYPES = new Set([
+  "primary",
+  "secondary",
+] as const);
+
+const ALLOWED_CONTRACT_TYPES = new Set([
+  "none",
+  "exclusive_bilateral",
+  "exclusive_unilateral",
+  "open",
+] as const);
+
+const ALLOWED_INSURANCE_SUBJECTS = new Set([
+  "house",
+  "car",
+  "vacation",
+  "children",
+  "other",
+] as const);
+
 type ClientRole =
   | "buyer"
   | "seller"
@@ -82,28 +153,141 @@ type ClientPipelineStage =
   | "closed_won"
   | "closed_lost";
 
+type ClientCaseType =
+  | "seller"
+  | "buyer"
+  | "landlord"
+  | "tenant"
+  | "credit"
+  | "insurance"
+  | "offer_inquiry"
+  | "unspecified"
+  | "other";
+
+type VisibilityScope =
+  | "everywhere"
+  | "network"
+  | "office"
+  | "group"
+  | "mine";
+
+type PropertyKind =
+  | "apartment"
+  | "house"
+  | "plot"
+  | "commercial_unit"
+  | "tenement"
+  | "warehouse"
+  | "other_commercial"
+  | "other";
+
+type PropertyMarketType = "primary" | "secondary";
+
+type PropertyContractType =
+  | "none"
+  | "exclusive_bilateral"
+  | "exclusive_unilateral"
+  | "open";
+
+type InsuranceSubject =
+  | "house"
+  | "car"
+  | "vacation"
+  | "children"
+  | "other";
+
+type OrderDetailsInput = {
+  propertyKind: PropertyKind | null;
+  marketType: PropertyMarketType | null;
+  contractType: PropertyContractType | null;
+  caretakerUserId: string | null;
+
+  expectedPropertyKind: PropertyKind | null;
+  searchLocationText: string | null;
+
+  budgetMin: number | null;
+  budgetMax: number | null;
+  roomsMin: number | null;
+  roomsMax: number | null;
+  areaMin: number | null;
+  areaMax: number | null;
+};
+
+type PropertyDetailsInput = {
+  country: string | null;
+  city: string | null;
+  street: string | null;
+  buildingNumber: string | null;
+  unitNumber: string | null;
+  priceAmount: number | null;
+  priceCurrency: string | null;
+  pricePeriod: string | null;
+  areaM2: number | null;
+  roomsCount: number | null;
+  floorNumber: number | null;
+  floorTotal: number | null;
+};
+
+type OfferInquiryInput = {
+  offerId: string | null;
+  inquiryText: string | null;
+  autofillFromOffer: boolean;
+  autofillMarginPercent: number | null;
+};
+
+type CreditDetailsInput = {
+  creditedPropertyPrice: number | null;
+  plannedOwnContribution: number | null;
+  loanPeriodMonths: number | null;
+  concernsExistingProperty: boolean;
+  relatedOfferId: string | null;
+  existingPropertyNotes: string | null;
+};
+
+type InsuranceDetailsInput = {
+  insuranceSubject: InsuranceSubject | null;
+  insuranceNotes: string | null;
+};
+
 type ContactPayload = {
   partyType: "person" | "company";
   clientRoles: ClientRole[];
   status: ClientStatus;
   pipelineStage: ClientPipelineStage;
+
   fullName: string | null;
   firstName: string | null;
   lastName: string | null;
   companyName: string | null;
+
   phone: string | null;
   email: string | null;
   notes: string | null;
   source: string | null;
+
   pesel: string | null;
   nip: string | null;
   regon: string | null;
   krs: string | null;
+
+  assignedUserId: string | null;
+  marketingConsent: boolean;
+  marketingConsentNotes: string | null;
+
+  caseType: ClientCaseType;
+  createCase: boolean;
+  visibilityScope: VisibilityScope;
+  clientBucket: "client" | "archive";
+
+  orderDetails: OrderDetailsInput;
+  propertyDetails: PropertyDetailsInput;
+  offerInquiry: OfferInquiryInput;
+  creditDetails: CreditDetailsInput;
+  insuranceDetails: InsuranceDetailsInput;
 };
 
 function normalizeRoles(value: unknown): ClientRole[] {
   if (!Array.isArray(value)) return [];
-
   const unique = new Set<ClientRole>();
 
   for (const item of value) {
@@ -134,6 +318,132 @@ function normalizePipelineStage(value: unknown): ClientPipelineStage {
   return "lead";
 }
 
+function normalizeCaseType(value: unknown, roles: ClientRole[]): ClientCaseType {
+  const raw = optString(value);
+  if (raw && ALLOWED_CASE_TYPES.has(raw as ClientCaseType)) {
+    return raw as ClientCaseType;
+  }
+
+  if (roles.includes("seller")) return "seller";
+  if (roles.includes("buyer")) return "buyer";
+  if (roles.includes("landlord")) return "landlord";
+  if (roles.includes("tenant")) return "tenant";
+  if (roles.includes("investor")) return "buyer";
+  if (roles.includes("flipper")) return "buyer";
+  if (roles.includes("developer")) return "seller";
+  if (roles.includes("external_agent")) return "other";
+
+  return "unspecified";
+}
+
+function normalizeVisibilityScope(value: unknown): VisibilityScope {
+  const raw = optString(value);
+  if (raw && ALLOWED_VISIBILITY_SCOPES.has(raw as VisibilityScope)) {
+    return raw as VisibilityScope;
+  }
+  return "office";
+}
+
+function normalizePropertyKind(value: unknown): PropertyKind | null {
+  const raw = optString(value);
+  if (raw && ALLOWED_PROPERTY_KINDS.has(raw as PropertyKind)) {
+    return raw as PropertyKind;
+  }
+  return null;
+}
+
+function normalizeMarketType(value: unknown): PropertyMarketType | null {
+  const raw = optString(value);
+  if (raw && ALLOWED_MARKET_TYPES.has(raw as PropertyMarketType)) {
+    return raw as PropertyMarketType;
+  }
+  return null;
+}
+
+function normalizeContractType(value: unknown): PropertyContractType | null {
+  const raw = optString(value);
+  if (raw && ALLOWED_CONTRACT_TYPES.has(raw as PropertyContractType)) {
+    return raw as PropertyContractType;
+  }
+  return null;
+}
+
+function normalizeInsuranceSubject(value: unknown): InsuranceSubject | null {
+  const raw = optString(value);
+  if (raw && ALLOWED_INSURANCE_SUBJECTS.has(raw as InsuranceSubject)) {
+    return raw as InsuranceSubject;
+  }
+  return null;
+}
+
+function normalizeOrderDetails(body: any): OrderDetailsInput {
+  const src = body?.orderDetails ?? body ?? {};
+  return {
+    propertyKind: normalizePropertyKind(src?.propertyKind),
+    marketType: normalizeMarketType(src?.marketType),
+    contractType: normalizeContractType(src?.contractType),
+    caretakerUserId: optString(src?.caretakerUserId),
+
+    expectedPropertyKind: normalizePropertyKind(src?.expectedPropertyKind),
+    searchLocationText: optString(src?.searchLocationText),
+
+    budgetMin: optNumeric(src?.budgetMin),
+    budgetMax: optNumeric(src?.budgetMax),
+    roomsMin: optInt(src?.roomsMin),
+    roomsMax: optInt(src?.roomsMax),
+    areaMin: optNumeric(src?.areaMin),
+    areaMax: optNumeric(src?.areaMax),
+  };
+}
+
+function normalizePropertyDetails(body: any): PropertyDetailsInput {
+  const src = body?.propertyDetails ?? body ?? {};
+  return {
+    country: optString(src?.country),
+    city: optString(src?.city),
+    street: optString(src?.street),
+    buildingNumber: optString(src?.buildingNumber),
+    unitNumber: optString(src?.unitNumber),
+    priceAmount: optNumeric(src?.priceAmount),
+    priceCurrency: optString(src?.priceCurrency) ?? "PLN",
+    pricePeriod: optString(src?.pricePeriod),
+    areaM2: optNumeric(src?.areaM2),
+    roomsCount: optInt(src?.roomsCount),
+    floorNumber: optInt(src?.floorNumber),
+    floorTotal: optInt(src?.floorTotal),
+  };
+}
+
+function normalizeOfferInquiry(body: any): OfferInquiryInput {
+  const src = body?.offerInquiry ?? body ?? {};
+  return {
+    offerId: optString(src?.offerId),
+    inquiryText: optString(src?.inquiryText),
+    autofillFromOffer: optBool(src?.autofillFromOffer, false),
+    autofillMarginPercent: optNumeric(src?.autofillMarginPercent) ?? 10,
+  };
+}
+
+function normalizeCreditDetails(body: any): CreditDetailsInput {
+  const src = body?.creditDetails ?? body ?? {};
+  return {
+    creditedPropertyPrice: optNumeric(src?.creditedPropertyPrice),
+    plannedOwnContribution: optNumeric(src?.plannedOwnContribution),
+    loanPeriodMonths: optInt(src?.loanPeriodMonths),
+    concernsExistingProperty: optBool(src?.concernsExistingProperty, false),
+    relatedOfferId: optString(src?.relatedOfferId),
+    existingPropertyNotes: optString(src?.existingPropertyNotes),
+  };
+}
+
+function normalizeInsuranceDetails(body: any): InsuranceDetailsInput {
+  const src = body?.insuranceDetails ?? body ?? {};
+  return {
+    insuranceSubject: normalizeInsuranceSubject(src?.insuranceSubject),
+    insuranceNotes: optString(src?.insuranceNotes),
+  };
+}
+
 function normalizePayload(body: any): ContactPayload {
   const partyType = optString(body?.partyType) === "company" ? "company" : "person";
 
@@ -146,24 +456,65 @@ function normalizePayload(body: any): ContactPayload {
       ? companyName
       : [firstName, lastName].filter(Boolean).join(" ").trim() || null;
 
+  const clientRoles = normalizeRoles(body?.clientRoles);
+  const caseType = normalizeCaseType(body?.caseType, clientRoles);
+
   return {
     partyType,
-    clientRoles: normalizeRoles(body?.clientRoles),
+    clientRoles,
     status: normalizeStatus(body?.status),
     pipelineStage: normalizePipelineStage(body?.pipelineStage),
+
     fullName: optString(body?.fullName) ?? derivedFullName,
     firstName,
     lastName,
     companyName,
+
     phone: optString(body?.phone),
     email: optString(body?.email),
     notes: optString(body?.notes),
     source: optString(body?.source) ?? "manual",
+
     pesel: optString(body?.pesel),
     nip: optString(body?.nip),
     regon: optString(body?.regon),
     krs: optString(body?.krs),
+
+    assignedUserId: optString(body?.assignedUserId),
+    marketingConsent: optBool(body?.marketingConsent, false),
+    marketingConsentNotes: optString(body?.marketingConsentNotes),
+
+    caseType,
+    createCase: body?.createCase === undefined ? caseType !== "other" : optBool(body?.createCase, true),
+    visibilityScope: normalizeVisibilityScope(body?.visibilityScope),
+    clientBucket: optString(body?.clientBucket) === "archive" ? "archive" : "client",
+
+    orderDetails: normalizeOrderDetails(body),
+    propertyDetails: normalizePropertyDetails(body),
+    offerInquiry: normalizeOfferInquiry(body),
+    creditDetails: normalizeCreditDetails(body),
+    insuranceDetails: normalizeInsuranceDetails(body),
   };
+}
+
+function shouldInsertOrderDetails(caseType: ClientCaseType) {
+  return ["seller", "buyer", "landlord", "tenant", "offer_inquiry"].includes(caseType);
+}
+
+function shouldInsertPropertyDetails(caseType: ClientCaseType) {
+  return ["seller", "landlord"].includes(caseType);
+}
+
+function shouldInsertOfferInquiry(caseType: ClientCaseType) {
+  return caseType === "offer_inquiry";
+}
+
+function shouldInsertCreditDetails(caseType: ClientCaseType) {
+  return caseType === "credit";
+}
+
+function shouldInsertInsuranceDetails(caseType: ClientCaseType) {
+  return caseType === "insurance";
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -207,6 +558,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         notes,
         source,
         created_by_user_id,
+        assigned_user_id,
         status,
         pipeline_stage
       )
@@ -217,18 +569,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         $4,
         $5,
         $6,
-        $7::public.party_status_type,
-        $8::public.party_pipeline_stage_type
+        $7,
+        $8::public.party_status_type,
+        $9::public.party_pipeline_stage_type
       )
-      RETURNING
-        id,
-        office_id,
-        party_type,
-        full_name,
-        status,
-        pipeline_stage,
-        created_at,
-        updated_at
+      RETURNING id, office_id, party_type, full_name, status, pipeline_stage, created_at, updated_at
       `,
       [
         officeId,
@@ -237,6 +582,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         payload.notes,
         payload.source,
         userId,
+        payload.assignedUserId ?? userId,
         payload.status,
         payload.pipelineStage,
       ]
@@ -257,9 +603,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           id_doc_type,
           id_doc_number
         )
-        VALUES (
-          $1, $2, $3, $4, $5, NULL, NULL
-        )
+        VALUES ($1, $2, $3, $4, $5, NULL, NULL)
         `,
         [partyId, officeId, payload.firstName, payload.lastName, payload.pesel]
       );
@@ -276,9 +620,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           regon,
           krs
         )
-        VALUES (
-          $1, $2, $3, $4, $5, $6
-        )
+        VALUES ($1, $2, $3, $4, $5, $6)
         `,
         [
           partyId,
@@ -331,23 +673,300 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       );
     }
 
-    if (payload.clientRoles.length > 0) {
-      for (const role of payload.clientRoles) {
+    for (const role of payload.clientRoles) {
+      await client.query(
+        `
+        INSERT INTO public.party_roles (
+          office_id,
+          party_id,
+          role
+        )
+        VALUES (
+          $1,
+          $2,
+          $3::public.party_role_type
+        )
+        ON CONFLICT (office_id, party_id, role) DO NOTHING
+        `,
+        [officeId, partyId, role]
+      );
+    }
+
+    await client.query(
+      `
+      INSERT INTO public.party_consents (
+        office_id,
+        party_id,
+        kind,
+        granted,
+        granted_at,
+        source,
+        notes
+      )
+      VALUES (
+        $1,
+        $2,
+        'marketing'::public.consent_kind,
+        $3,
+        $4,
+        $5,
+        $6
+      )
+      ON CONFLICT (party_id, kind)
+      DO UPDATE SET
+        granted = EXCLUDED.granted,
+        granted_at = EXCLUDED.granted_at,
+        source = EXCLUDED.source,
+        notes = EXCLUDED.notes
+      `,
+      [
+        officeId,
+        partyId,
+        payload.marketingConsent,
+        payload.marketingConsent ? new Date().toISOString() : null,
+        payload.source,
+        payload.marketingConsentNotes,
+      ]
+    );
+
+    let clientCaseId: string | null = null;
+
+    if (payload.createCase) {
+      const clientCaseInsert = await client.query(
+        `
+        INSERT INTO public.client_cases (
+          office_id,
+          party_id,
+          case_type,
+          status,
+          assigned_user_id,
+          created_by_user_id,
+          source,
+          notes,
+          client_bucket
+        )
+        VALUES (
+          $1,
+          $2,
+          $3::public.client_case_type,
+          'active'::public.client_case_status,
+          $4,
+          $5,
+          $6,
+          $7,
+          $8
+        )
+        RETURNING id
+        `,
+        [
+          officeId,
+          partyId,
+          payload.caseType,
+          payload.assignedUserId ?? userId,
+          userId,
+          payload.source,
+          payload.notes,
+          payload.clientBucket,
+        ]
+      );
+
+      clientCaseId = clientCaseInsert.rows[0]?.id ?? null;
+
+      await client.query(
+        `
+        INSERT INTO public.client_case_visibility_rules (
+          office_id,
+          client_case_id,
+          visibility_scope,
+          owner_user_id,
+          owner_membership_id
+        )
+        VALUES ($1, $2, $3::public.ownership_scope_type, $4, NULL)
+        `,
+        [officeId, clientCaseId, payload.visibilityScope, payload.assignedUserId ?? userId]
+      );
+
+      if (shouldInsertOrderDetails(payload.caseType)) {
+        const x = payload.orderDetails;
+
         await client.query(
           `
-          INSERT INTO public.party_roles (
+          INSERT INTO public.client_case_order_details (
             office_id,
-            party_id,
-            role
+            client_case_id,
+            property_kind,
+            market_type,
+            contract_type,
+            caretaker_user_id,
+            expected_property_kind,
+            search_location_text,
+            budget_min,
+            budget_max,
+            rooms_min,
+            rooms_max,
+            area_min,
+            area_max
           )
           VALUES (
             $1,
             $2,
-            $3::public.party_role_type
+            $3::public.property_kind_type,
+            $4::public.property_market_type,
+            $5::public.property_contract_type,
+            $6,
+            $7::public.property_kind_type,
+            $8,
+            $9,
+            $10,
+            $11,
+            $12,
+            $13,
+            $14
           )
-          ON CONFLICT (office_id, party_id, role) DO NOTHING
           `,
-          [officeId, partyId, role]
+          [
+            officeId,
+            clientCaseId,
+            x.propertyKind,
+            x.marketType,
+            x.contractType,
+            x.caretakerUserId ?? payload.assignedUserId ?? userId,
+            x.expectedPropertyKind,
+            x.searchLocationText,
+            x.budgetMin,
+            x.budgetMax,
+            x.roomsMin,
+            x.roomsMax,
+            x.areaMin,
+            x.areaMax,
+          ]
+        );
+      }
+
+      if (shouldInsertPropertyDetails(payload.caseType)) {
+        const x = payload.propertyDetails;
+
+        await client.query(
+          `
+          INSERT INTO public.client_case_properties (
+            office_id,
+            client_case_id,
+            country,
+            city,
+            street,
+            building_number,
+            unit_number,
+            price_amount,
+            price_currency,
+            price_period,
+            area_m2,
+            rooms_count,
+            floor_number,
+            floor_total
+          )
+          VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+          )
+          `,
+          [
+            officeId,
+            clientCaseId,
+            x.country,
+            x.city,
+            x.street,
+            x.buildingNumber,
+            x.unitNumber,
+            x.priceAmount,
+            x.priceCurrency,
+            x.pricePeriod,
+            x.areaM2,
+            x.roomsCount,
+            x.floorNumber,
+            x.floorTotal,
+          ]
+        );
+      }
+
+      if (shouldInsertOfferInquiry(payload.caseType)) {
+        const x = payload.offerInquiry;
+
+        await client.query(
+          `
+          INSERT INTO public.client_case_offer_inquiries (
+            office_id,
+            client_case_id,
+            offer_id,
+            inquiry_text,
+            autofill_from_offer,
+            autofill_margin_percent
+          )
+          VALUES ($1, $2, $3, $4, $5, $6)
+          `,
+          [
+            officeId,
+            clientCaseId,
+            x.offerId,
+            x.inquiryText,
+            x.autofillFromOffer,
+            x.autofillMarginPercent,
+          ]
+        );
+      }
+
+      if (shouldInsertCreditDetails(payload.caseType)) {
+        const x = payload.creditDetails;
+
+        await client.query(
+          `
+          INSERT INTO public.client_case_credit_details (
+            office_id,
+            client_case_id,
+            credited_property_price,
+            planned_own_contribution,
+            loan_period_months,
+            concerns_existing_property,
+            related_offer_id,
+            existing_property_notes
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          `,
+          [
+            officeId,
+            clientCaseId,
+            x.creditedPropertyPrice,
+            x.plannedOwnContribution,
+            x.loanPeriodMonths,
+            x.concernsExistingProperty,
+            x.relatedOfferId,
+            x.existingPropertyNotes,
+          ]
+        );
+      }
+
+      if (shouldInsertInsuranceDetails(payload.caseType)) {
+        const x = payload.insuranceDetails;
+
+        await client.query(
+          `
+          INSERT INTO public.client_case_insurance_details (
+            office_id,
+            client_case_id,
+            insurance_subject,
+            insurance_notes
+          )
+          VALUES (
+            $1,
+            $2,
+            $3::public.insurance_subject_type,
+            $4
+          )
+          `,
+          [
+            officeId,
+            clientCaseId,
+            x.insuranceSubject,
+            x.insuranceNotes,
+          ]
         );
       }
     }
@@ -391,21 +1010,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(200).json({
       ok: true,
-      row: refreshed.rows[0] ?? {
-        id: party.id,
-        office_id: party.office_id,
-        party_type: party.party_type,
-        full_name: party.full_name,
-        status: party.status,
-        pipeline_stage: party.pipeline_stage,
-        created_at: party.created_at,
-        updated_at: party.updated_at,
-        phone: payload.phone,
-        email: payload.email,
-        client_roles: payload.clientRoles,
-        has_interactions: false,
-        interactions_count: 0,
-      },
+      row: refreshed.rows[0] ?? null,
+      clientCaseId,
+      createdCase: Boolean(clientCaseId),
     });
   } catch (e: any) {
     await client.query("ROLLBACK").catch(() => null);
@@ -413,6 +1020,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (e?.message === "UNAUTHORIZED") {
       return res.status(401).json({ error: "UNAUTHORIZED" });
     }
+
     if (e?.message === "NO_OFFICE_MEMBERSHIP") {
       return res.status(403).json({ error: "NO_OFFICE_MEMBERSHIP" });
     }
