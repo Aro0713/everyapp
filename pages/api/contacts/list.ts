@@ -159,7 +159,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ROW_NUMBER() OVER (
             PARTITION BY cc.party_id
             ORDER BY
-              CASE WHEN cc.status = 'active'::public.client_case_status THEN 0 ELSE 1 END,
+             CASE WHEN cc.status = 'active' THEN 0 ELSE 1 END,
               cc.created_at ASC
           ) AS rn
         FROM public.client_cases cc
