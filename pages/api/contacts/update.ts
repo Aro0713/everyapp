@@ -651,8 +651,8 @@ async function ensureClientCase(
       `
       UPDATE public.client_cases
       SET
-        case_type = $3::public.client_case_type,
-        status = 'active'::public.client_case_status,
+        case_type = $3,
+        status = 'active',
         assigned_user_id = $4,
         source = $5,
         notes = $6,
@@ -690,8 +690,8 @@ async function ensureClientCase(
     VALUES (
       $1,
       $2,
-      $3::public.client_case_type,
-      'active'::public.client_case_status,
+      $3,
+      'active',
       $4,
       $5,
       $6,
@@ -1253,14 +1253,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         [officeId, payload.id]
       );
 
-      if (existingCase.rows[0]?.id) {
+          if (existingCase.rows[0]?.id) {
         clientCaseId = existingCase.rows[0].id as string;
 
         await client.query(
           `
           UPDATE public.client_cases
           SET
-            status = 'archived'::public.client_case_status,
+            status = 'archived',
             client_bucket = 'archive'
           WHERE id = $1
             AND office_id = $2
