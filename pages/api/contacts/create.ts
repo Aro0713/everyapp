@@ -748,8 +748,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         VALUES (
           $1,
           $2,
-          $3::public.client_case_type,
-          'active'::public.client_case_status,
+          $3,
+          'active',
           $4,
           $5,
           $6,
