@@ -552,7 +552,7 @@ async function createListingForCase(
     ? [property.street, property.buildingNumber, property.unitNumber].filter(Boolean).join(" ")
     : null;
 
-  const inserted = await client.query(
+    const inserted = await client.query(
     `
     INSERT INTO public.listings (
       office_id,
@@ -590,8 +590,8 @@ async function createListingForCase(
     )
     VALUES (
       $1,
-      'offer'::record_type,
-      $2::transaction_type,
+      'offer',
+      $2,
       'draft'::listing_status,
       $3,
       $4,
