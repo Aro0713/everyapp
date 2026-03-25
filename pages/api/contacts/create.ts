@@ -682,8 +682,8 @@ async function createListingForCase(
       street,
       postal_code,
       lat,
-      lng,
-      )
+      lng
+    )
     VALUES (
       $1,
       'offer',
@@ -716,7 +716,7 @@ async function createListingForCase(
       $27,
       $28,
       $29,
-      $30,
+      $30
     )
     RETURNING id
     `,
@@ -754,9 +754,13 @@ async function createListingForCase(
     ]
   );
 
-  const listingId = inserted.rows[0].id as string;
+ const listingId = inserted.rows[0].id as string;
 
-    await client.query(
+  // 🔍 DEBUG
+  console.log("OFFER NUMBER:", offerNumber);
+  console.log("LISTING ID:", listingId);
+
+  await client.query(
     `
     UPDATE public.listings
     SET offer_number = $2
@@ -765,7 +769,7 @@ async function createListingForCase(
     `,
     [listingId, offerNumber, officeId]
   );
-  
+
   await client.query(
     `
     INSERT INTO public.listing_parties (
