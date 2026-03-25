@@ -32,6 +32,96 @@ function optNumeric(v: unknown): number | null {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
+function slugToken(value: string | null | undefined, fallback: string, maxLen: number) {
+  const raw = (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+
+  const token = raw.slice(0, maxLen);
+  return token || fallback;
+}
+
+function buildAgentToken(fullName: string | null | undefined, email: string | null | undefined) {
+  const normalizedName = (fullName ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+  if (normalizedName) {
+    const parts = normalizedName
+      .split(/\s+/)
+      .map((x) => x.replace(/[^A-Za-z0-9]/g, ""))
+      .filter(Boolean);
+
+    if (parts.length >= 2) {
+      const first = parts[0][0] ?? "";
+      const last = parts[parts.length - 1][0] ?? "";
+      const initials = `${first}${last}`.toUpperCase();
+      if (initials) return initials;
+    }
+
+    if (parts.length === 1) {
+      return parts[0].slice(0, 3).toUpperCase();
+    }
+  }
+
+  const emailLocal = (email ?? "").split("@")[0]?.replace(/[^A-Za-z0-9]/g, "") ?? "";
+  return emailLocal.slice(0, 3).toUpperCase() || "USR";
+}
+
+async function generateOfferNumber(
+  client: any,
+  officeId: string,
+  caseOwnerUserId: string
+): Promise<string> {
+  const officeRes = await client.query(
+    `
+    SELECT name, invite_code
+    FROM public.offices
+    WHERE id = $1
+    LIMIT 1
+    `,
+    [officeId]
+  );
+
+  const office = officeRes.rows[0];
+  if (!office) throw new Error("OFFICE_NOT_FOUND");
+
+  const userRes = await client.query(
+    `
+    SELECT full_name, email
+    FROM public.users
+    WHERE id = $1
+    LIMIT 1
+    `,
+    [caseOwnerUserId]
+  );
+
+  const user = userRes.rows[0];
+  if (!user) throw new Error("CASE_OWNER_NOT_FOUND");
+
+  const officeToken = slugToken(office.invite_code ?? office.name, "OFFICE", 6);
+  const agentToken = buildAgentToken(user.full_name, user.email);
+  const year = new Date().getFullYear().toString();
+
+  const seqRes = await client.query(
+    `
+    SELECT COALESCE(MAX(CAST(SPLIT_PART(offer_number, '/', 1) AS INTEGER)), 0) AS max_seq
+    FROM public.listings
+    WHERE office_id = $1
+      AND offer_number IS NOT NULL
+      AND RIGHT(offer_number, 4) = $2
+    `,
+    [officeId, year]
+  );
+
+  const nextSeq = Number(seqRes.rows[0]?.max_seq ?? 0) + 1;
+  const seq = String(nextSeq).padStart(4, "0");
+
+  return `${seq}/${officeToken}/${agentToken}/${year}`;
+}
 
 const ALLOWED_CLIENT_ROLES = new Set([
   "buyer",
@@ -552,6 +642,12 @@ async function createListingForCase(
     ? [property.street, property.buildingNumber, property.unitNumber].filter(Boolean).join(" ")
     : null;
 
+  const offerNumber = await generateOfferNumber(
+    client,
+    officeId,
+    payload.assignedUserId ?? userId
+  );
+  
     const inserted = await client.query(
     `
     INSERT INTO public.listings (
@@ -586,8 +682,9 @@ async function createListingForCase(
       street,
       postal_code,
       lat,
-      lng
-    )
+      lng,
+      offer_number
+      )
     VALUES (
       $1,
       'offer',
@@ -620,7 +717,8 @@ async function createListingForCase(
       $27,
       $28,
       $29,
-      $30
+      $30,
+      $31
     )
     RETURNING id
     `,
