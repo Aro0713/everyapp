@@ -485,7 +485,8 @@ function normalizePayload(body: any): ContactPayload {
     marketingConsentNotes: optString(body?.marketingConsentNotes),
 
     caseType,
-    createCase: body?.createCase === undefined ? caseType !== "other" : optBool(body?.createCase, true),
+    createCase:
+      body?.createCase === undefined ? caseType !== "other" : optBool(body?.createCase, true),
     visibilityScope: normalizeVisibilityScope(body?.visibilityScope),
     clientBucket: optString(body?.clientBucket) === "archive" ? "archive" : "client",
 
@@ -515,6 +516,174 @@ function shouldInsertCreditDetails(caseType: ClientCaseType) {
 
 function shouldInsertInsuranceDetails(caseType: ClientCaseType) {
   return caseType === "insurance";
+}
+
+async function createListingForCase(
+  client: any,
+  officeId: string,
+  userId: string,
+  partyId: string,
+  payload: ContactPayload
+): Promise<{ listingId: string; redirectTo: string }> {
+  const isLandlord = payload.caseType === "landlord";
+  const transactionType = isLandlord ? "rent" : "sale";
+  const listingPartyRole = isLandlord ? "landlord" : "seller";
+
+  const property = payload.propertyDetails;
+  const order = payload.orderDetails;
+
+  const locationText =
+    [property.city, property.street].filter(Boolean).join(", ") ||
+    order.searchLocationText ||
+    null;
+
+  const title =
+    payload.fullName
+      ? `${isLandlord ? "Oferta wynajmu" : "Oferta sprzedaży"} - ${payload.fullName}`
+      : `${isLandlord ? "Oferta wynajmu" : "Oferta sprzedaży"}${order.propertyKind ? ` ${order.propertyKind}` : ""}`;
+
+  const description =
+    payload.notes ??
+    (isLandlord
+      ? "Nowa oferta wynajmu utworzona z formularza kontaktu."
+      : "Nowa oferta sprzedaży utworzona z formularza kontaktu.");
+
+  const streetFull = property.street
+    ? [property.street, property.buildingNumber, property.unitNumber].filter(Boolean).join(" ")
+    : null;
+
+  const inserted = await client.query(
+    `
+    INSERT INTO public.listings (
+      office_id,
+      record_type,
+      transaction_type,
+      status,
+      created_by_user_id,
+      case_owner_user_id,
+      contract_type,
+      market,
+      internal_notes,
+      currency,
+      price_amount,
+      budget_min,
+      budget_max,
+      area_min_m2,
+      area_max_m2,
+      rooms_min,
+      rooms_max,
+      location_text,
+      title,
+      description,
+      property_type,
+      area_m2,
+      rooms,
+      floor,
+      year_built,
+      voivodeship,
+      city,
+      district,
+      street,
+      postal_code,
+      lat,
+      lng
+    )
+    VALUES (
+      $1,
+      'offer'::record_type,
+      $2::transaction_type,
+      'draft'::listing_status,
+      $3,
+      $4,
+      $5,
+      $6,
+      $7,
+      COALESCE($8, 'PLN'),
+      $9,
+      $10,
+      $11,
+      $12,
+      $13,
+      $14,
+      $15,
+      $16,
+      $17,
+      $18,
+      $19,
+      $20,
+      $21,
+      $22,
+      $23,
+      $24,
+      $25,
+      $26,
+      $27,
+      $28,
+      $29,
+      $30
+    )
+    RETURNING id
+    `,
+    [
+      officeId,
+      transactionType,
+      userId,
+      payload.assignedUserId ?? userId,
+      order.contractType,
+      order.marketType,
+      payload.notes,
+      property.priceCurrency ?? "PLN",
+      property.priceAmount,
+      order.budgetMin,
+      order.budgetMax,
+      order.areaMin,
+      order.areaMax,
+      order.roomsMin,
+      order.roomsMax,
+      locationText,
+      title,
+      description,
+      order.propertyKind,
+      property.areaM2,
+      property.roomsCount,
+      property.floorNumber !== null ? String(property.floorNumber) : null,
+      null,
+      null,
+      property.city,
+      null,
+      streetFull,
+      null,
+      null,
+      null,
+    ]
+  );
+
+  const listingId = inserted.rows[0].id as string;
+
+  await client.query(
+    `
+    INSERT INTO public.listing_parties (
+      listing_id,
+      party_id,
+      role,
+      is_primary,
+      notes
+    )
+    VALUES (
+      $1,
+      $2,
+      $3::public.listing_party_role,
+      true,
+      $4
+    )
+    `,
+    [listingId, partyId, listingPartyRole, payload.notes]
+  );
+
+  return {
+    listingId,
+    redirectTo: `/panel/offers/${listingId}`,
+  };
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -730,6 +899,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
 
     let clientCaseId: string | null = null;
+    let createdEntityType: "listing" | null = null;
+    let createdEntityId: string | null = null;
+    let redirectTo: string | null = null;
 
     if (payload.createCase) {
       const clientCaseInsert = await client.query(
@@ -969,6 +1141,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ]
         );
       }
+
+      if (payload.caseType === "seller" || payload.caseType === "landlord") {
+        const created = await createListingForCase(
+          client,
+          officeId,
+          userId,
+          partyId,
+          payload
+        );
+
+        createdEntityType = "listing";
+        createdEntityId = created.listingId;
+        redirectTo = created.redirectTo;
+      }
     }
 
     const refreshed = await client.query(
@@ -1013,6 +1199,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       row: refreshed.rows[0] ?? null,
       clientCaseId,
       createdCase: Boolean(clientCaseId),
+      createdEntityType,
+      createdEntityId,
+      redirectTo,
     });
   } catch (e: any) {
     await client.query("ROLLBACK").catch(() => null);

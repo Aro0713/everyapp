@@ -1,3 +1,4 @@
+import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
 import { t } from "@/utils/i18n";
 import type { LangKey } from "@/utils/translations";
@@ -1722,6 +1723,8 @@ function ContactDetailsModal({
 }
 
 export default function ContactsView({ lang }: { lang: LangKey }) {
+  const router = useRouter();
+
   const [rows, setRows] = useState<ContactRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1850,11 +1853,21 @@ export default function ContactsView({ lang }: { lang: LangKey }) {
         throw new Error(code);
       }
 
-      setModalOpen(false);
-      setForm(buildInitialForm());
-      setSelectedRow(null);
-      setModalMode("create");
-      await load();
+            const shouldRedirect =
+          modalMode === "create" &&
+          typeof j?.redirectTo === "string" &&
+          j.redirectTo.trim().length > 0;
+
+        if (shouldRedirect) {
+          await router.push(j.redirectTo);
+          return;
+        }
+
+        setModalOpen(false);
+        setForm(buildInitialForm());
+        setSelectedRow(null);
+        setModalMode("create");
+        await load();
     } catch (e: any) {
       setCreateError(
         e?.message ??
