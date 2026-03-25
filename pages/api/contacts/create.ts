@@ -647,7 +647,7 @@ async function createListingForCase(
     officeId,
     payload.assignedUserId ?? userId
   );
-  
+
     const inserted = await client.query(
     `
     INSERT INTO public.listings (
@@ -753,6 +753,7 @@ async function createListingForCase(
       null,
       null,
       null,
+      offerNumber,
     ]
   );
 
