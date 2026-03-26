@@ -210,10 +210,42 @@ function Badge({
   );
 }
 
+function NextStepTile({
+  title,
+  href,
+  disabled = false,
+}: {
+  title: string;
+  href?: string;
+  disabled?: boolean;
+}) {
+  const router = useRouter();
+
+  return (
+    <button
+      type="button"
+      disabled={disabled || !href}
+      onClick={() => {
+        if (!href) return;
+        router.push(href);
+      }}
+      className={clsx(
+        "rounded-2xl border px-4 py-5 text-left text-sm transition",
+        disabled || !href
+          ? "border-dashed border-white/15 bg-white/5 text-white/40 cursor-not-allowed"
+          : "border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:border-white/20"
+      )}
+    >
+      {title}
+    </button>
+  );
+}
+
 export default function ContactDetailsPage() {
   const router = useRouter();
   const id = typeof router.query.id === "string" ? router.query.id : "";
   if (!id) return null;
+  const activeTab = typeof router.query.tab === "string" ? router.query.tab : "";
 
   const [row, setRow] = useState<ContactRow | null>(null);
   const [loading, setLoading] = useState(true);
@@ -462,30 +494,75 @@ export default function ContactDetailsPage() {
                     </div>
                   </Card>
                 </div>
+                
+                {activeTab ? (
+                <Card
+                    title={
+                    activeTab === "history"
+                        ? "Historia kontaktu"
+                        : activeTab === "notes"
+                        ? "Notatki i follow-up"
+                        : activeTab === "documents"
+                            ? "Dokumenty klienta"
+                            : "Sekcja klienta"
+                    }
+                    subtitle="Widok roboczy pod dalszą rozbudowę."
+                >
+                    <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 px-4 py-8 text-sm text-white/65">
+                    {activeTab === "history" && "Tutaj podepniemy timeline interakcji, zdarzeń i aktywności klienta."}
+                    {activeTab === "notes" && "Tutaj podepniemy notatki, follow-upy, zadania i przypomnienia."}
+                    {activeTab === "documents" && "Tutaj podepniemy dokumenty klienta i załączniki."}
+                    {!["history", "notes", "documents"].includes(activeTab) &&
+                        "Ta sekcja jest przygotowana pod dalszą rozbudowę CRM."}
+                    </div>
+                </Card>
+                ) : null}
 
                 <Card
-                  title="Zalecane następne kroki"
-                  subtitle="Sekcje docelowe do dalszej rozbudowy CRM dla klienta."
+                title="Zalecane następne kroki"
+                subtitle="Sekcje docelowe do dalszej rozbudowy CRM dla klienta."
                 >
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                    {[
-                      "Powiązane oferty",
-                      "Zlecenia popytowe",
-                      "Zlecenia kredytowe",
-                      "Zlecenia ubezpieczeniowe",
-                      "Historia kontaktu",
-                      "Terminarz klienta",
-                      "Dokumenty klienta",
-                      "Notatki i follow-up",
-                    ].map((item) => (
-                      <div
-                        key={item}
-                        className="rounded-2xl border border-dashed border-white/15 bg-white/5 px-4 py-5 text-sm text-white/70"
-                      >
-                        {item}
-                      </div>
-                    ))}
-                  </div>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <NextStepTile
+                    title="Powiązane oferty"
+                    href={`/panel/offers?clientId=${encodeURIComponent(row.id)}`}
+                    />
+
+                    <NextStepTile
+                    title="Zlecenia popytowe"
+                    href={`/panel/demand-orders?clientId=${encodeURIComponent(row.id)}`}
+                    />
+
+                    <NextStepTile
+                    title="Zlecenia kredytowe"
+                    href={`/panel/credit-orders?clientId=${encodeURIComponent(row.id)}`}
+                    />
+
+                    <NextStepTile
+                    title="Zlecenia ubezpieczeniowe"
+                    href={`/panel/insurance-orders?clientId=${encodeURIComponent(row.id)}`}
+                    />
+
+                    <NextStepTile
+                    title="Historia kontaktu"
+                    href={`/panel/contacts/${encodeURIComponent(row.id)}?tab=history`}
+                    />
+
+                    <NextStepTile
+                    title="Terminarz klienta"
+                    href={`/panel?view=calendar&clientId=${encodeURIComponent(row.id)}`}
+                    />
+
+                    <NextStepTile
+                    title="Dokumenty klienta"
+                    href={`/panel/contacts/${encodeURIComponent(row.id)}?tab=documents`}
+                    />
+
+                    <NextStepTile
+                    title="Notatki i follow-up"
+                    href={`/panel/contacts/${encodeURIComponent(row.id)}?tab=notes`}
+                    />
+                </div>
                 </Card>
               </div>
             )}
