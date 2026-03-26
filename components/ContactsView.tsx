@@ -1876,16 +1876,6 @@ export default function ContactsView({ lang }: { lang: LangKey }) {
         throw new Error(code);
       }
 
-       const shouldRedirect =
-        modalMode === "create" &&
-        typeof j?.redirectTo === "string" &&
-        j.redirectTo.trim().length > 0;
-
-      if (shouldRedirect) {
-        await router.push(j.redirectTo);
-        return;
-      }
-
       const returnTo =
         modalMode === "edit" && typeof router.query.returnTo === "string"
           ? router.query.returnTo.trim()
@@ -2105,26 +2095,10 @@ export default function ContactsView({ lang }: { lang: LangKey }) {
       load();
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
-    
-    useEffect(() => {
-    const editId =
-      typeof router.query.editId === "string" ? router.query.editId.trim() : "";
 
-    if (!editId) return;
-    if (!rows.length) return;
-    if (modalOpen) return;
-    if (selectedRow?.id === editId && modalMode === "edit") return;
+    const empty = !loading && !error && rows.length === 0;
 
-    const found = rows.find((x) => x.id === editId);
-    if (!found) return;
-
-    openEditModal(found);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router.query.editId, rows, modalOpen, selectedRow?.id, modalMode]);
-
-  const empty = !loading && !error && rows.length === 0;
-
-  const summary = useMemo(() => {
+    const summary = useMemo(() => {
     const persons = rows.filter((r) => (r.party_type ?? "").toLowerCase() === "person").length;
     const companies = rows.filter((r) => (r.party_type ?? "").toLowerCase() === "company").length;
     const active = rows.filter((r) => r.status === "active").length;
