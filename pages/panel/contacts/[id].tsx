@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
 
@@ -273,12 +272,14 @@ export default function ContactDetailsPage() {
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const phone = getDisplayPhone(row);
   const email = getDisplayEmail(row);
   const roles = Array.isArray(row?.client_roles) ? row!.client_roles : [];
   const caseType = deriveCaseTypeFromRoles(roles);
+
   const initials = useMemo(() => {
     const name = (row?.full_name ?? "").trim();
     if (!name) return "K";
@@ -308,9 +309,11 @@ export default function ContactDetailsPage() {
                   type="button"
                   onClick={() =>
                     router.push(
-                        `/panel?view=contacts&editId=${encodeURIComponent(id)}&returnTo=${encodeURIComponent(router.asPath)}`
+                      `/panel?view=contacts&editId=${encodeURIComponent(id)}&returnTo=${encodeURIComponent(
+                        router.asPath
+                      )}`
                     )
-                    }
+                  }
                   className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/15"
                 >
                   Edytuj
@@ -365,9 +368,7 @@ export default function ContactDetailsPage() {
                         ))}
 
                         {(row.has_interactions || (row.interactions_count ?? 0) > 0) && (
-                          <Badge tone="amber">
-                            Interakcje: {row.interactions_count ?? 1}
-                          </Badge>
+                          <Badge tone="amber">Interakcje: {row.interactions_count ?? 1}</Badge>
                         )}
                       </div>
                     </div>
@@ -421,7 +422,10 @@ export default function ContactDetailsPage() {
                   <Card title="Workflow i metadane">
                     <div className="grid gap-3">
                       <Field label="Status klienta" value={getClientStatusLabel(row.status)} />
-                      <Field label="Etap pipeline" value={getPipelineStageLabel(row.pipeline_stage)} />
+                      <Field
+                        label="Etap pipeline"
+                        value={getPipelineStageLabel(row.pipeline_stage)}
+                      />
                       <Field label="Dodano" value={fmtDate(row.created_at)} />
                       <Field label="Zmieniono" value={fmtDate(row.updated_at)} />
                       <Field label="created_by_user_id" value={row.created_by_user_id ?? "-"} />
@@ -442,7 +446,10 @@ export default function ContactDetailsPage() {
                   <Card title="Szybki obraz CRM">
                     <div className="grid gap-3 md:grid-cols-2">
                       <Field label="Typ sprawy" value={caseType} />
-                      <Field label="Łączna liczba kanałów kontaktu" value={row.contacts_count ?? "-"} />
+                      <Field
+                        label="Łączna liczba kanałów kontaktu"
+                        value={row.contacts_count ?? "-"}
+                      />
                       <Field
                         label="Czy są interakcje"
                         value={row.has_interactions ? "Tak" : "Nie"}
@@ -452,7 +459,10 @@ export default function ContactDetailsPage() {
                   </Card>
                 </div>
 
-                <Card title="Zalecane następne kroki" subtitle="Sekcje docelowe do dalszej rozbudowy CRM dla klienta.">
+                <Card
+                  title="Zalecane następne kroki"
+                  subtitle="Sekcje docelowe do dalszej rozbudowy CRM dla klienta."
+                >
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                     {[
                       "Powiązane oferty",

@@ -2054,18 +2054,27 @@ export default function ContactsView({ lang }: { lang: LangKey }) {
   }
 
   function openDetailsModal(row: ContactRow) {
-    setSelectedRow(row);
-    setDetailsOpen(true);
+    router.push(`/panel/contacts/${encodeURIComponent(row.id)}`);
   }
 
   function closeCreateModal() {
     if (createSaving) return;
+
+    const returnTo =
+      modalMode === "edit" && typeof router.query.returnTo === "string"
+        ? router.query.returnTo.trim()
+        : "";
 
     setModalOpen(false);
     setCreateError(null);
 
     if (modalMode === "create") {
       setForm(buildInitialForm());
+    }
+
+    if (returnTo) {
+      router.push(returnTo);
+      return;
     }
 
     const hasEditQuery =
@@ -2424,7 +2433,11 @@ export default function ContactsView({ lang }: { lang: LangKey }) {
 
                           <button
                             type="button"
-                            onClick={() => openEditModal(r)}
+                            onClick={() =>
+                              router.push(
+                                `/panel?view=contacts&editId=${encodeURIComponent(r.id)}`
+                              )
+                            }
                             className="rounded-xl border border-white/10 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:bg-white/15"
                           >
                             Edytuj
