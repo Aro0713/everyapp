@@ -306,7 +306,11 @@ export default function ContactDetailsPage() {
 
                 <button
                   type="button"
-                  onClick={() => router.push("/panel?view=contacts&editId=" + encodeURIComponent(id))}
+                  onClick={() =>
+                    router.push(
+                        `/panel?view=contacts&editId=${encodeURIComponent(id)}&returnTo=${encodeURIComponent(router.asPath)}`
+                    )
+                    }
                   className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/15"
                 >
                   Edytuj

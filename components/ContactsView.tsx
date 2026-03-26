@@ -1876,7 +1876,8 @@ export default function ContactsView({ lang }: { lang: LangKey }) {
         throw new Error(code);
       }
 
-      const shouldRedirect =
+       const shouldRedirect =
+        modalMode === "create" &&
         typeof j?.redirectTo === "string" &&
         j.redirectTo.trim().length > 0;
 
@@ -1885,11 +1886,22 @@ export default function ContactsView({ lang }: { lang: LangKey }) {
         return;
       }
 
+      const returnTo =
+        modalMode === "edit" && typeof router.query.returnTo === "string"
+          ? router.query.returnTo.trim()
+          : "";
+
       setModalOpen(false);
       setDetailsOpen(false);
       setForm(buildInitialForm());
       setSelectedRow(null);
       setModalMode("create");
+
+      if (returnTo) {
+        await router.push(returnTo);
+        return;
+      }
+
       await load();
     } catch (e: any) {
       setCreateError(
@@ -2048,10 +2060,31 @@ export default function ContactsView({ lang }: { lang: LangKey }) {
 
   function closeCreateModal() {
     if (createSaving) return;
+
     setModalOpen(false);
     setCreateError(null);
+
     if (modalMode === "create") {
       setForm(buildInitialForm());
+    }
+
+    const hasEditQuery =
+      typeof router.query.editId === "string" ||
+      typeof router.query.returnTo === "string";
+
+    if (hasEditQuery) {
+      const nextQuery = { ...router.query };
+      delete nextQuery.editId;
+      delete nextQuery.returnTo;
+
+      router.replace(
+        {
+          pathname: router.pathname,
+          query: nextQuery,
+        },
+        undefined,
+        { shallow: true }
+      );
     }
   }
 
@@ -2059,10 +2092,26 @@ export default function ContactsView({ lang }: { lang: LangKey }) {
     setDetailsOpen(false);
   }
 
-  useEffect(() => {
-    load();
+    useEffect(() => {
+      load();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    
+    useEffect(() => {
+    const editId =
+      typeof router.query.editId === "string" ? router.query.editId.trim() : "";
+
+    if (!editId) return;
+    if (!rows.length) return;
+    if (modalOpen) return;
+    if (selectedRow?.id === editId && modalMode === "edit") return;
+
+    const found = rows.find((x) => x.id === editId);
+    if (!found) return;
+
+    openEditModal(found);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [router.query.editId, rows, modalOpen, selectedRow?.id, modalMode]);
 
   const empty = !loading && !error && rows.length === 0;
 
