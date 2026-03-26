@@ -138,6 +138,21 @@ type AgentChatMessage = {
   actions?: any[];
 };
 
+function isPanelView(value: unknown): value is PanelView {
+  return (
+    value === "dashboard" ||
+    value === "calendar" ||
+    value === "offers" ||
+    value === "contacts" ||
+    value === "team" ||
+    value === "officeTransactions" ||
+    value === "downloads" ||
+    value === "notes" ||
+    value === "reports" ||
+    value === "menuSettings"
+  );
+}
+
 export default function PanelPage() {
 
   // -------------------- i18n --------------------
@@ -145,6 +160,18 @@ export default function PanelPage() {
 
   // -------------------- routing --------------------
   const router = useRouter();
+  
+    useEffect(() => {
+    if (!router.isReady) return;
+
+    const viewFromQuery = router.query.view;
+    const nextView =
+      typeof viewFromQuery === "string" && isPanelView(viewFromQuery)
+        ? viewFromQuery
+        : "dashboard";
+
+    setActiveView(nextView);
+  }, [router.isReady, router.query.view]);
 
   // -------------------- responsive / sidebar --------------------
   const [isMobile, setIsMobile] = useState(false); // < lg
@@ -605,8 +632,11 @@ function handleAgentAction(action: any) {
                         if (it.href) {
                           router.push(it.href);
                         } else if (it.view) {
-                          setActiveView(it.view);
-                        }
+                        router.push({
+                          pathname: "/panel",
+                          query: { view: it.view },
+                        });
+                      }
 
                         // mobile: close after selecting item
                         if (isMobile) setSidebarOpen(false);

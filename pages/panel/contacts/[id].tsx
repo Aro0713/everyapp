@@ -339,21 +339,21 @@ export default function ContactDetailsPage() {
                 </button>
 
                 <button
-                  type="button"
-                  onClick={() =>
-                    router.push({
+                    type="button"
+                    onClick={() =>
+                        router.push({
                         pathname: "/panel",
                         query: {
-                        view: "contacts",
-                        editId: id,
-                        returnTo: router.asPath,
+                            view: "contacts",
+                            editId: id,
+                            returnTo: router.asPath,
                         },
-                    })
+                        })
                     }
-                  className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/15"
-                >
-                  Edytuj
-                </button>
+                    className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/15"
+                    >
+                    Edytuj
+                    </button>
 
                 <button
                   type="button"
