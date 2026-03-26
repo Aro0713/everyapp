@@ -29,47 +29,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (req.method === "GET") {
       const rowRes = await client.query(
-        `
-        SELECT
-          c.id,
-          c.office_id,
-          c.party_type,
-          c.full_name,
-          c.pesel,
-          c.nip,
-          c.regon,
-          c.krs,
-          c.notes,
-          c.source,
-          c.created_by_user_id,
-          c.assigned_user_id,
-          c.status,
-          c.pipeline_stage,
-          c.created_at,
-          c.updated_at,
-          c.first_name,
-          c.last_name,
-          c.company_name,
-          c.phone,
-          c.email,
-          c.contacts_count,
-          c.has_interactions,
-          c.interactions_count,
-          c.client_roles
-        FROM public.crm_contacts_view c
-        WHERE c.id = $1
-          AND c.office_id = $2
-        LIMIT 1
-        `,
-        [id, officeId]
-      );
+      `
+      SELECT to_jsonb(c) AS row
+      FROM public.crm_contacts_view c
+      WHERE c.id = $1
+        AND c.office_id = $2
+      LIMIT 1
+      `,
+      [id, officeId]
+    );
 
-      const row = rowRes.rows[0];
-      if (!row) {
-        return res.status(404).json({ error: "NOT_FOUND" });
-      }
+    const row = rowRes.rows[0]?.row ?? null;
+    if (!row) {
+      return res.status(404).json({ error: "NOT_FOUND" });
+    }
 
-      return res.status(200).json({ ok: true, row });
+    return res.status(200).json({ ok: true, row });
     }
 
     if (req.method === "DELETE") {
