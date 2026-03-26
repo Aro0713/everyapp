@@ -32,6 +32,7 @@ function optNumeric(v: unknown): number | null {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
+
 function slugToken(value: string | null | undefined, fallback: string, maxLen: number) {
   const raw = (value ?? "")
     .normalize("NFD")
@@ -376,6 +377,14 @@ type ContactPayload = {
   insuranceDetails: InsuranceDetailsInput;
 };
 
+type WorkflowType =
+  | "contact"
+  | "offer"
+  | "demand_order"
+  | "credit_order"
+  | "insurance_order"
+  | "offer_inquiry";
+
 function normalizeRoles(value: unknown): ClientRole[] {
   if (!Array.isArray(value)) return [];
   const unique = new Set<ClientRole>();
@@ -534,6 +543,24 @@ function normalizeInsuranceDetails(body: any): InsuranceDetailsInput {
   };
 }
 
+function finalizeRolesForCaseType(inputRoles: ClientRole[], caseType: ClientCaseType): ClientRole[] {
+  const unique = new Set<ClientRole>(inputRoles);
+
+  if (caseType === "seller") unique.add("seller");
+  if (caseType === "buyer") unique.add("buyer");
+  if (caseType === "landlord") unique.add("landlord");
+  if (caseType === "tenant") unique.add("tenant");
+
+  // wymaganie szefa: zapytanie na ofertę = klient kupujący powiązany z ofertą
+  if (caseType === "offer_inquiry") unique.add("buyer");
+
+  return Array.from(unique);
+}
+
+function shouldCreateCaseByDefault(caseType: ClientCaseType) {
+  return !["other", "unspecified"].includes(caseType);
+}
+
 function normalizePayload(body: any): ContactPayload {
   const partyType = optString(body?.partyType) === "company" ? "company" : "person";
 
@@ -546,8 +573,9 @@ function normalizePayload(body: any): ContactPayload {
       ? companyName
       : [firstName, lastName].filter(Boolean).join(" ").trim() || null;
 
-  const clientRoles = normalizeRoles(body?.clientRoles);
-  const caseType = normalizeCaseType(body?.caseType, clientRoles);
+  const rawRoles = normalizeRoles(body?.clientRoles);
+  const caseType = normalizeCaseType(body?.caseType, rawRoles);
+  const clientRoles = finalizeRolesForCaseType(rawRoles, caseType);
 
   return {
     partyType,
@@ -576,7 +604,9 @@ function normalizePayload(body: any): ContactPayload {
 
     caseType,
     createCase:
-      body?.createCase === undefined ? caseType !== "other" : optBool(body?.createCase, true),
+      body?.createCase === undefined
+        ? shouldCreateCaseByDefault(caseType)
+        : optBool(body?.createCase, shouldCreateCaseByDefault(caseType)),
     visibilityScope: normalizeVisibilityScope(body?.visibilityScope),
     clientBucket: optString(body?.clientBucket) === "archive" ? "archive" : "client",
 
@@ -648,7 +678,7 @@ async function createListingForCase(
     payload.assignedUserId ?? userId
   );
 
-    const inserted = await client.query(
+  const inserted = await client.query(
     `
     INSERT INTO public.listings (
       office_id,
@@ -754,11 +784,7 @@ async function createListingForCase(
     ]
   );
 
- const listingId = inserted.rows[0].id as string;
-
-  // 🔍 DEBUG
-  console.log("OFFER NUMBER:", offerNumber);
-  console.log("LISTING ID:", listingId);
+  const listingId = inserted.rows[0].id as string;
 
   await client.query(
     `
@@ -793,6 +819,65 @@ async function createListingForCase(
   return {
     listingId,
     redirectTo: `/panel/offers/${listingId}`,
+  };
+}
+
+function buildWorkflowNavigation(args: {
+  caseType: ClientCaseType;
+  partyId: string;
+  clientCaseId: string | null;
+  listingId: string | null;
+}): {
+  workflowType: WorkflowType;
+  workflowId: string;
+  redirectTo: string;
+} {
+  const { caseType, partyId, clientCaseId, listingId } = args;
+
+  if ((caseType === "seller" || caseType === "landlord") && listingId) {
+    return {
+      workflowType: "offer",
+      workflowId: listingId,
+      redirectTo: `/panel/offers/${listingId}`,
+    };
+  }
+
+  if ((caseType === "buyer" || caseType === "tenant") && clientCaseId) {
+    return {
+      workflowType: "demand_order",
+      workflowId: clientCaseId,
+      redirectTo: `/panel/demand-orders/${clientCaseId}`,
+    };
+  }
+
+  if (caseType === "credit" && clientCaseId) {
+    return {
+      workflowType: "credit_order",
+      workflowId: clientCaseId,
+      redirectTo: `/panel/credit-orders/${clientCaseId}`,
+    };
+  }
+
+  if (caseType === "insurance" && clientCaseId) {
+    return {
+      workflowType: "insurance_order",
+      workflowId: clientCaseId,
+      redirectTo: `/panel/insurance-orders/${clientCaseId}`,
+    };
+  }
+
+  if (caseType === "offer_inquiry" && clientCaseId) {
+    return {
+      workflowType: "offer_inquiry",
+      workflowId: clientCaseId,
+      redirectTo: `/panel/offer-inquiries/${clientCaseId}`,
+    };
+  }
+
+  return {
+    workflowType: "contact",
+    workflowId: partyId,
+    redirectTo: `/panel/contacts/${partyId}`,
   };
 }
 
@@ -1009,9 +1094,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
 
     let clientCaseId: string | null = null;
-    let createdEntityType: "listing" | null = null;
-    let createdEntityId: string | null = null;
-    let redirectTo: string | null = null;
+    let createdEntityType: "listing" | "client_case" | "contact" = "contact";
+    let createdEntityId: string | null = partyId;
+    let listingId: string | null = null;
 
     if (payload.createCase) {
       const clientCaseInsert = await client.query(
@@ -1054,216 +1139,221 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       clientCaseId = clientCaseInsert.rows[0]?.id ?? null;
 
-      await client.query(
-        `
-        INSERT INTO public.client_case_visibility_rules (
-          office_id,
-          client_case_id,
-          visibility_scope,
-          owner_user_id,
-          owner_membership_id
-        )
-        VALUES ($1, $2, $3::public.ownership_scope_type, $4, NULL)
-        `,
-        [officeId, clientCaseId, payload.visibilityScope, payload.assignedUserId ?? userId]
-      );
-
-      if (shouldInsertOrderDetails(payload.caseType)) {
-        const x = payload.orderDetails;
+      if (clientCaseId) {
+        createdEntityType = "client_case";
+        createdEntityId = clientCaseId;
 
         await client.query(
           `
-          INSERT INTO public.client_case_order_details (
+          INSERT INTO public.client_case_visibility_rules (
             office_id,
             client_case_id,
-            property_kind,
-            market_type,
-            contract_type,
-            caretaker_user_id,
-            expected_property_kind,
-            search_location_text,
-            budget_min,
-            budget_max,
-            rooms_min,
-            rooms_max,
-            area_min,
-            area_max
+            visibility_scope,
+            owner_user_id,
+            owner_membership_id
           )
-          VALUES (
-            $1,
-            $2,
-            $3::public.property_kind_type,
-            $4::public.property_market_type,
-            $5::public.property_contract_type,
-            $6,
-            $7::public.property_kind_type,
-            $8,
-            $9,
-            $10,
-            $11,
-            $12,
-            $13,
-            $14
-          )
+          VALUES ($1, $2, $3::public.ownership_scope_type, $4, NULL)
           `,
-          [
+          [officeId, clientCaseId, payload.visibilityScope, payload.assignedUserId ?? userId]
+        );
+
+        if (shouldInsertOrderDetails(payload.caseType)) {
+          const x = payload.orderDetails;
+
+          await client.query(
+            `
+            INSERT INTO public.client_case_order_details (
+              office_id,
+              client_case_id,
+              property_kind,
+              market_type,
+              contract_type,
+              caretaker_user_id,
+              expected_property_kind,
+              search_location_text,
+              budget_min,
+              budget_max,
+              rooms_min,
+              rooms_max,
+              area_min,
+              area_max
+            )
+            VALUES (
+              $1,
+              $2,
+              $3::public.property_kind_type,
+              $4::public.property_market_type,
+              $5::public.property_contract_type,
+              $6,
+              $7::public.property_kind_type,
+              $8,
+              $9,
+              $10,
+              $11,
+              $12,
+              $13,
+              $14
+            )
+            `,
+            [
+              officeId,
+              clientCaseId,
+              x.propertyKind,
+              x.marketType,
+              x.contractType,
+              x.caretakerUserId ?? payload.assignedUserId ?? userId,
+              x.expectedPropertyKind,
+              x.searchLocationText,
+              x.budgetMin,
+              x.budgetMax,
+              x.roomsMin,
+              x.roomsMax,
+              x.areaMin,
+              x.areaMax,
+            ]
+          );
+        }
+
+        if (shouldInsertPropertyDetails(payload.caseType)) {
+          const x = payload.propertyDetails;
+
+          await client.query(
+            `
+            INSERT INTO public.client_case_properties (
+              office_id,
+              client_case_id,
+              country,
+              city,
+              street,
+              building_number,
+              unit_number,
+              price_amount,
+              price_currency,
+              price_period,
+              area_m2,
+              rooms_count,
+              floor_number,
+              floor_total
+            )
+            VALUES (
+              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+            )
+            `,
+            [
+              officeId,
+              clientCaseId,
+              x.country,
+              x.city,
+              x.street,
+              x.buildingNumber,
+              x.unitNumber,
+              x.priceAmount,
+              x.priceCurrency,
+              x.pricePeriod,
+              x.areaM2,
+              x.roomsCount,
+              x.floorNumber,
+              x.floorTotal,
+            ]
+          );
+        }
+
+        if (shouldInsertOfferInquiry(payload.caseType)) {
+          const x = payload.offerInquiry;
+
+          await client.query(
+            `
+            INSERT INTO public.client_case_offer_inquiries (
+              office_id,
+              client_case_id,
+              offer_id,
+              inquiry_text,
+              autofill_from_offer,
+              autofill_margin_percent
+            )
+            VALUES ($1, $2, $3, $4, $5, $6)
+            `,
+            [
+              officeId,
+              clientCaseId,
+              x.offerId,
+              x.inquiryText,
+              x.autofillFromOffer,
+              x.autofillMarginPercent,
+            ]
+          );
+        }
+
+        if (shouldInsertCreditDetails(payload.caseType)) {
+          const x = payload.creditDetails;
+
+          await client.query(
+            `
+            INSERT INTO public.client_case_credit_details (
+              office_id,
+              client_case_id,
+              credited_property_price,
+              planned_own_contribution,
+              loan_period_months,
+              concerns_existing_property,
+              related_offer_id,
+              existing_property_notes
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            `,
+            [
+              officeId,
+              clientCaseId,
+              x.creditedPropertyPrice,
+              x.plannedOwnContribution,
+              x.loanPeriodMonths,
+              x.concernsExistingProperty,
+              x.relatedOfferId,
+              x.existingPropertyNotes,
+            ]
+          );
+        }
+
+        if (shouldInsertInsuranceDetails(payload.caseType)) {
+          const x = payload.insuranceDetails;
+
+          await client.query(
+            `
+            INSERT INTO public.client_case_insurance_details (
+              office_id,
+              client_case_id,
+              insurance_subject,
+              insurance_notes
+            )
+            VALUES (
+              $1,
+              $2,
+              $3::public.insurance_subject_type,
+              $4
+            )
+            `,
+            [
+              officeId,
+              clientCaseId,
+              x.insuranceSubject,
+              x.insuranceNotes,
+            ]
+          );
+        }
+
+        if (payload.caseType === "seller" || payload.caseType === "landlord") {
+          const created = await createListingForCase(
+            client,
             officeId,
-            clientCaseId,
-            x.propertyKind,
-            x.marketType,
-            x.contractType,
-            x.caretakerUserId ?? payload.assignedUserId ?? userId,
-            x.expectedPropertyKind,
-            x.searchLocationText,
-            x.budgetMin,
-            x.budgetMax,
-            x.roomsMin,
-            x.roomsMax,
-            x.areaMin,
-            x.areaMax,
-          ]
-        );
-      }
+            userId,
+            partyId,
+            payload
+          );
 
-      if (shouldInsertPropertyDetails(payload.caseType)) {
-        const x = payload.propertyDetails;
-
-        await client.query(
-          `
-          INSERT INTO public.client_case_properties (
-            office_id,
-            client_case_id,
-            country,
-            city,
-            street,
-            building_number,
-            unit_number,
-            price_amount,
-            price_currency,
-            price_period,
-            area_m2,
-            rooms_count,
-            floor_number,
-            floor_total
-          )
-          VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
-          )
-          `,
-          [
-            officeId,
-            clientCaseId,
-            x.country,
-            x.city,
-            x.street,
-            x.buildingNumber,
-            x.unitNumber,
-            x.priceAmount,
-            x.priceCurrency,
-            x.pricePeriod,
-            x.areaM2,
-            x.roomsCount,
-            x.floorNumber,
-            x.floorTotal,
-          ]
-        );
-      }
-
-      if (shouldInsertOfferInquiry(payload.caseType)) {
-        const x = payload.offerInquiry;
-
-        await client.query(
-          `
-          INSERT INTO public.client_case_offer_inquiries (
-            office_id,
-            client_case_id,
-            offer_id,
-            inquiry_text,
-            autofill_from_offer,
-            autofill_margin_percent
-          )
-          VALUES ($1, $2, $3, $4, $5, $6)
-          `,
-          [
-            officeId,
-            clientCaseId,
-            x.offerId,
-            x.inquiryText,
-            x.autofillFromOffer,
-            x.autofillMarginPercent,
-          ]
-        );
-      }
-
-      if (shouldInsertCreditDetails(payload.caseType)) {
-        const x = payload.creditDetails;
-
-        await client.query(
-          `
-          INSERT INTO public.client_case_credit_details (
-            office_id,
-            client_case_id,
-            credited_property_price,
-            planned_own_contribution,
-            loan_period_months,
-            concerns_existing_property,
-            related_offer_id,
-            existing_property_notes
-          )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-          `,
-          [
-            officeId,
-            clientCaseId,
-            x.creditedPropertyPrice,
-            x.plannedOwnContribution,
-            x.loanPeriodMonths,
-            x.concernsExistingProperty,
-            x.relatedOfferId,
-            x.existingPropertyNotes,
-          ]
-        );
-      }
-
-      if (shouldInsertInsuranceDetails(payload.caseType)) {
-        const x = payload.insuranceDetails;
-
-        await client.query(
-          `
-          INSERT INTO public.client_case_insurance_details (
-            office_id,
-            client_case_id,
-            insurance_subject,
-            insurance_notes
-          )
-          VALUES (
-            $1,
-            $2,
-            $3::public.insurance_subject_type,
-            $4
-          )
-          `,
-          [
-            officeId,
-            clientCaseId,
-            x.insuranceSubject,
-            x.insuranceNotes,
-          ]
-        );
-      }
-
-      if (payload.caseType === "seller" || payload.caseType === "landlord") {
-        const created = await createListingForCase(
-          client,
-          officeId,
-          userId,
-          partyId,
-          payload
-        );
-
-        createdEntityType = "listing";
-        createdEntityId = created.listingId;
-        redirectTo = created.redirectTo;
+          listingId = created.listingId;
+          createdEntityType = "listing";
+          createdEntityId = created.listingId;
+        }
       }
     }
 
@@ -1302,6 +1392,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       [partyId, officeId]
     );
 
+    const navigation = buildWorkflowNavigation({
+      caseType: payload.caseType,
+      partyId,
+      clientCaseId,
+      listingId,
+    });
+
     await client.query("COMMIT");
 
     return res.status(200).json({
@@ -1311,7 +1408,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       createdCase: Boolean(clientCaseId),
       createdEntityType,
       createdEntityId,
-      redirectTo,
+      workflowType: navigation.workflowType,
+      workflowId: navigation.workflowId,
+      redirectTo: navigation.redirectTo,
     });
   } catch (e: any) {
     await client.query("ROLLBACK").catch(() => null);

@@ -346,7 +346,7 @@ function buildInitialForm(): ContactFormState {
     pipelineStage: "lead",
 
     caseType: "unspecified",
-    createCase: true,
+    createCase: false,
     visibilityScope: "office",
     clientBucket: "client",
 
@@ -414,7 +414,9 @@ function mapRowToForm(row: ContactRow): ContactFormState {
   const fullName = (row.full_name ?? "").trim();
   const parts = fullName.split(/\s+/).filter(Boolean);
   const isCompany = (row.party_type ?? "").toLowerCase() === "company";
-  const roles = Array.isArray(row.client_roles) ? (row.client_roles.filter(Boolean) as ClientRole[]) : [];
+  const roles = Array.isArray(row.client_roles)
+    ? (row.client_roles.filter(Boolean) as ClientRole[])
+    : [];
   const caseType = deriveCaseTypeFromRoles(roles);
 
   return {
@@ -424,7 +426,7 @@ function mapRowToForm(row: ContactRow): ContactFormState {
     status: (row.status ?? "new") as ClientStatus,
     pipelineStage: (row.pipeline_stage ?? "lead") as ClientPipelineStage,
     caseType,
-    createCase: caseType !== "other",
+    createCase: !["other", "unspecified"].includes(caseType),
     clientBucket: row.status === "archived" ? "archive" : "client",
 
     firstName: !isCompany ? parts[0] ?? row.first_name ?? "" : "",
@@ -734,11 +736,14 @@ function ContactModal({
                   <SelectBox
                     value={form.caseType}
                     onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        caseType: e.target.value as ClientCaseType,
-                        createCase: e.target.value !== "other",
-                      }))
+                      setForm((prev) => {
+                        const nextCaseType = e.target.value as ClientCaseType;
+                        return {
+                          ...prev,
+                          caseType: nextCaseType,
+                          createCase: !["other", "unspecified"].includes(nextCaseType),
+                        };
+                      })
                     }
                   >
                     <option value="seller">Sprzedający</option>
@@ -813,7 +818,12 @@ function ContactModal({
                               ...prev,
                               clientRoles,
                               ...(mode === "create"
-                                ? { caseType: deriveCaseTypeFromRoles(clientRoles) }
+                                ? {
+                                    caseType: deriveCaseTypeFromRoles(clientRoles),
+                                    createCase: !["other", "unspecified"].includes(
+                                      deriveCaseTypeFromRoles(clientRoles)
+                                    ),
+                                  }
                                 : {}),
                             };
                           })
@@ -1039,7 +1049,12 @@ function ContactModal({
                     <FieldLabel>Rodzaj nieruchomości</FieldLabel>
                     <SelectBox
                       value={form.propertyKind}
-                      onChange={(e) => setForm((prev) => ({ ...prev, propertyKind: e.target.value as PropertyKind | "" }))}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          propertyKind: e.target.value as PropertyKind | "",
+                        }))
+                      }
                     >
                       <option value="">—</option>
                       <option value="apartment">Mieszkanie</option>
@@ -1057,7 +1072,12 @@ function ContactModal({
                     <FieldLabel>Rynek</FieldLabel>
                     <SelectBox
                       value={form.marketType}
-                      onChange={(e) => setForm((prev) => ({ ...prev, marketType: e.target.value as PropertyMarketType | "" }))}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          marketType: e.target.value as PropertyMarketType | "",
+                        }))
+                      }
                     >
                       <option value="">—</option>
                       <option value="primary">Pierwotny</option>
@@ -1191,7 +1211,7 @@ function ContactModal({
             </SectionCard>
 
             <SectionCard title="Dane nieruchomości" muted={advancedEditLocked}>
-            {shouldShowPropertySection(form.caseType) ? (
+              {shouldShowPropertySection(form.caseType) ? (
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                   <label className="block">
                     <FieldLabel>Państwo</FieldLabel>
@@ -1659,7 +1679,7 @@ function ContactDetailsModal({
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
             <div className="mb-3 text-sm font-semibold text-white">Workflow i metadane</div>
 
-            <div className="grid gap-3 md:grid-cols-2 text-sm text-white/80">
+            <div className="grid gap-3 text-sm text-white/80 md:grid-cols-2">
               <div>
                 <div className="text-xs text-white/45">Status klienta</div>
                 <div className="mt-1">{row.status ? getClientStatusLabel(lang, row.status) : "-"}</div>
@@ -1786,7 +1806,10 @@ export default function ContactsView({ lang }: { lang: LangKey }) {
 
       const filtered =
         caseTypeWanted.length > 0
-          ? rawRows.filter((row) => deriveCaseTypeFromRoles((row.client_roles ?? []) as ClientRole[]) === caseTypeWanted)
+          ? rawRows.filter(
+              (row) =>
+                deriveCaseTypeFromRoles((row.client_roles ?? []) as ClientRole[]) === caseTypeWanted
+            )
           : rawRows;
 
       setRows(filtered);
@@ -1853,21 +1876,21 @@ export default function ContactsView({ lang }: { lang: LangKey }) {
         throw new Error(code);
       }
 
-            const shouldRedirect =
-          modalMode === "create" &&
-          typeof j?.redirectTo === "string" &&
-          j.redirectTo.trim().length > 0;
+      const shouldRedirect =
+        typeof j?.redirectTo === "string" &&
+        j.redirectTo.trim().length > 0;
 
-        if (shouldRedirect) {
-          await router.push(j.redirectTo);
-          return;
-        }
+      if (shouldRedirect) {
+        await router.push(j.redirectTo);
+        return;
+      }
 
-        setModalOpen(false);
-        setForm(buildInitialForm());
-        setSelectedRow(null);
-        setModalMode("create");
-        await load();
+      setModalOpen(false);
+      setDetailsOpen(false);
+      setForm(buildInitialForm());
+      setSelectedRow(null);
+      setModalMode("create");
+      await load();
     } catch (e: any) {
       setCreateError(
         e?.message ??
@@ -1909,6 +1932,7 @@ export default function ContactsView({ lang }: { lang: LangKey }) {
         setDetailsOpen(false);
         setModalOpen(false);
         setModalMode("create");
+        setForm(buildInitialForm());
       }
 
       await load();
@@ -1920,14 +1944,17 @@ export default function ContactsView({ lang }: { lang: LangKey }) {
   function openCreateModal(caseType?: ClientCaseType) {
     setCreateError(null);
     const next = buildInitialForm();
+
     if (caseType) {
       next.caseType = caseType;
-      next.createCase = caseType !== "other";
+      next.createCase = !["other", "unspecified"].includes(caseType);
       if (caseType === "seller") next.clientRoles = ["seller"];
       if (caseType === "buyer") next.clientRoles = ["buyer"];
       if (caseType === "landlord") next.clientRoles = ["landlord"];
       if (caseType === "tenant") next.clientRoles = ["tenant"];
+      if (caseType === "offer_inquiry") next.clientRoles = ["buyer"];
     }
+
     setForm(next);
     setSelectedRow(null);
     setModalMode("create");
@@ -1951,21 +1978,16 @@ export default function ContactsView({ lang }: { lang: LangKey }) {
 
       const data = j as any;
 
-      // bazowy formularz z row
       const base = mapRowToForm(data.row);
 
-      // nadpisanie danymi szczegółowymi
       const next = {
         ...base,
 
-        // visibility
         visibilityScope: data.visibilityRule?.visibility_scope ?? "office",
 
-        // consent
         marketingConsent: Boolean(data.consent?.granted),
         marketingConsentNotes: data.consent?.notes ?? "",
 
-        // order
         propertyKind: data.orderDetails?.property_kind ?? "",
         marketType: data.orderDetails?.market_type ?? "",
         contractType: data.orderDetails?.contract_type ?? "",
@@ -1981,7 +2003,6 @@ export default function ContactsView({ lang }: { lang: LangKey }) {
         areaMin: data.orderDetails?.area_min?.toString?.() ?? "",
         areaMax: data.orderDetails?.area_max?.toString?.() ?? "",
 
-        // property
         country: data.propertyDetails?.country ?? "",
         city: data.propertyDetails?.city ?? "",
         street: data.propertyDetails?.street ?? "",
@@ -1995,27 +2016,18 @@ export default function ContactsView({ lang }: { lang: LangKey }) {
         floorNumber: data.propertyDetails?.floor_number?.toString?.() ?? "",
         floorTotal: data.propertyDetails?.floor_total?.toString?.() ?? "",
 
-        // inquiry
         offerId: data.offerInquiry?.offer_id ?? "",
         inquiryText: data.offerInquiry?.inquiry_text ?? "",
         autofillFromOffer: Boolean(data.offerInquiry?.autofill_from_offer),
-        autofillMarginPercent:
-          data.offerInquiry?.autofill_margin_percent?.toString?.() ?? "10",
+        autofillMarginPercent: data.offerInquiry?.autofill_margin_percent?.toString?.() ?? "10",
 
-        // credit
-        creditedPropertyPrice:
-          data.creditDetails?.credited_property_price?.toString?.() ?? "",
-        plannedOwnContribution:
-          data.creditDetails?.planned_own_contribution?.toString?.() ?? "",
-        loanPeriodMonths:
-          data.creditDetails?.loan_period_months?.toString?.() ?? "",
-        concernsExistingProperty:
-          Boolean(data.creditDetails?.concerns_existing_property),
+        creditedPropertyPrice: data.creditDetails?.credited_property_price?.toString?.() ?? "",
+        plannedOwnContribution: data.creditDetails?.planned_own_contribution?.toString?.() ?? "",
+        loanPeriodMonths: data.creditDetails?.loan_period_months?.toString?.() ?? "",
+        concernsExistingProperty: Boolean(data.creditDetails?.concerns_existing_property),
         relatedOfferId: data.creditDetails?.related_offer_id ?? "",
-        existingPropertyNotes:
-          data.creditDetails?.existing_property_notes ?? "",
+        existingPropertyNotes: data.creditDetails?.existing_property_notes ?? "",
 
-        // insurance
         insuranceSubject: data.insuranceDetails?.insurance_subject ?? "",
         insuranceNotes: data.insuranceDetails?.insurance_notes ?? "",
       };
@@ -2024,7 +2036,6 @@ export default function ContactsView({ lang }: { lang: LangKey }) {
       setModalOpen(true);
     } catch (e: any) {
       setCreateError(e?.message ?? "Nie udało się pobrać szczegółów");
-      // fallback
       setForm(mapRowToForm(row));
       setModalOpen(true);
     }
@@ -2257,7 +2268,9 @@ export default function ContactsView({ lang }: { lang: LangKey }) {
                           <div
                             className={clsx(
                               "h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-white/15",
-                              (r.party_type ?? "").toLowerCase() === "company" ? "bg-sky-400" : "bg-emerald-400"
+                              (r.party_type ?? "").toLowerCase() === "company"
+                                ? "bg-sky-400"
+                                : "bg-emerald-400"
                             )}
                           />
                           <div className="truncate text-sm font-semibold text-white">{r.full_name ?? "-"}</div>
@@ -2317,7 +2330,9 @@ export default function ContactsView({ lang }: { lang: LangKey }) {
 
                       <div className="text-[11px] text-white/70">
                         <div className="text-white/45">Rodzaj</div>
-                        <div className="mt-1 font-semibold text-white/85">{getCaseTypeLabel(lang, derivedCaseType)}</div>
+                        <div className="mt-1 font-semibold text-white/85">
+                          {getCaseTypeLabel(lang, derivedCaseType)}
+                        </div>
                       </div>
 
                       <div className="min-w-0 text-[11px] text-white/70">

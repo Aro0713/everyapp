@@ -293,6 +293,14 @@ type ContactPayload = {
   insuranceDetails: InsuranceDetailsInput;
 };
 
+type WorkflowType =
+  | "contact"
+  | "offer"
+  | "demand_order"
+  | "credit_order"
+  | "insurance_order"
+  | "offer_inquiry";
+
 function normalizeRoles(value: unknown): ClientRole[] {
   if (!Array.isArray(value)) return [];
   const unique = new Set<ClientRole>();
@@ -456,6 +464,22 @@ function normalizeInsuranceDetails(body: any): InsuranceDetailsInput {
   };
 }
 
+function finalizeRolesForCaseType(inputRoles: ClientRole[], caseType: ClientCaseType): ClientRole[] {
+  const unique = new Set<ClientRole>(inputRoles);
+
+  if (caseType === "seller") unique.add("seller");
+  if (caseType === "buyer") unique.add("buyer");
+  if (caseType === "landlord") unique.add("landlord");
+  if (caseType === "tenant") unique.add("tenant");
+  if (caseType === "offer_inquiry") unique.add("buyer");
+
+  return Array.from(unique);
+}
+
+function shouldCreateCaseByDefault(caseType: ClientCaseType) {
+  return !["other", "unspecified"].includes(caseType);
+}
+
 function normalizePayload(body: any): ContactPayload {
   const partyType = optString(body?.partyType) === "company" ? "company" : "person";
 
@@ -468,8 +492,9 @@ function normalizePayload(body: any): ContactPayload {
       ? companyName
       : [firstName, lastName].filter(Boolean).join(" ").trim() || null;
 
-  const clientRoles = normalizeRoles(body?.clientRoles);
-  const caseType = normalizeCaseType(body?.caseType, clientRoles);
+  const rawRoles = normalizeRoles(body?.clientRoles);
+  const caseType = normalizeCaseType(body?.caseType, rawRoles);
+  const clientRoles = finalizeRolesForCaseType(rawRoles, caseType);
 
   return {
     id: optString(body?.id),
@@ -499,7 +524,10 @@ function normalizePayload(body: any): ContactPayload {
     marketingConsentNotes: optString(body?.marketingConsentNotes),
 
     caseType,
-    createCase: body?.createCase === undefined ? caseType !== "other" : optBool(body?.createCase, true),
+    createCase:
+      body?.createCase === undefined
+        ? shouldCreateCaseByDefault(caseType)
+        : optBool(body?.createCase, shouldCreateCaseByDefault(caseType)),
     visibilityScope: normalizeVisibilityScope(body?.visibilityScope),
     clientBucket: optString(body?.clientBucket) === "archive" ? "archive" : "client",
 
@@ -1032,6 +1060,87 @@ async function syncInsuranceDetails(
   );
 }
 
+async function findListingIdForParty(
+  client: any,
+  officeId: string,
+  partyId: string
+): Promise<string | null> {
+  const listingRes = await client.query(
+    `
+    SELECT l.id
+    FROM public.listing_parties lp
+    JOIN public.listings l
+      ON l.id = lp.listing_id
+    WHERE lp.party_id = $1
+      AND l.office_id = $2
+    ORDER BY l.created_at DESC NULLS LAST, l.id DESC
+    LIMIT 1
+    `,
+    [partyId, officeId]
+  );
+
+  return (listingRes.rows[0]?.id as string | undefined) ?? null;
+}
+
+function buildWorkflowNavigation(args: {
+  caseType: ClientCaseType;
+  partyId: string;
+  clientCaseId: string | null;
+  listingId: string | null;
+}): {
+  workflowType: WorkflowType;
+  workflowId: string;
+  redirectTo: string;
+} {
+  const { caseType, partyId, clientCaseId, listingId } = args;
+
+  if ((caseType === "seller" || caseType === "landlord") && listingId) {
+    return {
+      workflowType: "offer",
+      workflowId: listingId,
+      redirectTo: `/panel/offers/${listingId}`,
+    };
+  }
+
+  if ((caseType === "buyer" || caseType === "tenant") && clientCaseId) {
+    return {
+      workflowType: "demand_order",
+      workflowId: clientCaseId,
+      redirectTo: `/panel/demand-orders/${clientCaseId}`,
+    };
+  }
+
+  if (caseType === "credit" && clientCaseId) {
+    return {
+      workflowType: "credit_order",
+      workflowId: clientCaseId,
+      redirectTo: `/panel/credit-orders/${clientCaseId}`,
+    };
+  }
+
+  if (caseType === "insurance" && clientCaseId) {
+    return {
+      workflowType: "insurance_order",
+      workflowId: clientCaseId,
+      redirectTo: `/panel/insurance-orders/${clientCaseId}`,
+    };
+  }
+
+  if (caseType === "offer_inquiry" && clientCaseId) {
+    return {
+      workflowType: "offer_inquiry",
+      workflowId: clientCaseId,
+      redirectTo: `/panel/offer-inquiries/${clientCaseId}`,
+    };
+  }
+
+  return {
+    workflowType: "contact",
+    workflowId: partyId,
+    redirectTo: `/panel/contacts/${partyId}`,
+  };
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const client = await pool.connect();
 
@@ -1253,7 +1362,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         [officeId, payload.id]
       );
 
-          if (existingCase.rows[0]?.id) {
+      if (existingCase.rows[0]?.id) {
         clientCaseId = existingCase.rows[0].id as string;
 
         await client.query(
@@ -1269,6 +1378,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         );
       }
     }
+
+    const listingId =
+      payload.caseType === "seller" || payload.caseType === "landlord"
+        ? await findListingIdForParty(client, officeId, payload.id)
+        : null;
 
     const refreshed = await client.query(
       `
@@ -1305,6 +1419,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       [payload.id, officeId]
     );
 
+    const navigation = buildWorkflowNavigation({
+      caseType: payload.caseType,
+      partyId: payload.id,
+      clientCaseId,
+      listingId,
+    });
+
     await client.query("COMMIT");
 
     return res.status(200).json({
@@ -1312,6 +1433,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       row: refreshed.rows[0] ?? null,
       clientCaseId,
       updatedCase: Boolean(clientCaseId),
+      workflowType: navigation.workflowType,
+      workflowId: navigation.workflowId,
+      redirectTo: navigation.redirectTo,
     });
   } catch (e: any) {
     await client.query("ROLLBACK").catch(() => null);
