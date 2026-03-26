@@ -9,95 +9,10 @@ function mustUserId(req: NextApiRequest) {
   return uid;
 }
 
-function optString(v: unknown): string | null {
-  return typeof v === "string" && v.trim() ? v.trim() : null;
-}
-
-const ALLOWED_CLIENT_ROLES = new Set([
-  "buyer",
-  "seller",
-  "tenant",
-  "landlord",
-  "investor",
-  "flipper",
-  "developer",
-  "external_agent",
-] as const);
-
-type ClientRole =
-  | "buyer"
-  | "seller"
-  | "tenant"
-  | "landlord"
-  | "investor"
-  | "flipper"
-  | "developer"
-  | "external_agent";
-
-type ContactPayload = {
-  id: string | null;
-  partyType: "person" | "company";
-  clientRoles: ClientRole[];
-  fullName: string | null;
-  firstName: string | null;
-  lastName: string | null;
-  companyName: string | null;
-  phone: string | null;
-  email: string | null;
-  notes: string | null;
-  source: string | null;
-  pesel: string | null;
-  nip: string | null;
-  regon: string | null;
-  krs: string | null;
-};
-
-function normalizeRoles(value: unknown): ClientRole[] {
-  if (!Array.isArray(value)) return [];
-
-  const unique = new Set<ClientRole>();
-
-  for (const item of value) {
-    if (typeof item !== "string") continue;
-    const role = item.trim();
-    if (!role) continue;
-    if (ALLOWED_CLIENT_ROLES.has(role as ClientRole)) {
-      unique.add(role as ClientRole);
-    }
-  }
-
-  return Array.from(unique);
-}
-
-function normalizePayload(body: any): ContactPayload {
-  const partyType = optString(body?.partyType) === "company" ? "company" : "person";
-
-  const firstName = optString(body?.firstName);
-  const lastName = optString(body?.lastName);
-  const companyName = optString(body?.companyName);
-
-  const derivedFullName =
-    partyType === "company"
-      ? companyName
-      : [firstName, lastName].filter(Boolean).join(" ").trim() || null;
-
-  return {
-    id: optString(body?.id),
-    partyType,
-    clientRoles: normalizeRoles(body?.clientRoles),
-    fullName: optString(body?.fullName) ?? derivedFullName,
-    firstName,
-    lastName,
-    companyName,
-    phone: optString(body?.phone),
-    email: optString(body?.email),
-    notes: optString(body?.notes),
-    source: optString(body?.source) ?? "manual",
-    pesel: optString(body?.pesel),
-    nip: optString(body?.nip),
-    regon: optString(body?.regon),
-    krs: optString(body?.krs),
-  };
+function getIdParam(req: NextApiRequest): string | null {
+  const raw = req.query.id;
+  if (typeof raw === "string" && raw.trim()) return raw.trim();
+  return null;
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -105,274 +20,179 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const userId = mustUserId(req);
-
-    if (req.method !== "PUT") {
-      res.setHeader("Allow", "PUT");
-      return res.status(405).json({ error: "Method not allowed" });
-    }
-
     const officeId = await getOfficeIdForUserId(userId);
-    const payload = normalizePayload(req.body ?? {});
+    const id = getIdParam(req);
 
-    if (!payload.id) {
+    if (!id) {
       return res.status(400).json({ error: "MISSING_ID" });
     }
 
-    if (!payload.fullName) {
-      return res.status(400).json({ error: "MISSING_FULL_NAME" });
-    }
-
-    if (!payload.phone && !payload.email) {
-      return res.status(400).json({ error: "MISSING_CONTACT_CHANNEL" });
-    }
-
-    if (payload.partyType === "person" && (!payload.firstName || !payload.lastName)) {
-      return res.status(400).json({ error: "MISSING_PERSON_NAME_PARTS" });
-    }
-
-    if (payload.partyType === "company" && !payload.companyName && !payload.fullName) {
-      return res.status(400).json({ error: "MISSING_COMPANY_NAME" });
-    }
-
-    await client.query("BEGIN");
-
-    const existing = await client.query(
-      `
-      SELECT id, office_id, party_type::text AS party_type
-      FROM public.parties
-      WHERE id = $1
-        AND office_id = $2
-      LIMIT 1
-      `,
-      [payload.id, officeId]
-    );
-
-    if (!existing.rowCount) {
-      await client.query("ROLLBACK");
-      return res.status(404).json({ error: "NOT_FOUND" });
-    }
-
-    await client.query(
-      `
-      UPDATE public.parties
-      SET
-        party_type = $2::public.party_type,
-        full_name = $3,
-        notes = $4,
-        source = $5,
-        updated_at = now()
-      WHERE id = $1
-        AND office_id = $6
-      `,
-      [
-        payload.id,
-        payload.partyType,
-        payload.fullName,
-        payload.notes,
-        payload.source,
-        officeId,
-      ]
-    );
-
-    if (payload.partyType === "person") {
-      await client.query(
+    if (req.method === "GET") {
+      const rowRes = await client.query(
         `
-        DELETE FROM public.party_company_details
-        WHERE party_id = $1
-          AND office_id = $2
+        SELECT
+          c.id,
+          c.office_id,
+          c.party_type,
+          c.full_name,
+          c.pesel,
+          c.nip,
+          c.regon,
+          c.krs,
+          c.notes,
+          c.source,
+          c.created_by_user_id,
+          c.assigned_user_id,
+          c.status,
+          c.pipeline_stage,
+          c.created_at,
+          c.updated_at,
+          c.first_name,
+          c.last_name,
+          c.company_name,
+          c.phone_primary,
+          c.email_primary,
+          c.phone_fallback,
+          c.email_fallback,
+          c.phone,
+          c.email,
+          c.contacts_count,
+          c.has_interactions,
+          c.interactions_count,
+          c.client_roles
+        FROM public.crm_contacts_view c
+        WHERE c.id = $1
+          AND c.office_id = $2
+        LIMIT 1
         `,
-        [payload.id, officeId]
+        [id, officeId]
       );
 
-      await client.query(
-        `
-        INSERT INTO public.party_person_details (
-          party_id,
-          office_id,
-          first_name,
-          last_name,
-          pesel,
-          id_doc_type,
-          id_doc_number
-        )
-        VALUES (
-          $1, $2, $3, $4, $5, NULL, NULL
-        )
-        ON CONFLICT (party_id) DO UPDATE
-        SET
-          office_id = EXCLUDED.office_id,
-          first_name = EXCLUDED.first_name,
-          last_name = EXCLUDED.last_name,
-          pesel = EXCLUDED.pesel
-        `,
-        [
-          payload.id,
-          officeId,
-          payload.firstName,
-          payload.lastName,
-          payload.pesel,
-        ]
-      );
-    }
-
-    if (payload.partyType === "company") {
-      await client.query(
-        `
-        DELETE FROM public.party_person_details
-        WHERE party_id = $1
-          AND office_id = $2
-        `,
-        [payload.id, officeId]
-      );
-
-      await client.query(
-        `
-        INSERT INTO public.party_company_details (
-          party_id,
-          office_id,
-          company_name,
-          nip,
-          regon,
-          krs
-        )
-        VALUES (
-          $1, $2, $3, $4, $5, $6
-        )
-        ON CONFLICT (party_id) DO UPDATE
-        SET
-          office_id = EXCLUDED.office_id,
-          company_name = EXCLUDED.company_name,
-          nip = EXCLUDED.nip,
-          regon = EXCLUDED.regon,
-          krs = EXCLUDED.krs
-        `,
-        [
-          payload.id,
-          officeId,
-          payload.companyName ?? payload.fullName,
-          payload.nip,
-          payload.regon,
-          payload.krs,
-        ]
-      );
-    }
-
-    await client.query(
-      `
-      DELETE FROM public.party_contacts
-      WHERE party_id = $1
-      `,
-      [payload.id]
-    );
-
-    if (payload.phone) {
-      await client.query(
-        `
-        INSERT INTO public.party_contacts (
-          party_id,
-          kind,
-          value,
-          is_primary
-        )
-        VALUES (
-          $1,
-          'phone'::public.contact_kind,
-          $2,
-          true
-        )
-        `,
-        [payload.id, payload.phone]
-      );
-    }
-
-    if (payload.email) {
-      await client.query(
-        `
-        INSERT INTO public.party_contacts (
-          party_id,
-          kind,
-          value,
-          is_primary
-        )
-        VALUES (
-          $1,
-          'email'::public.contact_kind,
-          $2,
-          $3
-        )
-        `,
-        [payload.id, payload.email, payload.phone ? false : true]
-      );
-    }
-
-    await client.query(
-      `
-      DELETE FROM public.party_roles
-      WHERE party_id = $1
-        AND office_id = $2
-      `,
-      [payload.id, officeId]
-    );
-
-    if (payload.clientRoles.length > 0) {
-      for (const role of payload.clientRoles) {
-        await client.query(
-          `
-          INSERT INTO public.party_roles (
-            office_id,
-            party_id,
-            role
-          )
-          VALUES (
-            $1,
-            $2,
-            $3::public.party_role_type
-          )
-          ON CONFLICT (office_id, party_id, role) DO NOTHING
-          `,
-          [officeId, payload.id, role]
-        );
+      const row = rowRes.rows[0];
+      if (!row) {
+        return res.status(404).json({ error: "NOT_FOUND" });
       }
+
+      return res.status(200).json({ ok: true, row });
     }
 
-    const refreshed = await client.query(
-      `
-      SELECT
-        id,
-        office_id,
-        party_type::text AS party_type,
-        full_name,
-        notes,
-        source,
-        created_by_user_id,
-        created_at,
-        updated_at,
-        first_name,
-        last_name,
-        pesel,
-        company_name,
-        nip,
-        regon,
-        krs,
-        phone,
-        email,
-        client_roles,
-        has_interactions,
-        interactions_count
-      FROM public.crm_contacts_view
-      WHERE id = $1
-        AND office_id = $2
-      LIMIT 1
-      `,
-      [payload.id, officeId]
-    );
+    if (req.method === "DELETE") {
+      const existing = await client.query(
+        `
+        SELECT id
+        FROM public.parties
+        WHERE id = $1
+          AND office_id = $2
+        LIMIT 1
+        `,
+        [id, officeId]
+      );
 
-    await client.query("COMMIT");
+      if (!existing.rows[0]) {
+        return res.status(404).json({ error: "NOT_FOUND" });
+      }
 
-    return res.status(200).json({
-      ok: true,
-      row: refreshed.rows[0] ?? null,
-    });
+      await client.query("BEGIN");
+
+      await client.query(
+        `DELETE FROM public.party_consents WHERE party_id = $1`,
+        [id]
+      );
+
+      await client.query(
+        `DELETE FROM public.party_roles WHERE party_id = $1 AND office_id = $2`,
+        [id, officeId]
+      );
+
+      await client.query(
+        `DELETE FROM public.party_contacts WHERE party_id = $1`,
+        [id]
+      );
+
+      await client.query(
+        `DELETE FROM public.party_person_details WHERE party_id = $1 AND office_id = $2`,
+        [id, officeId]
+      );
+
+      await client.query(
+        `DELETE FROM public.party_company_details WHERE party_id = $1 AND office_id = $2`,
+        [id, officeId]
+      );
+
+      await client.query(
+        `DELETE FROM public.client_case_visibility_rules
+         WHERE client_case_id IN (
+           SELECT id FROM public.client_cases WHERE party_id = $1 AND office_id = $2
+         )`,
+        [id, officeId]
+      );
+
+      await client.query(
+        `DELETE FROM public.client_case_credit_details
+         WHERE client_case_id IN (
+           SELECT id FROM public.client_cases WHERE party_id = $1 AND office_id = $2
+         )`,
+        [id, officeId]
+      );
+
+      await client.query(
+        `DELETE FROM public.client_case_insurance_details
+         WHERE client_case_id IN (
+           SELECT id FROM public.client_cases WHERE party_id = $1 AND office_id = $2
+         )`,
+        [id, officeId]
+      );
+
+      await client.query(
+        `DELETE FROM public.client_case_offer_inquiries
+         WHERE client_case_id IN (
+           SELECT id FROM public.client_cases WHERE party_id = $1 AND office_id = $2
+         )`,
+        [id, officeId]
+      );
+
+      await client.query(
+        `DELETE FROM public.client_case_order_details
+         WHERE client_case_id IN (
+           SELECT id FROM public.client_cases WHERE party_id = $1 AND office_id = $2
+         )`,
+        [id, officeId]
+      );
+
+      await client.query(
+        `DELETE FROM public.client_case_properties
+         WHERE client_case_id IN (
+           SELECT id FROM public.client_cases WHERE party_id = $1 AND office_id = $2
+         )`,
+        [id, officeId]
+      );
+
+      await client.query(
+        `DELETE FROM public.client_cases
+         WHERE party_id = $1
+           AND office_id = $2`,
+        [id, officeId]
+      );
+
+      await client.query(
+        `DELETE FROM public.listing_parties WHERE party_id = $1`,
+        [id]
+      );
+
+      await client.query(
+        `DELETE FROM public.parties
+         WHERE id = $1
+           AND office_id = $2`,
+        [id, officeId]
+      );
+
+      await client.query("COMMIT");
+
+      return res.status(200).json({ ok: true });
+    }
+
+    res.setHeader("Allow", "GET,DELETE");
+    return res.status(405).json({ error: "Method not allowed" });
   } catch (e: any) {
     await client.query("ROLLBACK").catch(() => null);
 
@@ -384,7 +204,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(403).json({ error: "NO_OFFICE_MEMBERSHIP" });
     }
 
-    console.error("CONTACTS_UPDATE_ERROR", e);
+    console.error("CONTACTS_ID_ROUTE_ERROR", e);
     return res.status(400).json({ error: e?.message ?? "Bad request" });
   } finally {
     client.release();
