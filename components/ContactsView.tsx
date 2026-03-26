@@ -2425,7 +2425,9 @@ export default function ContactsView({ lang }: { lang: LangKey }) {
                         <div className="flex flex-wrap justify-end gap-1.5">
                           <button
                             type="button"
-                            onClick={() => openDetailsModal(r)}
+                            onClick={() =>
+                              router.push(`/panel/contacts/${encodeURIComponent(r.id)}`)
+                            }
                             className="rounded-xl border border-white/10 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:bg-white/15"
                           >
                             Otwórz
