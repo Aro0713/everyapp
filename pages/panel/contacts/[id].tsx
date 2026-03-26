@@ -213,6 +213,7 @@ function Badge({
 export default function ContactDetailsPage() {
   const router = useRouter();
   const id = typeof router.query.id === "string" ? router.query.id : "";
+  if (!id) return null;
 
   const [row, setRow] = useState<ContactRow | null>(null);
   const [loading, setLoading] = useState(true);
@@ -262,7 +263,7 @@ export default function ContactDetailsPage() {
       const j = await r.json().catch(() => null);
       if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
 
-      await router.push("/panel?view=contacts");
+      await router.replace("/panel?view=contacts");
     } catch (e: any) {
       alert(e?.message ?? "Nie udało się usunąć klienta.");
     } finally {
@@ -308,12 +309,15 @@ export default function ContactDetailsPage() {
                 <button
                   type="button"
                   onClick={() =>
-                    router.push(
-                      `/panel?view=contacts&editId=${encodeURIComponent(id)}&returnTo=${encodeURIComponent(
-                        router.asPath
-                      )}`
-                    )
-                  }
+                    router.push({
+                        pathname: "/panel",
+                        query: {
+                        view: "contacts",
+                        editId: id,
+                        returnTo: router.asPath,
+                        },
+                    })
+                    }
                   className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/15"
                 >
                   Edytuj
@@ -321,7 +325,7 @@ export default function ContactDetailsPage() {
 
                 <button
                   type="button"
-                  onClick={handleDelete}
+                  onClick={!busyDelete ? handleDelete : undefined}
                   disabled={busyDelete}
                   className="rounded-2xl border border-red-500/20 bg-red-600/80 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-600 disabled:opacity-60"
                 >
