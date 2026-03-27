@@ -1,37 +1,21 @@
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
+import {
+  ContactModal,
+  type ContactFormState,
+  type ContactRow,
+  buildInitialForm,
+  buildPayloadFromForm,
+  mapRowToForm,
+} from "@/components/ContactsView";
+import { DEFAULT_LANG, isLangKey } from "@/utils/i18n";
+import type { LangKey } from "@/utils/translations";
 
-type ContactRow = {
-  id: string;
-  office_id: string;
-  party_type: string | null;
-  client_roles?: string[] | null;
-  full_name: string | null;
-  pesel: string | null;
-  nip: string | null;
-  regon?: string | null;
-  krs: string | null;
-  notes?: string | null;
-  source?: string | null;
-  created_by_user_id?: string | null;
-  assigned_user_id?: string | null;
-  status?: string | null;
-  pipeline_stage?: string | null;
-  created_at: string | null;
-  updated_at?: string | null;
-  first_name?: string | null;
-  last_name?: string | null;
-  company_name?: string | null;
-  phone_primary?: string | null;
-  email_primary?: string | null;
-  phone_fallback?: string | null;
-  email_fallback?: string | null;
-  phone?: string | null;
-  email?: string | null;
-  contacts_count?: number | null;
-  has_interactions?: boolean | null;
-  interactions_count?: number | null;
-};
+function getCookie(name: string) {
+  if (typeof document === "undefined") return null;
+  const m = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
+  return m ? decodeURIComponent(m[2]) : null;
+}
 
 function clsx(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
@@ -244,13 +228,25 @@ function NextStepTile({
 export default function ContactDetailsPage() {
   const router = useRouter();
   const id = typeof router.query.id === "string" ? router.query.id : "";
-  if (!id) return null;
   const activeTab = typeof router.query.tab === "string" ? router.query.tab : "";
+  const mode = typeof router.query.mode === "string" ? router.query.mode : "";
+
+  const [lang, setLang] = useState<LangKey>(DEFAULT_LANG);
 
   const [row, setRow] = useState<ContactRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyDelete, setBusyDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [form, setForm] = useState<ContactFormState>(buildInitialForm());
+
+  useEffect(() => {
+    const c = getCookie("lang");
+    if (isLangKey(c)) setLang(c);
+  }, []);
 
   async function load() {
     if (!id) return;
@@ -272,6 +268,153 @@ export default function ContactDetailsPage() {
       setError(e?.message ?? "Nie udało się pobrać klienta.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function openEditModal() {
+    if (!id || !row) return;
+
+    setEditError(null);
+
+    try {
+      const r = await fetch(`/api/contacts/details?id=${encodeURIComponent(id)}`, {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      const j = await r.json().catch(() => null);
+      if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
+
+      const base = mapRowToForm(j.row);
+
+      const next: ContactFormState = {
+        ...base,
+        visibilityScope: j.visibilityRule?.visibility_scope ?? "office",
+        marketingConsent: Boolean(j.consent?.granted),
+        marketingConsentNotes: j.consent?.notes ?? "",
+
+        propertyKind: j.orderDetails?.property_kind ?? "",
+        marketType: j.orderDetails?.market_type ?? "",
+        contractType: j.orderDetails?.contract_type ?? "",
+        caretakerUserId: j.orderDetails?.caretaker_user_id ?? "",
+
+        expectedPropertyKind: j.orderDetails?.expected_property_kind ?? "",
+        searchLocationText: j.orderDetails?.search_location_text ?? "",
+
+        budgetMin: j.orderDetails?.budget_min?.toString?.() ?? "",
+        budgetMax: j.orderDetails?.budget_max?.toString?.() ?? "",
+        roomsMin: j.orderDetails?.rooms_min?.toString?.() ?? "",
+        roomsMax: j.orderDetails?.rooms_max?.toString?.() ?? "",
+        areaMin: j.orderDetails?.area_min?.toString?.() ?? "",
+        areaMax: j.orderDetails?.area_max?.toString?.() ?? "",
+
+        country: j.propertyDetails?.country ?? "",
+        city: j.propertyDetails?.city ?? "",
+        street: j.propertyDetails?.street ?? "",
+        buildingNumber: j.propertyDetails?.building_number ?? "",
+        unitNumber: j.propertyDetails?.unit_number ?? "",
+        priceAmount: j.propertyDetails?.price_amount?.toString?.() ?? "",
+        priceCurrency: j.propertyDetails?.price_currency ?? "PLN",
+        pricePeriod: j.propertyDetails?.price_period ?? "",
+        areaM2: j.propertyDetails?.area_m2?.toString?.() ?? "",
+        roomsCount: j.propertyDetails?.rooms_count?.toString?.() ?? "",
+        floorNumber: j.propertyDetails?.floor_number?.toString?.() ?? "",
+        floorTotal: j.propertyDetails?.floor_total?.toString?.() ?? "",
+
+        offerId: j.offerInquiry?.offer_id ?? "",
+        inquiryText: j.offerInquiry?.inquiry_text ?? "",
+        autofillFromOffer: Boolean(j.offerInquiry?.autofill_from_offer),
+        autofillMarginPercent: j.offerInquiry?.autofill_margin_percent?.toString?.() ?? "10",
+
+        creditedPropertyPrice: j.creditDetails?.credited_property_price?.toString?.() ?? "",
+        plannedOwnContribution: j.creditDetails?.planned_own_contribution?.toString?.() ?? "",
+        loanPeriodMonths: j.creditDetails?.loan_period_months?.toString?.() ?? "",
+        concernsExistingProperty: Boolean(j.creditDetails?.concerns_existing_property),
+        relatedOfferId: j.creditDetails?.related_offer_id ?? "",
+        existingPropertyNotes: j.creditDetails?.existing_property_notes ?? "",
+
+        insuranceSubject: j.insuranceDetails?.insurance_subject ?? "",
+        insuranceNotes: j.insuranceDetails?.insurance_notes ?? "",
+      };
+
+      setForm(next);
+      setEditOpen(true);
+
+      await router.replace(
+        {
+          pathname: router.pathname,
+          query: {
+            ...router.query,
+            mode: "edit",
+          },
+        },
+        undefined,
+        { shallow: true }
+      );
+    } catch (e: any) {
+      setEditError(e?.message ?? "Nie udało się pobrać szczegółów.");
+      setForm(mapRowToForm(row));
+      setEditOpen(true);
+    }
+  }
+
+  async function closeEditModal() {
+    if (editSaving) return;
+
+    setEditOpen(false);
+    setEditError(null);
+
+    const nextQuery: Record<string, string> = {};
+    if (typeof router.query.id === "string") nextQuery.id = router.query.id;
+    if (typeof router.query.tab === "string") nextQuery.tab = router.query.tab;
+
+    await router.replace(
+      {
+        pathname: router.pathname,
+        query: nextQuery,
+      },
+      undefined,
+      { shallow: true }
+    );
+  }
+
+  async function handleSave() {
+    if (!row?.id) return;
+
+    setEditSaving(true);
+    setEditError(null);
+
+    try {
+      const payload = buildPayloadFromForm(form);
+
+      const r = await fetch("/api/contacts/update", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: row.id,
+          ...payload,
+        }),
+      });
+
+      const j = await r.json().catch(() => null);
+
+      if (!r.ok) {
+        const code = j?.error ?? `HTTP ${r.status}`;
+        if (code === "MISSING_FULL_NAME") throw new Error("Brak nazwy lub imienia i nazwiska.");
+        if (code === "MISSING_CONTACT_CHANNEL") throw new Error("Podaj telefon lub email.");
+        if (code === "MISSING_PERSON_NAME_PARTS") throw new Error("Podaj imię i nazwisko.");
+        if (code === "MISSING_COMPANY_NAME") throw new Error("Podaj nazwę firmy.");
+        if (code === "MISSING_ID") throw new Error("Brak identyfikatora.");
+        if (code === "NOT_FOUND") throw new Error("Nie znaleziono kontaktu.");
+        throw new Error(code);
+      }
+
+      await load();
+      await closeEditModal();
+    } catch (e: any) {
+      setEditError(e?.message ?? "Nie udało się zapisać zmian.");
+    } finally {
+      setEditSaving(false);
     }
   }
 
@@ -304,9 +447,17 @@ export default function ContactDetailsPage() {
   }
 
   useEffect(() => {
+    if (!id) return;
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  useEffect(() => {
+    if (!loading && row && mode === "edit" && !editOpen) {
+      openEditModal();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, row, mode]);
 
   const phone = getDisplayPhone(row);
   const email = getDisplayEmail(row);
@@ -320,6 +471,8 @@ export default function ContactDetailsPage() {
     if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
     return `${parts[0][0] ?? ""}${parts[parts.length - 1][0] ?? ""}`.toUpperCase();
   }, [row?.full_name]);
+
+  if (!id) return null;
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
@@ -339,21 +492,12 @@ export default function ContactDetailsPage() {
                 </button>
 
                 <button
-                    type="button"
-                    onClick={() =>
-                        router.push({
-                        pathname: "/panel",
-                        query: {
-                            view: "contacts",
-                            editId: id,
-                            returnTo: router.asPath,
-                        },
-                        })
-                    }
-                    className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/15"
-                    >
-                    Edytuj
-                    </button>
+                  type="button"
+                  onClick={openEditModal}
+                  className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/15"
+                >
+                  Edytuj
+                </button>
 
                 <button
                   type="button"
@@ -494,81 +638,93 @@ export default function ContactDetailsPage() {
                     </div>
                   </Card>
                 </div>
-                
+
                 {activeTab ? (
-                <Card
+                  <Card
                     title={
-                    activeTab === "history"
+                      activeTab === "history"
                         ? "Historia kontaktu"
                         : activeTab === "notes"
-                        ? "Notatki i follow-up"
-                        : activeTab === "documents"
+                          ? "Notatki i follow-up"
+                          : activeTab === "documents"
                             ? "Dokumenty klienta"
                             : "Sekcja klienta"
                     }
                     subtitle="Widok roboczy pod dalszą rozbudowę."
-                >
+                  >
                     <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 px-4 py-8 text-sm text-white/65">
-                    {activeTab === "history" && "Tutaj podepniemy timeline interakcji, zdarzeń i aktywności klienta."}
-                    {activeTab === "notes" && "Tutaj podepniemy notatki, follow-upy, zadania i przypomnienia."}
-                    {activeTab === "documents" && "Tutaj podepniemy dokumenty klienta i załączniki."}
-                    {!["history", "notes", "documents"].includes(activeTab) &&
+                      {activeTab === "history" && "Tutaj podepniemy timeline interakcji, zdarzeń i aktywności klienta."}
+                      {activeTab === "notes" && "Tutaj podepniemy notatki, follow-upy, zadania i przypomnienia."}
+                      {activeTab === "documents" && "Tutaj podepniemy dokumenty klienta i załączniki."}
+                      {!["history", "notes", "documents"].includes(activeTab) &&
                         "Ta sekcja jest przygotowana pod dalszą rozbudowę CRM."}
                     </div>
-                </Card>
+                  </Card>
                 ) : null}
 
                 <Card
-                title="Zalecane następne kroki"
-                subtitle="Sekcje docelowe do dalszej rozbudowy CRM dla klienta."
+                  title="Zalecane następne kroki"
+                  subtitle="Sekcje docelowe do dalszej rozbudowy CRM dla klienta."
                 >
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                     <NextStepTile
-                    title="Powiązane oferty"
-                    href={`/panel/offers?clientId=${encodeURIComponent(row.id)}`}
+                      title="Powiązane oferty"
+                      href={`/panel/offers?clientId=${encodeURIComponent(row.id)}`}
                     />
 
                     <NextStepTile
-                    title="Zlecenia popytowe"
-                    href={`/panel/demand-orders?clientId=${encodeURIComponent(row.id)}`}
+                      title="Zlecenia popytowe"
+                      href={`/panel/demand-orders?clientId=${encodeURIComponent(row.id)}`}
                     />
 
                     <NextStepTile
-                    title="Zlecenia kredytowe"
-                    href={`/panel/credit-orders?clientId=${encodeURIComponent(row.id)}`}
+                      title="Zlecenia kredytowe"
+                      href={`/panel/credit-orders?clientId=${encodeURIComponent(row.id)}`}
                     />
 
                     <NextStepTile
-                    title="Zlecenia ubezpieczeniowe"
-                    href={`/panel/insurance-orders?clientId=${encodeURIComponent(row.id)}`}
+                      title="Zlecenia ubezpieczeniowe"
+                      href={`/panel/insurance-orders?clientId=${encodeURIComponent(row.id)}`}
                     />
 
                     <NextStepTile
-                    title="Historia kontaktu"
-                    href={`/panel/contacts/${encodeURIComponent(row.id)}?tab=history`}
+                      title="Historia kontaktu"
+                      href={`/panel/contacts/${encodeURIComponent(row.id)}?tab=history`}
                     />
 
                     <NextStepTile
-                    title="Terminarz klienta"
-                    href={`/panel?view=calendar&clientId=${encodeURIComponent(row.id)}`}
+                      title="Terminarz klienta"
+                      href={`/panel?view=calendar&clientId=${encodeURIComponent(row.id)}`}
                     />
 
                     <NextStepTile
-                    title="Dokumenty klienta"
-                    href={`/panel/contacts/${encodeURIComponent(row.id)}?tab=documents`}
+                      title="Dokumenty klienta"
+                      href={`/panel/contacts/${encodeURIComponent(row.id)}?tab=documents`}
                     />
 
                     <NextStepTile
-                    title="Notatki i follow-up"
-                    href={`/panel/contacts/${encodeURIComponent(row.id)}?tab=notes`}
+                      title="Notatki i follow-up"
+                      href={`/panel/contacts/${encodeURIComponent(row.id)}?tab=notes`}
                     />
-                </div>
+                  </div>
                 </Card>
               </div>
             )}
           </Card>
         </div>
       </div>
+
+      <ContactModal
+        lang={lang}
+        open={editOpen}
+        mode="edit"
+        saving={editSaving}
+        error={editError}
+        form={form}
+        setForm={setForm}
+        onClose={closeEditModal}
+        onSubmit={handleSave}
+      />
     </div>
   );
 }

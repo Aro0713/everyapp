@@ -1,5 +1,5 @@
-import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/router";
 import { t } from "@/utils/i18n";
 import type { LangKey } from "@/utils/translations";
 
@@ -74,7 +74,7 @@ type PropertyContractType =
 
 type InsuranceSubject = "house" | "car" | "vacation" | "children" | "other";
 
-type ContactRow = {
+export type ContactRow = {
   id: string;
   office_id: string;
   party_type: string | null;
@@ -106,7 +106,7 @@ type ContactRow = {
   interactions_count?: number | null;
 };
 
-type ContactFormState = {
+export type ContactFormState = {
   partyType: "person" | "company";
   clientRoles: ClientRole[];
   status: ClientStatus;
@@ -284,7 +284,7 @@ function getPipelineStageLabel(lang: LangKey, stage: ClientPipelineStage | strin
   }
 }
 
-function getCaseTypeLabel(lang: LangKey, caseType: ClientCaseType | string) {
+function getCaseTypeLabel(_lang: LangKey, caseType: ClientCaseType | string) {
   switch (caseType) {
     case "seller":
       return "Sprzedający";
@@ -309,23 +309,6 @@ function getCaseTypeLabel(lang: LangKey, caseType: ClientCaseType | string) {
   }
 }
 
-function getVisibilityScopeLabel(scope: VisibilityScope | string) {
-  switch (scope) {
-    case "everywhere":
-      return "Everywhere";
-    case "network":
-      return "Moja sieć";
-    case "office":
-      return "Moje biuro";
-    case "group":
-      return "Moja grupa";
-    case "mine":
-      return "Tylko moje";
-    default:
-      return scope || "-";
-  }
-}
-
 function deriveCaseTypeFromRoles(roles: ClientRole[]): ClientCaseType {
   if (roles.includes("seller")) return "seller";
   if (roles.includes("buyer")) return "buyer";
@@ -338,7 +321,7 @@ function deriveCaseTypeFromRoles(roles: ClientRole[]): ClientCaseType {
   return "unspecified";
 }
 
-function buildInitialForm(): ContactFormState {
+export function buildInitialForm(): ContactFormState {
   return {
     partyType: "person",
     clientRoles: [],
@@ -410,7 +393,7 @@ function buildInitialForm(): ContactFormState {
   };
 }
 
-function mapRowToForm(row: ContactRow): ContactFormState {
+export function mapRowToForm(row: ContactRow): ContactFormState {
   const fullName = (row.full_name ?? "").trim();
   const parts = fullName.split(/\s+/).filter(Boolean);
   const isCompany = (row.party_type ?? "").toLowerCase() === "company";
@@ -477,7 +460,7 @@ function shouldShowInsuranceSection(caseType: ClientCaseType) {
   return caseType === "insurance";
 }
 
-function buildPayloadFromForm(form: ContactFormState) {
+export function buildPayloadFromForm(form: ContactFormState) {
   return {
     partyType: form.partyType,
     clientRoles: form.clientRoles,
@@ -620,7 +603,7 @@ function SelectBox(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   );
 }
 
-function ContactModal({
+export function ContactModal({
   lang,
   open,
   mode,
@@ -644,7 +627,6 @@ function ContactModal({
   if (!open) return null;
 
   const isCompany = form.partyType === "company";
-  const advancedEditLocked = false;
 
   const availableRoles: ClientRole[] = [
     "buyer",
@@ -676,7 +658,7 @@ function ContactModal({
             </h3>
             <p className="mt-1 text-sm text-white/55">
               {mode === "edit"
-                ? "Edycja danych podstawowych kontaktu i ustawień CRM."
+                ? "Edycja danych kontaktu i ustawień CRM."
                 : "Dodaj klienta wraz z typem sprawy, danymi zlecenia i nieruchomości."}
             </p>
           </div>
@@ -1042,7 +1024,7 @@ function ContactModal({
               </div>
             </SectionCard>
 
-            <SectionCard title="Dane zlecenia" muted={advancedEditLocked}>
+            <SectionCard title="Dane zlecenia">
               {shouldShowOrderSection(form.caseType) ? (
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                   <label className="block">
@@ -1210,7 +1192,7 @@ function ContactModal({
               )}
             </SectionCard>
 
-            <SectionCard title="Dane nieruchomości" muted={advancedEditLocked}>
+            <SectionCard title="Dane nieruchomości">
               {shouldShowPropertySection(form.caseType) ? (
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                   <label className="block">
@@ -1323,7 +1305,7 @@ function ContactModal({
               )}
             </SectionCard>
 
-            <SectionCard title="Zapytanie na ofertę" muted={advancedEditLocked}>
+            <SectionCard title="Zapytanie na ofertę">
               {shouldShowOfferInquirySection(form.caseType) ? (
                 <div className="grid gap-4 md:grid-cols-2">
                   <label className="block">
@@ -1375,7 +1357,7 @@ function ContactModal({
               )}
             </SectionCard>
 
-            <SectionCard title="Dane kredytowe" muted={advancedEditLocked}>
+            <SectionCard title="Dane kredytowe">
               {shouldShowCreditSection(form.caseType) ? (
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                   <label className="block">
@@ -1446,7 +1428,7 @@ function ContactModal({
               )}
             </SectionCard>
 
-            <SectionCard title="Dane ubezpieczeniowe" muted={advancedEditLocked}>
+            <SectionCard title="Dane ubezpieczeniowe">
               {shouldShowInsuranceSection(form.caseType) ? (
                 <div className="grid gap-4 md:grid-cols-2">
                   <label className="block">
@@ -1513,235 +1495,6 @@ function ContactModal({
   );
 }
 
-function ContactDetailsModal({
-  lang,
-  open,
-  row,
-  onClose,
-  onEdit,
-}: {
-  lang: LangKey;
-  open: boolean;
-  row: ContactRow | null;
-  onClose: () => void;
-  onEdit: (row: ContactRow) => void;
-}) {
-  if (!open || !row) return null;
-
-  const phone = getDisplayPhone(row);
-  const email = getDisplayEmail(row);
-  const withInteractions = hasRowInteractions(row);
-  const roles = Array.isArray(row.client_roles) ? row.client_roles : [];
-  const caseType = deriveCaseTypeFromRoles(roles as ClientRole[]);
-
-  return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
-      <button
-        type="button"
-        aria-label="Close modal overlay"
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-      />
-
-      <div className="relative z-[121] w-full max-w-4xl rounded-3xl border border-white/10 bg-slate-950/95 shadow-2xl backdrop-blur-xl">
-        <div className="flex items-start justify-between gap-3 border-b border-white/10 px-5 py-4">
-          <div>
-            <h3 className="text-lg font-extrabold tracking-tight text-white">
-              {t(lang, "listingOpen" as any) ?? "Otwórz"}
-            </h3>
-            <p className="mt-1 text-sm text-white/55">Podgląd danych kontaktu</p>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white/85 transition hover:bg-white/10"
-          >
-            ✕
-          </button>
-        </div>
-
-        <div className="space-y-4 px-5 py-4">
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <div className="text-lg font-bold text-white">{row.full_name ?? "-"}</div>
-
-            <div className="mt-2 flex flex-wrap gap-2">
-              <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/85 ring-1 ring-white/10">
-                {normalizePartyTypeLabel(lang, row.party_type)}
-              </span>
-
-              <span className="rounded bg-indigo-500/15 px-2 py-0.5 text-[10px] text-indigo-100 ring-1 ring-indigo-500/20">
-                {getCaseTypeLabel(lang, caseType)}
-              </span>
-
-              {row.status ? (
-                <span className="rounded bg-sky-500/15 px-2 py-0.5 text-[10px] text-sky-100 ring-1 ring-sky-500/20">
-                  {getClientStatusLabel(lang, row.status)}
-                </span>
-              ) : null}
-
-              {row.pipeline_stage ? (
-                <span className="rounded bg-fuchsia-500/15 px-2 py-0.5 text-[10px] text-fuchsia-100 ring-1 ring-fuchsia-500/20">
-                  {getPipelineStageLabel(lang, row.pipeline_stage)}
-                </span>
-              ) : null}
-
-              {roles.length
-                ? roles.map((role) => (
-                    <span
-                      key={role}
-                      className="rounded bg-ew-accent/15 px-2 py-0.5 text-[10px] text-white/85 ring-1 ring-ew-accent/20"
-                    >
-                      {getClientRoleLabel(lang, role)}
-                    </span>
-                  ))
-                : null}
-
-              {withInteractions ? (
-                <span className="rounded bg-amber-500/15 px-2 py-0.5 text-[10px] text-amber-200 ring-1 ring-amber-500/20">
-                  {(t(lang, "contactsInteractionsBadge" as any) ?? "Interakcje") +
-                    `: ${row.interactions_count ?? 1}`}
-                </span>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <div className="mb-3 text-sm font-semibold text-white">Dane kontaktowe</div>
-
-              <div className="space-y-3 text-sm text-white/80">
-                <div>
-                  <div className="text-xs text-white/45">Telefon</div>
-                  <div className="mt-1">
-                    {phone ? (
-                      <a href={`tel:${phone}`} className="text-ew-accent underline">
-                        {phone}
-                      </a>
-                    ) : (
-                      "-"
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="text-xs text-white/45">Email</div>
-                  <div className="mt-1">
-                    {email ? (
-                      <a href={`mailto:${email}`} className="text-ew-accent underline">
-                        {email}
-                      </a>
-                    ) : (
-                      "-"
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="text-xs text-white/45">Źródło</div>
-                  <div className="mt-1">{row.source ?? "-"}</div>
-                </div>
-
-                <div>
-                  <div className="text-xs text-white/45">Przypisany user_id</div>
-                  <div className="mt-1 break-all">{row.assigned_user_id ?? "-"}</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <div className="mb-3 text-sm font-semibold text-white">Dane podstawowe</div>
-
-              <div className="space-y-3 text-sm text-white/80">
-                <div>
-                  <div className="text-xs text-white/45">PESEL</div>
-                  <div className="mt-1">{row.pesel ?? "-"}</div>
-                </div>
-
-                <div>
-                  <div className="text-xs text-white/45">NIP</div>
-                  <div className="mt-1">{row.nip ?? "-"}</div>
-                </div>
-
-                <div>
-                  <div className="text-xs text-white/45">REGON</div>
-                  <div className="mt-1">{row.regon ?? "-"}</div>
-                </div>
-
-                <div>
-                  <div className="text-xs text-white/45">KRS</div>
-                  <div className="mt-1">{row.krs ?? "-"}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <div className="mb-3 text-sm font-semibold text-white">Workflow i metadane</div>
-
-            <div className="grid gap-3 text-sm text-white/80 md:grid-cols-2">
-              <div>
-                <div className="text-xs text-white/45">Status klienta</div>
-                <div className="mt-1">{row.status ? getClientStatusLabel(lang, row.status) : "-"}</div>
-              </div>
-
-              <div>
-                <div className="text-xs text-white/45">Etap pipeline</div>
-                <div className="mt-1">
-                  {row.pipeline_stage ? getPipelineStageLabel(lang, row.pipeline_stage) : "-"}
-                </div>
-              </div>
-
-              <div>
-                <div className="text-xs text-white/45">Dodano</div>
-                <div className="mt-1">{fmtDate(row.created_at)}</div>
-              </div>
-
-              <div>
-                <div className="text-xs text-white/45">Zmieniono</div>
-                <div className="mt-1">{fmtDate(row.updated_at)}</div>
-              </div>
-
-              <div>
-                <div className="text-xs text-white/45">created_by_user_id</div>
-                <div className="mt-1 break-all">{row.created_by_user_id ?? "-"}</div>
-              </div>
-
-              <div>
-                <div className="text-xs text-white/45">Zakres domyślny</div>
-                <div className="mt-1">{getVisibilityScopeLabel("office")}</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <div className="mb-3 text-sm font-semibold text-white">Notatki</div>
-            <div className="whitespace-pre-wrap text-sm text-white/80">{row.notes ?? "-"}</div>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-end gap-3 border-t border-white/10 px-5 py-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-white/15"
-          >
-            Zamknij
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onEdit(row)}
-            className="rounded-2xl bg-ew-accent px-5 py-2 text-sm font-extrabold text-white shadow-sm transition hover:opacity-95"
-          >
-            Edytuj
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function ContactsView({ lang }: { lang: LangKey }) {
   const router = useRouter();
 
@@ -1758,9 +1511,6 @@ export default function ContactsView({ lang }: { lang: LangKey }) {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"create" | "edit">("create");
-
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const [selectedRow, setSelectedRow] = useState<ContactRow | null>(null);
 
   const [createSaving, setCreateSaving] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -1820,84 +1570,35 @@ export default function ContactsView({ lang }: { lang: LangKey }) {
     }
   }
 
-  async function handleCreateOrUpdate() {
+  async function handleCreate() {
     setCreateSaving(true);
     setCreateError(null);
 
     try {
-      const isEdit = modalMode === "edit" && selectedRow?.id;
-      const endpoint = isEdit ? "/api/contacts/update" : "/api/contacts/create";
-      const method = isEdit ? "PUT" : "POST";
-
       const payload = buildPayloadFromForm(form);
 
-      const body = isEdit
-        ? {
-            id: selectedRow?.id,
-            ...payload,
-          }
-        : payload;
-
-      const r = await fetch(endpoint, {
-        method,
+      const r = await fetch("/api/contacts/create", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify(payload),
       });
 
       const j = await r.json().catch(() => null);
 
       if (!r.ok) {
         const code = j?.error ?? `HTTP ${r.status}`;
-
-        if (code === "MISSING_FULL_NAME") {
-          throw new Error("Brak nazwy lub imienia i nazwiska.");
-        }
-
-        if (code === "MISSING_CONTACT_CHANNEL") {
-          throw new Error("Podaj telefon lub email.");
-        }
-
-        if (code === "MISSING_PERSON_NAME_PARTS") {
-          throw new Error("Podaj imię i nazwisko.");
-        }
-
-        if (code === "MISSING_COMPANY_NAME") {
-          throw new Error("Podaj nazwę firmy.");
-        }
-
-        if (code === "MISSING_ID") {
-          throw new Error("Brak identyfikatora.");
-        }
-
-        if (code === "NOT_FOUND") {
-          throw new Error("Nie znaleziono kontaktu.");
-        }
-
+        if (code === "MISSING_FULL_NAME") throw new Error("Brak nazwy lub imienia i nazwiska.");
+        if (code === "MISSING_CONTACT_CHANNEL") throw new Error("Podaj telefon lub email.");
+        if (code === "MISSING_PERSON_NAME_PARTS") throw new Error("Podaj imię i nazwisko.");
+        if (code === "MISSING_COMPANY_NAME") throw new Error("Podaj nazwę firmy.");
         throw new Error(code);
       }
 
-      const returnTo =
-        modalMode === "edit" && typeof router.query.returnTo === "string"
-          ? router.query.returnTo.trim()
-          : "";
-
       setModalOpen(false);
-      setDetailsOpen(false);
       setForm(buildInitialForm());
-      setSelectedRow(null);
-      setModalMode("create");
-
-      if (returnTo) {
-        await router.push(returnTo);
-        return;
-      }
-
       await load();
     } catch (e: any) {
-      setCreateError(
-        e?.message ??
-          (modalMode === "edit" ? "Nie udało się zapisać zmian." : "Nie udało się zapisać kontaktu.")
-      );
+      setCreateError(e?.message ?? "Nie udało się zapisać kontaktu.");
     } finally {
       setCreateSaving(false);
     }
@@ -1929,14 +1630,6 @@ export default function ContactsView({ lang }: { lang: LangKey }) {
         throw new Error(code);
       }
 
-      if (selectedRow?.id === row.id) {
-        setSelectedRow(null);
-        setDetailsOpen(false);
-        setModalOpen(false);
-        setModalMode("create");
-        setForm(buildInitialForm());
-      }
-
       await load();
     } catch (e: any) {
       alert(e?.message ?? "Nie udało się usunąć kontaktu.");
@@ -1958,147 +1651,25 @@ export default function ContactsView({ lang }: { lang: LangKey }) {
     }
 
     setForm(next);
-    setSelectedRow(null);
     setModalMode("create");
     setModalOpen(true);
   }
 
-  async function openEditModal(row: ContactRow) {
-    setCreateError(null);
-    setSelectedRow(row);
-    setModalMode("edit");
-    setDetailsOpen(false);
-
-    try {
-      const r = await fetch(`/api/contacts/details?id=${encodeURIComponent(row.id)}`, {
-        method: "GET",
-        cache: "no-store",
-      });
-
-      const j = await r.json().catch(() => null);
-      if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
-
-      const data = j as any;
-
-      const base = mapRowToForm(data.row);
-
-      const next = {
-        ...base,
-
-        visibilityScope: data.visibilityRule?.visibility_scope ?? "office",
-
-        marketingConsent: Boolean(data.consent?.granted),
-        marketingConsentNotes: data.consent?.notes ?? "",
-
-        propertyKind: data.orderDetails?.property_kind ?? "",
-        marketType: data.orderDetails?.market_type ?? "",
-        contractType: data.orderDetails?.contract_type ?? "",
-        caretakerUserId: data.orderDetails?.caretaker_user_id ?? "",
-
-        expectedPropertyKind: data.orderDetails?.expected_property_kind ?? "",
-        searchLocationText: data.orderDetails?.search_location_text ?? "",
-
-        budgetMin: data.orderDetails?.budget_min?.toString?.() ?? "",
-        budgetMax: data.orderDetails?.budget_max?.toString?.() ?? "",
-        roomsMin: data.orderDetails?.rooms_min?.toString?.() ?? "",
-        roomsMax: data.orderDetails?.rooms_max?.toString?.() ?? "",
-        areaMin: data.orderDetails?.area_min?.toString?.() ?? "",
-        areaMax: data.orderDetails?.area_max?.toString?.() ?? "",
-
-        country: data.propertyDetails?.country ?? "",
-        city: data.propertyDetails?.city ?? "",
-        street: data.propertyDetails?.street ?? "",
-        buildingNumber: data.propertyDetails?.building_number ?? "",
-        unitNumber: data.propertyDetails?.unit_number ?? "",
-        priceAmount: data.propertyDetails?.price_amount?.toString?.() ?? "",
-        priceCurrency: data.propertyDetails?.price_currency ?? "PLN",
-        pricePeriod: data.propertyDetails?.price_period ?? "",
-        areaM2: data.propertyDetails?.area_m2?.toString?.() ?? "",
-        roomsCount: data.propertyDetails?.rooms_count?.toString?.() ?? "",
-        floorNumber: data.propertyDetails?.floor_number?.toString?.() ?? "",
-        floorTotal: data.propertyDetails?.floor_total?.toString?.() ?? "",
-
-        offerId: data.offerInquiry?.offer_id ?? "",
-        inquiryText: data.offerInquiry?.inquiry_text ?? "",
-        autofillFromOffer: Boolean(data.offerInquiry?.autofill_from_offer),
-        autofillMarginPercent: data.offerInquiry?.autofill_margin_percent?.toString?.() ?? "10",
-
-        creditedPropertyPrice: data.creditDetails?.credited_property_price?.toString?.() ?? "",
-        plannedOwnContribution: data.creditDetails?.planned_own_contribution?.toString?.() ?? "",
-        loanPeriodMonths: data.creditDetails?.loan_period_months?.toString?.() ?? "",
-        concernsExistingProperty: Boolean(data.creditDetails?.concerns_existing_property),
-        relatedOfferId: data.creditDetails?.related_offer_id ?? "",
-        existingPropertyNotes: data.creditDetails?.existing_property_notes ?? "",
-
-        insuranceSubject: data.insuranceDetails?.insurance_subject ?? "",
-        insuranceNotes: data.insuranceDetails?.insurance_notes ?? "",
-      };
-
-      setForm(next);
-      setModalOpen(true);
-    } catch (e: any) {
-      setCreateError(e?.message ?? "Nie udało się pobrać szczegółów");
-      setForm(mapRowToForm(row));
-      setModalOpen(true);
-    }
-  }
-
-  function openDetailsModal(row: ContactRow) {
-    router.push(`/panel/contacts/${encodeURIComponent(row.id)}`);
-  }
-
   function closeCreateModal() {
     if (createSaving) return;
-
-    const returnTo =
-      modalMode === "edit" && typeof router.query.returnTo === "string"
-        ? router.query.returnTo.trim()
-        : "";
-
     setModalOpen(false);
     setCreateError(null);
-
-    if (modalMode === "create") {
-      setForm(buildInitialForm());
-    }
-
-    if (returnTo) {
-      router.push(returnTo);
-      return;
-    }
-
-    const hasEditQuery =
-      typeof router.query.editId === "string" ||
-      typeof router.query.returnTo === "string";
-
-    if (hasEditQuery) {
-      const nextQuery = { ...router.query };
-      delete nextQuery.editId;
-      delete nextQuery.returnTo;
-
-      router.replace(
-        {
-          pathname: router.pathname,
-          query: nextQuery,
-        },
-        undefined,
-        { shallow: true }
-      );
-    }
+    setForm(buildInitialForm());
   }
 
-  function closeDetailsModal() {
-    setDetailsOpen(false);
-  }
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    useEffect(() => {
-      load();
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+  const empty = !loading && !error && rows.length === 0;
 
-    const empty = !loading && !error && rows.length === 0;
-
-    const summary = useMemo(() => {
+  const summary = useMemo(() => {
     const persons = rows.filter((r) => (r.party_type ?? "").toLowerCase() === "person").length;
     const companies = rows.filter((r) => (r.party_type ?? "").toLowerCase() === "company").length;
     const active = rows.filter((r) => r.status === "active").length;
@@ -2410,9 +1981,7 @@ export default function ContactsView({ lang }: { lang: LangKey }) {
                           <button
                             type="button"
                             onClick={() =>
-                              router.push(
-                                `/panel?view=contacts&editId=${encodeURIComponent(r.id)}`
-                              )
+                              router.push(`/panel/contacts/${encodeURIComponent(r.id)}?mode=edit`)
                             }
                             className="rounded-xl border border-white/10 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:bg-white/15"
                           >
@@ -2451,15 +2020,7 @@ export default function ContactsView({ lang }: { lang: LangKey }) {
         form={form}
         setForm={setForm}
         onClose={closeCreateModal}
-        onSubmit={handleCreateOrUpdate}
-      />
-
-      <ContactDetailsModal
-        lang={lang}
-        open={detailsOpen}
-        row={selectedRow}
-        onClose={closeDetailsModal}
-        onEdit={openEditModal}
+        onSubmit={handleCreate}
       />
     </>
   );
