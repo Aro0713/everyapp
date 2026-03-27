@@ -399,18 +399,33 @@ export default function ContactDetailsPage() {
       const j = await r.json().catch(() => null);
 
       if (!r.ok) {
-        const code = j?.error ?? `HTTP ${r.status}`;
-        if (code === "MISSING_FULL_NAME") throw new Error("Brak nazwy lub imienia i nazwiska.");
-        if (code === "MISSING_CONTACT_CHANNEL") throw new Error("Podaj telefon lub email.");
-        if (code === "MISSING_PERSON_NAME_PARTS") throw new Error("Podaj imię i nazwisko.");
-        if (code === "MISSING_COMPANY_NAME") throw new Error("Podaj nazwę firmy.");
-        if (code === "MISSING_ID") throw new Error("Brak identyfikatora.");
-        if (code === "NOT_FOUND") throw new Error("Nie znaleziono kontaktu.");
-        throw new Error(code);
-      }
+      const code = j?.error ?? `HTTP ${r.status}`;
+      if (code === "MISSING_FULL_NAME") throw new Error("Brak nazwy lub imienia i nazwiska.");
+      if (code === "MISSING_CONTACT_CHANNEL") throw new Error("Podaj telefon lub email.");
+      if (code === "MISSING_PERSON_NAME_PARTS") throw new Error("Podaj imię i nazwisko.");
+      if (code === "MISSING_COMPANY_NAME") throw new Error("Podaj nazwę firmy.");
+      if (code === "MISSING_ID") throw new Error("Brak identyfikatora.");
+      if (code === "NOT_FOUND") throw new Error("Nie znaleziono kontaktu.");
+      throw new Error(code);
+    }
 
-      await load();
-      await closeEditModal();
+    setEditOpen(false);
+    setEditError(null);
+
+    const nextQuery: Record<string, string> = {};
+    if (typeof router.query.id === "string") nextQuery.id = router.query.id;
+    if (typeof router.query.tab === "string") nextQuery.tab = router.query.tab;
+
+    await router.replace(
+      {
+        pathname: router.pathname,
+        query: nextQuery,
+      },
+      undefined,
+      { shallow: true }
+    );
+
+    await load();
     } catch (e: any) {
       setEditError(e?.message ?? "Nie udało się zapisać zmian.");
     } finally {
