@@ -399,33 +399,33 @@ export default function ContactDetailsPage() {
       const j = await r.json().catch(() => null);
 
       if (!r.ok) {
-      const code = j?.error ?? `HTTP ${r.status}`;
-      if (code === "MISSING_FULL_NAME") throw new Error("Brak nazwy lub imienia i nazwiska.");
-      if (code === "MISSING_CONTACT_CHANNEL") throw new Error("Podaj telefon lub email.");
-      if (code === "MISSING_PERSON_NAME_PARTS") throw new Error("Podaj imię i nazwisko.");
-      if (code === "MISSING_COMPANY_NAME") throw new Error("Podaj nazwę firmy.");
-      if (code === "MISSING_ID") throw new Error("Brak identyfikatora.");
-      if (code === "NOT_FOUND") throw new Error("Nie znaleziono kontaktu.");
-      throw new Error(code);
-    }
+        const code = j?.error ?? `HTTP ${r.status}`;
+        if (code === "MISSING_FULL_NAME") throw new Error("Brak nazwy lub imienia i nazwiska.");
+        if (code === "MISSING_CONTACT_CHANNEL") throw new Error("Podaj telefon lub email.");
+        if (code === "MISSING_PERSON_NAME_PARTS") throw new Error("Podaj imię i nazwisko.");
+        if (code === "MISSING_COMPANY_NAME") throw new Error("Podaj nazwę firmy.");
+        if (code === "MISSING_ID") throw new Error("Brak identyfikatora.");
+        if (code === "NOT_FOUND") throw new Error("Nie znaleziono kontaktu.");
+        throw new Error(code);
+      }
 
-    setEditOpen(false);
-    setEditError(null);
+      setEditOpen(false);
+      setEditError(null);
 
-    const nextQuery: Record<string, string> = {};
-    if (typeof router.query.id === "string") nextQuery.id = router.query.id;
-    if (typeof router.query.tab === "string") nextQuery.tab = router.query.tab;
+      const nextQuery: Record<string, string> = {};
+      if (typeof router.query.id === "string") nextQuery.id = router.query.id;
+      if (typeof router.query.tab === "string") nextQuery.tab = router.query.tab;
 
-    await router.replace(
-      {
-        pathname: router.pathname,
-        query: nextQuery,
-      },
-      undefined,
-      { shallow: true }
-    );
+      await router.replace(
+        {
+          pathname: router.pathname,
+          query: nextQuery,
+        },
+        undefined,
+        { shallow: true }
+      );
 
-    await load();
+      await load();
     } catch (e: any) {
       setEditError(e?.message ?? "Nie udało się zapisać zmian.");
     } finally {
@@ -668,9 +668,12 @@ export default function ContactDetailsPage() {
                     subtitle="Widok roboczy pod dalszą rozbudowę."
                   >
                     <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 px-4 py-8 text-sm text-white/65">
-                      {activeTab === "history" && "Tutaj podepniemy timeline interakcji, zdarzeń i aktywności klienta."}
-                      {activeTab === "notes" && "Tutaj podepniemy notatki, follow-upy, zadania i przypomnienia."}
-                      {activeTab === "documents" && "Tutaj podepniemy dokumenty klienta i załączniki."}
+                      {activeTab === "history" &&
+                        "Tutaj podepniemy timeline interakcji, zdarzeń i aktywności klienta."}
+                      {activeTab === "notes" &&
+                        "Tutaj podepniemy notatki, follow-upy, zadania i przypomnienia."}
+                      {activeTab === "documents" &&
+                        "Tutaj podepniemy dokumenty klienta i załączniki."}
                       {!["history", "notes", "documents"].includes(activeTab) &&
                         "Ta sekcja jest przygotowana pod dalszą rozbudowę CRM."}
                     </div>
@@ -678,13 +681,13 @@ export default function ContactDetailsPage() {
                 ) : null}
 
                 <Card
-                  title="Zalecane następne kroki"
-                  subtitle="Sekcje docelowe do dalszej rozbudowy CRM dla klienta."
+                  title="Inne czynności klienta"
+                  subtitle="Szybki dostęp do powiązanych działań i sekcji CRM."
                 >
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                     <NextStepTile
                       title="Powiązane oferty"
-                      href={`/panel/offers?clientId=${encodeURIComponent(row.id)}`}
+                      href={`/panel?view=offers&clientId=${encodeURIComponent(row.id)}`}
                     />
 
                     <NextStepTile

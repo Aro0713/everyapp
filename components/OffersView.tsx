@@ -165,6 +165,7 @@ function normalizeVoivodeshipInput(v?: string | null): string | null {
 
 export default function OffersView({ lang }: { lang: LangKey }) {
   const router = useRouter();
+  const clientId = typeof router.query.clientId === "string" ? router.query.clientId : "";
   const searchIntervalRef = useRef<number | null>(null);
   const searchingRef = useRef(false);
 
@@ -180,11 +181,27 @@ export default function OffersView({ lang }: { lang: LangKey }) {
   async function load() {
     setLoading(true);
     setErr(null);
+
     try {
-      const r = await fetch("/api/offers/list");
+      const qs = new URLSearchParams();
+
+      if (clientId) {
+        qs.set("clientId", clientId);
+      }
+
+      const url = qs.toString()
+        ? `/api/offers/list?${qs.toString()}`
+        : "/api/offers/list";
+
+      const r = await fetch(url, {
+        method: "GET",
+        cache: "no-store",
+      });
+
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
+
       const data = (await r.json()) as { rows: ListingRow[] };
-      setRows(data.rows ?? []);
+      setRows(Array.isArray(data.rows) ? data.rows : []);
     } catch (e: any) {
       setErr(e?.message ?? "Failed to load");
     } finally {
@@ -318,8 +335,8 @@ const [botFilters, setBotFilters] = useState<EverybotFilters>({
         await refreshEverybotList();
 
        if (action === "save") {
-        await load();
         setTab("office");
+        await load();
       }
     } catch (e: any) {
       alert(`Nie udało się zapisać akcji: ${e?.message ?? "Unknown error"}`);
@@ -807,9 +824,10 @@ async function loadMapPins() {
   }
 }
 
-    useEffect(() => {
-      load();
-    }, []);
+  useEffect(() => {
+    if (!router.isReady) return;
+    load();
+  }, [router.isReady, clientId]);
     useEffect(() => {
       (async () => {
         try {
@@ -1211,38 +1229,45 @@ return (
             </>
           )}
 
-          <button
-            type="button"
-            className="rounded-xl bg-ew-accent px-3 py-1.5 text-xs font-extrabold text-white shadow-sm transition hover:opacity-95"
-            onClick={async () => {
-              try {
-                const r = await fetch("/api/offers/create", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    recordType: "offer",
-                    transactionType: "sale",
-                    status: "draft",
-                  }),
-                });
+              <button
+                type="button"
+                className="rounded-xl bg-ew-accent px-3 py-1.5 text-xs font-extrabold text-white shadow-sm transition hover:opacity-95"
+                onClick={async () => {
+                  try {
+                    const payload: Record<string, unknown> = {
+                      recordType: "offer",
+                      transactionType: "sale",
+                      status: "draft",
+                    };
 
-                const j = await r.json().catch(() => null);
+                    if (clientId) {
+                      payload.clientId = clientId;
+                      payload.clientRole = "seller";
+                    }
 
-                if (!r.ok) {
-                  throw new Error(j?.error ?? `HTTP ${r.status}`);
-                }
+                    const r = await fetch("/api/offers/create", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(payload),
+                    });
 
-                const newId = typeof j?.id === "string" ? j.id : null;
-                if (!newId) throw new Error("Brak id nowej oferty");
+                    const j = await r.json().catch(() => null);
 
-                router.push(`/panel/offers/${newId}`);
-              } catch (e: any) {
-                alert(`Nie udało się utworzyć oferty: ${e?.message ?? "Unknown error"}`);
-              }
-            }}
-          >
-            + {t(lang, "offersNew" as any)}
-          </button>
+                    if (!r.ok) {
+                      throw new Error(j?.error ?? `HTTP ${r.status}`);
+                    }
+
+                    const newId = typeof j?.id === "string" ? j.id : null;
+                    if (!newId) throw new Error("Brak id nowej oferty");
+
+                    router.push(`/panel/offers/${newId}`);
+                  } catch (e: any) {
+                    alert(`Nie udało się utworzyć oferty: ${e?.message ?? "Unknown error"}`);
+                  }
+                }}
+              >
+                + {t(lang, "offersNew" as any)}
+         </button>
 
           <button
             type="button"

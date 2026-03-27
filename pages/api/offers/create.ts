@@ -120,6 +120,16 @@ async function generateOfferNumber(
   return `${seq}/${officeToken}/${agentToken}/${year}`;
 }
 
+function deriveRoleFromContext(
+  recordType: string,
+  transactionType: string
+): "seller" | "buyer" | "landlord" | "tenant" {
+  if (recordType === "search") {
+    return transactionType === "rent" ? "tenant" : "buyer";
+  }
+  return transactionType === "rent" ? "landlord" : "seller";
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     if (req.method !== "POST") {
@@ -155,6 +165,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const locationText = optString(body.locationText);
 
     const caseOwnerUserId = optString(body.caseOwnerUserId) ?? sessionUserId;
+    const clientId = optString(body.clientId);
+    const clientRoleRaw = optString(body.clientRole);
 
     const partiesRaw = Array.isArray(body.parties) ? (body.parties as PartyLinkInput[]) : [];
     const parties: PartyLinkInput[] = partiesRaw
@@ -170,6 +182,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           typeof p.partyId === "string" &&
           p.partyId.length > 10
       );
+
+    if (clientId && !parties.some((p) => p.partyId === clientId)) {
+      const derivedRole =
+        clientRoleRaw && ALLOWED_ROLES.has(clientRoleRaw)
+          ? (clientRoleRaw as "seller" | "buyer" | "landlord" | "tenant")
+          : deriveRoleFromContext(recordType, transactionType);
+
+      parties.push({
+        role: derivedRole,
+        partyId: clientId,
+        isPrimary: parties.length === 0,
+      });
+    }
 
     const client = await pool.connect();
 
@@ -191,6 +216,46 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!ownerCheck.rows[0]) {
         await client.query("ROLLBACK");
         return res.status(403).json({ error: "CASE_OWNER_NOT_IN_OFFICE" });
+      }
+
+      if (clientId) {
+        const partyCheck = await client.query(
+          `
+          SELECT 1
+          FROM public.parties
+          WHERE id = $1
+            AND office_id = $2
+          LIMIT 1
+          `,
+          [clientId, officeId]
+        );
+
+        if (!partyCheck.rows[0]) {
+          await client.query("ROLLBACK");
+          return res.status(404).json({ error: "CLIENT_NOT_FOUND" });
+        }
+      }
+
+      if (parties.length > 0) {
+        const partyIds = parties.map((p) => p.partyId);
+
+        const partyCheck = await client.query(
+          `
+          SELECT id
+          FROM public.parties
+          WHERE office_id = $1
+            AND id = ANY($2::uuid[])
+          `,
+          [officeId, partyIds]
+        );
+
+        const foundIds = new Set<string>(partyCheck.rows.map((r: any) => r.id));
+        const missing = partyIds.find((id) => !foundIds.has(id));
+
+        if (missing) {
+          await client.query("ROLLBACK");
+          return res.status(404).json({ error: "PARTY_NOT_FOUND_IN_OFFICE" });
+        }
       }
 
       const offerNumber = await generateOfferNumber(client, officeId, caseOwnerUserId);

@@ -9,6 +9,10 @@ function optNumber(v: unknown): number | null {
   return null;
 }
 
+function optString(v: unknown): string | null {
+  return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+
 type OfficeListingRow = {
   id: string;
   office_id: string;
@@ -65,7 +69,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const limitRaw = optNumber(req.query.limit) ?? 50;
-    const limit = Math.min(Math.max(limitRaw ?? 50, 1), 200);
+    const limit = Math.min(Math.max(limitRaw, 1), 200);
+    const clientId = optString(req.query.clientId);
+
+    const crmParams: Array<string | number> = [officeId];
+    let crmWhere = `WHERE l.office_id = $1::uuid`;
+
+    if (clientId) {
+      crmParams.push(clientId);
+      crmWhere += `
+        AND EXISTS (
+          SELECT 1
+          FROM public.listing_parties lp_filter
+          WHERE lp_filter.listing_id = l.id
+            AND lp_filter.party_id = $2::uuid
+        )
+      `;
+    }
 
     const crmQuery = pool.query<OfficeListingRow>(
       `
@@ -79,10 +99,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ou.full_name AS case_owner_name,
         string_agg(
           DISTINCT CASE lp.role
-            WHEN 'seller'::listing_party_role THEN 'Sprzedający: ' || p.full_name
-            WHEN 'buyer'::listing_party_role THEN 'Kupujący: ' || p.full_name
-            WHEN 'landlord'::listing_party_role THEN 'Wynajmujący: ' || p.full_name
-            WHEN 'tenant'::listing_party_role THEN 'Najemca: ' || p.full_name
+            WHEN 'seller'::public.listing_party_role THEN 'Sprzedający: ' || p.full_name
+            WHEN 'buyer'::public.listing_party_role THEN 'Kupujący: ' || p.full_name
+            WHEN 'landlord'::public.listing_party_role THEN 'Wynajmujący: ' || p.full_name
+            WHEN 'tenant'::public.listing_party_role THEN 'Najemca: ' || p.full_name
             ELSE lp.role::text || ': ' || p.full_name
           END,
           ' | '
@@ -90,13 +110,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         l.price_amount,
         l.currency,
         l.location_text
-      FROM listings l
-      LEFT JOIN listing_parties lp ON lp.listing_id = l.id
-      LEFT JOIN parties p ON p.id = lp.party_id
-      LEFT JOIN office_users ou
+      FROM public.listings l
+      LEFT JOIN public.listing_parties lp
+        ON lp.listing_id = l.id
+      LEFT JOIN public.parties p
+        ON p.id = lp.party_id
+      LEFT JOIN public.office_users ou
         ON ou.user_id = l.case_owner_user_id
        AND ou.office_id = l.office_id
-      WHERE l.office_id = $1::uuid
+      ${crmWhere}
       GROUP BY
         l.id,
         l.office_id,
@@ -109,44 +131,46 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         l.currency,
         l.location_text
       `,
-      [officeId]
+      crmParams
     );
 
-    const portalQuery = pool.query<PortalSavedRow>(
-      `
-      SELECT
-        ela.id::text AS action_id,
-        ela.office_id::text,
-        ela.external_listing_id::text,
-        ela.action::text,
-        ela.created_at,
-        el.source,
-        el.source_url,
-        el.title,
-        el.description,
-        el.price_amount,
-        el.currency,
-        el.location_text,
-        el.thumb_url,
-        el.transaction_type
-      FROM (
-        SELECT DISTINCT ON (external_listing_id)
-          id,
-          office_id,
-          external_listing_id,
-          action,
-          created_at
-        FROM external_listing_actions
-        WHERE office_id = $1::uuid
-          AND action IN ('save', 'call', 'visit')
-        ORDER BY external_listing_id, created_at DESC
-      ) ela
-      JOIN external_listings el
-        ON el.id = ela.external_listing_id
-      ORDER BY ela.created_at DESC
-      `,
-      [officeId]
-    );
+    const portalQuery = clientId
+      ? Promise.resolve({ rows: [] as PortalSavedRow[] })
+      : pool.query<PortalSavedRow>(
+          `
+          SELECT
+            ela.id::text AS action_id,
+            ela.office_id::text,
+            ela.external_listing_id::text,
+            ela.action::text,
+            ela.created_at,
+            el.source,
+            el.source_url,
+            el.title,
+            el.description,
+            el.price_amount,
+            el.currency,
+            el.location_text,
+            el.thumb_url,
+            el.transaction_type
+          FROM (
+            SELECT DISTINCT ON (external_listing_id)
+              id,
+              office_id,
+              external_listing_id,
+              action,
+              created_at
+            FROM public.external_listing_actions
+            WHERE office_id = $1::uuid
+              AND action IN ('save', 'call', 'visit')
+            ORDER BY external_listing_id, created_at DESC
+          ) ela
+          JOIN public.external_listings el
+            ON el.id = ela.external_listing_id
+          ORDER BY ela.created_at DESC
+          `,
+          [officeId]
+        );
 
     const [crmRes, portalRes] = await Promise.all([crmQuery, portalQuery]);
 
@@ -169,6 +193,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       thumb_url: null,
       source_url: null,
       action: null,
+      source: null,
       external_listing_id: null,
     }));
 
@@ -191,6 +216,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       thumb_url: r.thumb_url,
       source_url: r.source_url,
       action: r.action,
+      source: r.source,
       external_listing_id: r.external_listing_id,
     }));
 
@@ -202,6 +228,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       rows,
       meta: {
         officeId,
+        clientId,
         limit,
         count: rows.length,
         crmCount: crmRows.length,
