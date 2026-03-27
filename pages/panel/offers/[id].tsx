@@ -38,6 +38,31 @@ type OfferForm = {
   lng: string;
 };
 
+type OfferParty = {
+  id: string;
+  full_name: string | null;
+  party_type: string | null;
+  notes: string | null;
+  source: string | null;
+  created_by_user_id: string | null;
+  assigned_user_id: string | null;
+  status: string | null;
+  pipeline_stage: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  pesel?: string | null;
+  company_name?: string | null;
+  nip?: string | null;
+  regon?: string | null;
+  krs?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  listing_party_role?: string | null;
+  listing_party_notes?: string | null;
+};
+
 type ListingImage = {
   id: string;
   url: string;
@@ -48,6 +73,55 @@ type ListingImage = {
 function toStr(v: unknown) {
   if (v === null || v === undefined) return "";
   return String(v);
+}
+
+function fmtDate(v?: string | null) {
+  if (!v) return "-";
+  const ms = Date.parse(v);
+  if (!Number.isFinite(ms)) return "-";
+  return new Date(ms).toLocaleString();
+}
+
+function getPartyTypeLabel(v?: string | null) {
+  if (v === "person") return "Osoba";
+  if (v === "company") return "Firma";
+  return v || "-";
+}
+
+function getPartyRoleLabel(v?: string | null) {
+  switch (v) {
+    case "seller":
+      return "Sprzedający";
+    case "buyer":
+      return "Kupujący";
+    case "landlord":
+      return "Wynajmujący";
+    case "tenant":
+      return "Najemca";
+    default:
+      return v || "-";
+  }
+}
+
+function getPartyStatusLabel(v?: string | null) {
+  switch (v) {
+    case "new":
+      return "Nowy";
+    case "active":
+      return "Aktywny";
+    case "in_progress":
+      return "W trakcie";
+    case "won":
+      return "Wygrany";
+    case "lost":
+      return "Przegrany";
+    case "inactive":
+      return "Nieaktywny";
+    case "archived":
+      return "Zarchiwizowany";
+    default:
+      return v || "-";
+  }
 }
 
 const EMPTY_FORM: OfferForm = {
@@ -105,6 +179,7 @@ export default function OfferEditorPage() {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
+  const [party, setParty] = useState<OfferParty | null>(null);
 
   const [images, setImages] = useState<ListingImage[]>([]);
   const [imageUrl, setImageUrl] = useState("");
@@ -118,7 +193,6 @@ export default function OfferEditorPage() {
       const j = await r.json().catch(() => null);
 
       if (!r.ok) {
-        // jeśli endpoint jeszcze nie istnieje / nie jest gotowy, nie wywalaj całej strony
         setImages([]);
         return;
       }
@@ -141,13 +215,14 @@ export default function OfferEditorPage() {
       setErr(null);
 
       try {
-        const r = await fetch(`/api/offers/${encodeURIComponent(id)}`);
+        const r = await fetch(`/api/offers/details?id=${encodeURIComponent(id)}`);
         const j = await r.json().catch(() => null);
 
         if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
         if (!active) return;
 
-        const row = j?.row ?? {};
+        const row = j?.listing ?? {};
+        setParty(j?.party ?? null);
 
         setForm({
           id: toStr(row.id),
@@ -199,7 +274,8 @@ export default function OfferEditorPage() {
   function setField<K extends keyof OfferForm>(key: K, value: OfferForm[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
-    function validateForm(): string | null {
+
+  function validateForm(): string | null {
     if (!form.title.trim()) return t(lang, "offerEditorValidationTitle" as any);
     if (!form.description.trim()) return t(lang, "offerEditorValidationDescription" as any);
     if (!form.property_type.trim()) return t(lang, "offerEditorValidationPropertyType" as any);
@@ -219,14 +295,14 @@ export default function OfferEditorPage() {
     return null;
   }
 
-    async function save() {
+  async function save() {
     if (!id) return;
 
     const validationError = validateForm();
     if (validationError) {
-        setErr(validationError);
-        setOkMsg(null);
-        return;
+      setErr(validationError);
+      setOkMsg(null);
+      return;
     }
 
     setSaving(true);
@@ -678,6 +754,100 @@ export default function OfferEditorPage() {
               </div>
             </section>
           </div>
+
+          <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold text-white">Powiązany klient</h2>
+              <p className="mt-1 text-sm text-white/60">
+                Klient przypisany do tej oferty przez listing_parties.
+              </p>
+            </div>
+
+            {!party ? (
+              <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 px-4 py-6 text-sm text-white/60">
+                Brak powiązanego klienta.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="text-base font-semibold text-white">
+                        {party.full_name ?? "-"}
+                      </div>
+
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {party.listing_party_role ? (
+                          <span className="rounded bg-indigo-500/15 px-2 py-0.5 text-[10px] text-indigo-100 ring-1 ring-indigo-500/20">
+                            {getPartyRoleLabel(party.listing_party_role)}
+                          </span>
+                        ) : null}
+
+                        {party.party_type ? (
+                          <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/85 ring-1 ring-white/10">
+                            {getPartyTypeLabel(party.party_type)}
+                          </span>
+                        ) : null}
+
+                        {party.status ? (
+                          <span className="rounded bg-sky-500/15 px-2 py-0.5 text-[10px] text-sky-100 ring-1 ring-sky-500/20">
+                            {getPartyStatusLabel(party.status)}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/panel/contacts/${party.id}`)}
+                      className="rounded-xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15"
+                    >
+                      Otwórz klienta
+                    </button>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-3">
+                      <div className="text-xs text-white/45">Telefon</div>
+                      <div className="mt-1 text-sm font-semibold text-white/85">
+                        {party.phone ?? "-"}
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-3">
+                      <div className="text-xs text-white/45">Email</div>
+                      <div className="mt-1 text-sm font-semibold text-white/85">
+                        {party.email ?? "-"}
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-3">
+                      <div className="text-xs text-white/45">Dodano klienta</div>
+                      <div className="mt-1 text-sm font-semibold text-white/85">
+                        {fmtDate(party.created_at)}
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-3">
+                      <div className="text-xs text-white/45">Ostatnia zmiana klienta</div>
+                      <div className="mt-1 text-sm font-semibold text-white/85">
+                        {fmtDate(party.updated_at)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {party.listing_party_notes ? (
+                    <div className="mt-4 rounded-xl border border-white/10 bg-white/5 px-3 py-3">
+                      <div className="text-xs text-white/45">Notatki powiązania</div>
+                      <div className="mt-1 whitespace-pre-wrap text-sm text-white/80">
+                        {party.listing_party_notes}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            )}
+          </section>
 
           <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
             <h2 className="mb-4 text-lg font-semibold">
