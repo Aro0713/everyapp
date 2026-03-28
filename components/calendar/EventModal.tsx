@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import { t } from "@/utils/i18n";
 import type { LangKey } from "@/utils/translations";
 
@@ -46,7 +47,11 @@ export type EventDraft = {
   end: string;
   locationText: string;
   description: string;
+  clientId: string;
+  listingId: string;
 };
+
+type Option = { id: string; label: string; subtitle?: string | null };
 
 type EventModalProps = {
   isOpen: boolean;
@@ -73,7 +78,48 @@ export default function EventModal({
   onSubmit,
   activeCalendarId,
 }: EventModalProps) {
+  const [query, setQuery] = useState("");
+  const [clients, setClients] = useState<Option[]>([]);
+  const [listings, setListings] = useState<Option[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let alive = true;
+
+    const run = async () => {
+      setLoading(true);
+      try {
+        const qs = new URLSearchParams();
+        if (query) qs.set("q", query);
+        const r = await fetch(`/api/calendar/link-options?${qs.toString()}`);
+        const j = await r.json().catch(() => null);
+        if (!alive) return;
+
+        setClients((j?.clients ?? []) as Option[]);
+        setListings((j?.listings ?? []) as Option[]);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    };
+
+    const tmr = setTimeout(run, 250);
+    return () => {
+      alive = false;
+      clearTimeout(tmr);
+    };
+  }, [query, isOpen]);
+
   if (!isOpen) return null;
+
+  const selectedClient = useMemo(
+    () => clients.find((c) => c.id === draft.clientId) || null,
+    [clients, draft.clientId]
+  );
+  const selectedListing = useMemo(
+    () => listings.find((l) => l.id === draft.listingId) || null,
+    [listings, draft.listingId]
+  );
 
   return (
     <div
@@ -87,8 +133,8 @@ export default function EventModal({
           <div>
             <h2 className="text-lg font-extrabold tracking-tight text-white">
               {editingEventId
-                ? (t(lang, "calEditEvent" as any) ?? "Edytuj termin")
-                : (t(lang, "calNewEvent" as any) ?? "Nowy termin")}
+                ? t(lang, "calEditEvent" as any) ?? "Edytuj termin"
+                : t(lang, "calNewEvent" as any) ?? "Nowy termin"}
             </h2>
             <p className="mt-1 text-xs text-white/60">{scopeLabel}</p>
           </div>
@@ -103,52 +149,35 @@ export default function EventModal({
         </div>
 
         <div className="mt-5 space-y-4">
+          {/* TYPE */}
           <div>
             <label className="text-xs font-semibold text-white/70">Typ</label>
-            <div className="relative mt-1">
-                <select
-                    value={draft.eventType}
-                    onChange={(e) => {
-                    const nextType = e.target.value as EventType;
-                    setDraft((d) => {
-                        const autoTitle = labelForEventType(lang, nextType);
-                        const prevAuto = labelForEventType(lang, d.eventType);
-                        const shouldAuto = !d.title.trim() || d.title.trim() === prevAuto;
-
-                        return {
-                        ...d,
-                        eventType: nextType,
-                        title: shouldAuto ? autoTitle : d.title,
-                        };
-                    });
-                    }}
-                    className="w-full appearance-none rounded-2xl border border-white/10 bg-white/10 px-4 py-2 pr-10 text-sm font-medium text-white shadow-sm outline-none transition focus:border-white/40 focus:ring-2 focus:ring-white/20"
-                >
-                    {EVENT_TYPES.map((opt) => (
-                    <option key={opt.value} value={opt.value} className="bg-slate-900 text-white">
-                        {t(lang, opt.labelKey as any) || opt.fallback}
-                    </option>
-                    ))}
-                </select>
-
-                {/* custom arrow */}
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4 text-white/60">
-                    <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                    className="h-4 w-4"
-                    >
-                    <path
-                        fillRule="evenodd"
-                        d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
-                        clipRule="evenodd"
-                    />
-                    </svg>
-                </div>
-             </div>
+            <select
+              value={draft.eventType}
+              onChange={(e) => {
+                const nextType = e.target.value as EventType;
+                setDraft((d) => {
+                  const autoTitle = labelForEventType(lang, nextType);
+                  const prevAuto = labelForEventType(lang, d.eventType);
+                  const shouldAuto = !d.title.trim() || d.title.trim() === prevAuto;
+                  return {
+                    ...d,
+                    eventType: nextType,
+                    title: shouldAuto ? autoTitle : d.title,
+                  };
+                });
+              }}
+              className="mt-1 w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm"
+            >
+              {EVENT_TYPES.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {t(lang, opt.labelKey as any) || opt.fallback}
+                </option>
+              ))}
+            </select>
           </div>
 
+          {/* TITLE */}
           <div>
             <label className="text-xs font-semibold text-white/70">
               {t(lang, "calFieldTitle" as any) ?? "Tytuł"}
@@ -156,81 +185,86 @@ export default function EventModal({
             <input
               value={draft.title}
               onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
-              className="mt-1 w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white placeholder:text-white/40 outline-none transition focus:border-white/40 focus:ring-2 focus:ring-white/20"
-              placeholder={t(lang, "calFieldTitlePh" as any) ?? "np. Prezentacja mieszkania"}
+              className="mt-1 w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm"
             />
           </div>
 
+          {/* TIME */}
           <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className="text-xs font-semibold text-white/70">
-                {t(lang, "calFieldStart" as any) ?? "Start"}
-              </label>
-              <input
-                type="datetime-local"
-                value={draft.start}
-                onChange={(e) => setDraft((d) => ({ ...d, start: e.target.value }))}
-                className="mt-1 w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white outline-none transition focus:border-white/40 focus:ring-2 focus:ring-white/20"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-white/70">
-                {t(lang, "calFieldEnd" as any) ?? "Koniec"}
-              </label>
-              <input
-                type="datetime-local"
-                value={draft.end}
-                onChange={(e) => setDraft((d) => ({ ...d, end: e.target.value }))}
-                className="mt-1 w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white outline-none transition focus:border-white/40 focus:ring-2 focus:ring-white/20"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-white/70">
-              {t(lang, "calFieldLocation" as any) ?? "Lokalizacja"}
-            </label>
             <input
-              value={draft.locationText}
-              onChange={(e) => setDraft((d) => ({ ...d, locationText: e.target.value }))}
-              className="mt-1 w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white placeholder:text-white/40 outline-none transition focus:border-white/40 focus:ring-2 focus:ring-white/20"
-              placeholder={t(lang, "calFieldLocationPh" as any) ?? "np. Katowice, ul. ..."}
+              type="datetime-local"
+              value={draft.start}
+              onChange={(e) => setDraft((d) => ({ ...d, start: e.target.value }))}
+              className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm"
+            />
+            <input
+              type="datetime-local"
+              value={draft.end}
+              onChange={(e) => setDraft((d) => ({ ...d, end: e.target.value }))}
+              className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm"
             />
           </div>
 
+          {/* SEARCH */}
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Szukaj klienta lub oferty..."
+            className="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm"
+          />
+
+          {/* CLIENT SELECT */}
           <div>
-            <label className="text-xs font-semibold text-white/70">
-              {t(lang, "calFieldDesc" as any) ?? "Opis"}
-            </label>
-            <textarea
-              value={draft.description}
-              onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
-              className="mt-1 w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white placeholder:text-white/40 outline-none transition focus:border-white/40 focus:ring-2 focus:ring-white/20"
-              rows={4}
-              placeholder={t(lang, "calFieldDescPh" as any) ?? "Dodatkowe informacje…"}
-            />
+            <div className="text-xs text-white/60 mb-1">Klient</div>
+            <select
+              value={draft.clientId}
+              onChange={(e) => setDraft((d) => ({ ...d, clientId: e.target.value }))}
+              className="w-full rounded-2xl bg-white/10 px-4 py-2"
+            >
+              <option value="">— brak —</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
           </div>
+
+          {/* LISTING SELECT */}
+          <div>
+            <div className="text-xs text-white/60 mb-1">Oferta</div>
+            <select
+              value={draft.listingId}
+              onChange={(e) => setDraft((d) => ({ ...d, listingId: e.target.value }))}
+              className="w-full rounded-2xl bg-white/10 px-4 py-2"
+            >
+              <option value="">— brak —</option>
+              {listings.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* DESCRIPTION */}
+          <textarea
+            value={draft.description}
+            onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
+            className="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm"
+          />
         </div>
 
-        <div className="mt-6 flex items-center justify-end gap-2">
-          <button
-            type="button"
-            className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/15 disabled:opacity-60"
-            onClick={onClose}
-            disabled={saving}
-          >
+        <div className="mt-6 flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 bg-white/10 rounded-2xl">
             {t(lang, "calCancel" as any) ?? "Anuluj"}
           </button>
-
           <button
-            type="button"
-            className="rounded-2xl bg-white/15 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-white/20 disabled:opacity-60"
             onClick={onSubmit}
             disabled={saving || !activeCalendarId}
-            title={!activeCalendarId ? "Brak aktywnego kalendarza (Mój / Biuro)" : undefined}
+            className="px-4 py-2 bg-white/20 rounded-2xl"
           >
-            {saving ? (t(lang, "calSaving" as any) ?? "Zapisuję…") : (t(lang, "calSave" as any) ?? "Zapisz")}
+            {saving ? "..." : t(lang, "calSave" as any) ?? "Zapisz"}
           </button>
         </div>
       </div>

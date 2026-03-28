@@ -70,6 +70,20 @@ type ListingImage = {
   created_at?: string | null;
 };
 
+type ListingEventRow = {
+  id: string;
+  title: string;
+  startAt: string;
+  endAt: string;
+  locationText: string | null;
+  description: string | null;
+  eventType: string | null;
+  status: string | null;
+  outcome: string | null;
+  source: string | null;
+  clientId: string | null;
+};
+
 function toStr(v: unknown) {
   if (v === null || v === undefined) return "";
   return String(v);
@@ -80,6 +94,19 @@ function fmtDate(v?: string | null) {
   const ms = Date.parse(v);
   if (!Number.isFinite(ms)) return "-";
   return new Date(ms).toLocaleString();
+}
+
+function fmtShortDate(v?: string | null) {
+  if (!v) return "-";
+  const ms = Date.parse(v);
+  if (!Number.isFinite(ms)) return "-";
+  return new Date(ms).toLocaleString("pl-PL", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function getPartyTypeLabel(v?: string | null) {
@@ -121,6 +148,62 @@ function getPartyStatusLabel(v?: string | null) {
       return "Zarchiwizowany";
     default:
       return v || "-";
+  }
+}
+
+function getEventTypeLabel(type?: string | null) {
+  switch (type) {
+    case "presentation":
+      return "Prezentacja";
+    case "acquisition":
+      return "Pozyskanie";
+    case "broker_agreement":
+      return "Umowa pośrednictwa";
+    case "preliminary_agreement":
+      return "Umowa przedwstępna";
+    case "final_agreement":
+      return "Umowa końcowa";
+    case "contact":
+      return "Kontakt";
+    case "task":
+      return "Zadanie";
+    case "vacation":
+      return "Urlop";
+    case "other":
+      return "Inne";
+    case "call":
+      return "Telefon";
+    case "visit":
+      return "Wizyta";
+    case "meeting":
+      return "Spotkanie";
+    case "follow_up":
+      return "Follow-up";
+    default:
+      return type || "-";
+  }
+}
+
+function getEventOutcomeLabel(outcome?: string | null) {
+  switch (outcome) {
+    case "none":
+      return "Brak";
+    case "answered":
+      return "Odebrano";
+    case "no_answer":
+      return "Brak odpowiedzi";
+    case "rescheduled":
+      return "Przełożono";
+    case "completed":
+      return "Zrealizowano";
+    case "cancelled":
+      return "Anulowano";
+    case "offer_rejected":
+      return "Oferta odrzucona";
+    case "interested":
+      return "Zainteresowany";
+    default:
+      return outcome || "-";
   }
 }
 
@@ -186,6 +269,10 @@ export default function OfferEditorPage() {
   const [imagesLoading, setImagesLoading] = useState(false);
   const [imagesBusy, setImagesBusy] = useState(false);
 
+  const [listingEvents, setListingEvents] = useState<ListingEventRow[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [eventsError, setEventsError] = useState<string | null>(null);
+
   async function loadImages(listingId: string) {
     setImagesLoading(true);
     try {
@@ -202,6 +289,31 @@ export default function OfferEditorPage() {
       setImages([]);
     } finally {
       setImagesLoading(false);
+    }
+  }
+
+  async function loadListingEvents(listingId: string) {
+    setEventsLoading(true);
+    setEventsError(null);
+
+    try {
+      const r = await fetch(
+        `/api/calendar/by-listing?listingId=${encodeURIComponent(listingId)}&limit=20`,
+        {
+          method: "GET",
+          cache: "no-store",
+        }
+      );
+      const j = await r.json().catch(() => null);
+
+      if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
+
+      setListingEvents(Array.isArray(j?.rows) ? j.rows : []);
+    } catch (e: any) {
+      setEventsError(e?.message ?? "Nie udało się pobrać terminarza oferty.");
+      setListingEvents([]);
+    } finally {
+      setEventsLoading(false);
     }
   }
 
@@ -258,6 +370,7 @@ export default function OfferEditorPage() {
         });
 
         await loadImages(id);
+        await loadListingEvents(id);
       } catch (e: any) {
         if (!active) return;
         setErr(e?.message ?? "Load failed");
@@ -477,6 +590,26 @@ export default function OfferEditorPage() {
               >
                 ← {t(lang, "offerEditorBackToPanel" as any)}
               </Link>
+
+              <button
+                type="button"
+                onClick={() =>
+                  router.push(`/panel?view=calendar&listingId=${encodeURIComponent(id)}&action=new`)
+                }
+                className="rounded-xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15"
+              >
+                + Nowy termin
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  router.push(`/panel?view=calendar&listingId=${encodeURIComponent(id)}`)
+                }
+                className="rounded-xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15"
+              >
+                Otwórz kalendarz
+              </button>
 
               <button
                 type="button"
@@ -850,6 +983,167 @@ export default function OfferEditorPage() {
           </section>
 
           <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-white">Terminarz oferty</h2>
+                <p className="mt-1 text-sm text-white/60">
+                  Ostatnie zdarzenia przypięte do tej oferty.
+                </p>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    router.push(`/panel?view=calendar&listingId=${encodeURIComponent(id)}&action=new`)
+                  }
+                  className="rounded-xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15"
+                >
+                  + Nowy termin dla oferty
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    router.push(`/panel?view=calendar&listingId=${encodeURIComponent(id)}`)
+                  }
+                  className="rounded-xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15"
+                >
+                  Pełny kalendarz oferty
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => loadListingEvents(id)}
+                  className="rounded-xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15"
+                >
+                  Odśwież
+                </button>
+              </div>
+            </div>
+
+            {eventsLoading ? (
+              <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 p-6 text-sm text-white/50">
+                Ładowanie terminarza oferty...
+              </div>
+            ) : eventsError ? (
+              <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200">
+                {eventsError}
+              </div>
+            ) : listingEvents.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 p-6 text-sm text-white/50">
+                Brak terminów przypiętych do oferty.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {listingEvents.map((ev) => (
+                  <div
+                    key={ev.id}
+                    className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-base font-semibold text-white">{ev.title || "-"}</div>
+
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <span className="rounded bg-indigo-500/15 px-2 py-0.5 text-[10px] text-indigo-100 ring-1 ring-indigo-500/20">
+                            {getEventTypeLabel(ev.eventType)}
+                          </span>
+
+                          {ev.status ? (
+                            <span className="rounded bg-sky-500/15 px-2 py-0.5 text-[10px] text-sky-100 ring-1 ring-sky-500/20">
+                              {ev.status}
+                            </span>
+                          ) : null}
+
+                          {ev.outcome ? (
+                            <span className="rounded bg-amber-500/15 px-2 py-0.5 text-[10px] text-amber-100 ring-1 ring-amber-500/20">
+                              {getEventOutcomeLabel(ev.outcome)}
+                            </span>
+                          ) : null}
+
+                          {ev.source ? (
+                            <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/85 ring-1 ring-white/10">
+                              {ev.source}
+                            </span>
+                          ) : null}
+
+                          {ev.clientId ? (
+                            <span className="rounded bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-100 ring-1 ring-emerald-500/20">
+                              Klient powiązany
+                            </span>
+                          ) : null}
+                        </div>
+
+                        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                          <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-3">
+                            <div className="text-xs text-white/45">Start</div>
+                            <div className="mt-1 text-sm font-semibold text-white/85">
+                              {fmtShortDate(ev.startAt)}
+                            </div>
+                          </div>
+
+                          <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-3">
+                            <div className="text-xs text-white/45">Koniec</div>
+                            <div className="mt-1 text-sm font-semibold text-white/85">
+                              {fmtShortDate(ev.endAt)}
+                            </div>
+                          </div>
+
+                          <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-3">
+                            <div className="text-xs text-white/45">Lokalizacja</div>
+                            <div className="mt-1 text-sm font-semibold text-white/85">
+                              {ev.locationText || "-"}
+                            </div>
+                          </div>
+
+                          <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-3">
+                            <div className="text-xs text-white/45">Client ID</div>
+                            <div className="mt-1 text-sm font-semibold text-white/85">
+                              {ev.clientId || "-"}
+                            </div>
+                          </div>
+                        </div>
+
+                        {ev.description ? (
+                          <div className="mt-4 rounded-xl border border-white/10 bg-white/5 px-3 py-3">
+                            <div className="text-xs text-white/45">Opis</div>
+                            <div className="mt-1 whitespace-pre-wrap text-sm text-white/80">
+                              {ev.description}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div className="flex flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            router.push(`/panel?view=calendar&listingId=${encodeURIComponent(id)}`)
+                          }
+                          className="rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
+                        >
+                          Otwórz w kalendarzu
+                        </button>
+
+                        {ev.clientId ? (
+                          <button
+                            type="button"
+                            onClick={() => router.push(`/panel/contacts/${encodeURIComponent(ev.clientId!)}`)}
+                            className="rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15"
+                          >
+                            Otwórz klienta
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-3xl border border-white/10 bg-white/5 p-4">
             <h2 className="mb-4 text-lg font-semibold">
               {t(lang, "offerEditorSectionImages" as any)}
             </h2>
@@ -904,9 +1198,7 @@ export default function OfferEditorPage() {
                     </div>
 
                     <div className="space-y-3 p-3">
-                      <div className="text-xs text-white/60">
-                        #{index + 1}
-                      </div>
+                      <div className="text-xs text-white/60">#{index + 1}</div>
 
                       <div className="truncate text-xs text-white/50">{img.url}</div>
 

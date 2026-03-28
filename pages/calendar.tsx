@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/router";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
@@ -9,7 +10,6 @@ import { DEFAULT_LANG, isLangKey, t } from "@/utils/i18n";
 import EventModal, {
   type EventDraft,
   type EventType,
-  EVENT_TYPES,
   labelForEventType,
 } from "@/components/calendar/EventModal";
 
@@ -33,7 +33,6 @@ function clsx(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
 }
 
-// Map Two-letter UI langs -> FullCalendar locale objects
 function fcLocale(lang: LangKey) {
   switch (lang) {
     case "pl":
@@ -62,7 +61,19 @@ type FcEvent = {
   title: string;
   start: string;
   end: string;
-  extendedProps?: any;
+  extendedProps?: {
+    description?: string | null;
+    locationText?: string | null;
+    status?: string | null;
+    eventType?: EventType | null;
+    source?: string | null;
+    outcome?: string | null;
+    externalListingId?: string | null;
+    clientId?: string | null;
+    listingId?: string | null;
+    meta?: Record<string, unknown>;
+    ownerUserId?: string | null;
+  };
 };
 
 type BootstrapResponse = {
@@ -81,27 +92,31 @@ function toLocalInput(dt: Date) {
 }
 
 export default function CalendarPage() {
+  const router = useRouter();
   const calendarRef = useRef<FullCalendar | null>(null);
+  const autoOpenedRef = useRef(false);
+
+  const queryClientId =
+    typeof router.query.clientId === "string" ? router.query.clientId.trim() : "";
+  const queryListingId =
+    typeof router.query.listingId === "string" ? router.query.listingId.trim() : "";
+  const queryAction =
+    typeof router.query.action === "string" ? router.query.action.trim() : "";
 
   const [lang, setLang] = useState<LangKey>(DEFAULT_LANG);
   const [events, setEvents] = useState<FcEvent[]>([]);
 
-  // MVP: docelowo z auth/sesji
   const [userId, setUserId] = useState<string | null>(null);
 
-  // bootstrap output
   const [officeId, setOfficeId] = useState<string | null>(null);
   const [orgCalendarId, setOrgCalendarId] = useState<string | null>(null);
   const [userCalendarId, setUserCalendarId] = useState<string | null>(null);
 
-  // UI state
-  const [scope, setScope] = useState<"user" | "org">("user"); // Mój / Biuro
-  // ✅ domyślnie miesiąc
+  const [scope, setScope] = useState<"user" | "org">("user");
   const [view, setView] = useState<CalView>("dayGridMonth");
   const [query, setQuery] = useState("");
   const [range, setRange] = useState<{ start?: string; end?: string }>({});
 
-  // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -128,13 +143,15 @@ export default function CalendarPage() {
 
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [draft, setDraft] = useState<EventDraft>({
-      eventType: "presentation",
-      title: "",
-      start: "",
-      end: "",
-      locationText: "",
-      description: "",
-    });
+    eventType: "presentation",
+    title: "",
+    start: "",
+    end: "",
+    locationText: "",
+    description: "",
+    clientId: "",
+    listingId: "",
+  });
 
   useEffect(() => {
     (async () => {
@@ -154,7 +171,6 @@ export default function CalendarPage() {
     if (isLangKey(c)) setLang(c);
   }, []);
 
-  // Bootstrap: znajdź biuro usera i zapewnij kalendarze
   useEffect(() => {
     (async () => {
       if (!userId) return;
@@ -162,7 +178,6 @@ export default function CalendarPage() {
       const r = await fetch("/api/calendar/bootstrap", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId }),
       });
       if (!r.ok) return;
 
@@ -176,7 +191,6 @@ export default function CalendarPage() {
 
       await loadIntegrations();
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
   const activeCalendarId = scope === "user" ? userCalendarId : orgCalendarId;
@@ -192,14 +206,12 @@ export default function CalendarPage() {
     if (rangeStart) qs.set("start", rangeStart);
     if (rangeEnd) qs.set("end", rangeEnd);
 
-    // 1) internal events
     const r = await fetch(`/api/calendar/events?${qs.toString()}`);
     if (!r.ok) return;
 
     const data = await r.json().catch(() => []);
     const list: FcEvent[] = Array.isArray(data) ? data : [];
 
-    // 2) external (ICS) cached events (fail-safe)
     let extList: FcEvent[] = [];
     try {
       const rExt = await fetch(`/api/calendar/external-events?${qs.toString()}`);
@@ -208,33 +220,38 @@ export default function CalendarPage() {
         extList = Array.isArray(extData) ? extData : [];
       }
     } catch {
-      // ignore external failures (MVP)
+      // ignore external failures
     }
 
-    // 3) merge
-    const merged = [...list, ...extList];
+    let merged = [...list, ...extList];
 
-    // 4) filter by query
+    if (queryClientId) {
+      merged = merged.filter((e) => e.extendedProps?.clientId === queryClientId);
+    }
+
+    if (queryListingId) {
+      merged = merged.filter((e) => e.extendedProps?.listingId === queryListingId);
+    }
+
     const q = query.trim().toLowerCase();
-    setEvents(q ? merged.filter((e) => (e.title || "").toLowerCase().includes(q)) : merged);
+    if (q) {
+      merged = merged.filter((e) => (e.title || "").toLowerCase().includes(q));
+    }
+
+    setEvents(merged);
   }
 
-  // zmiana scope -> odśwież eventy w aktualnym zakresie
   useEffect(() => {
     if (!activeCalendarId) return;
     if (!range.start || !range.end) return;
     loadEvents(range.start, range.end);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCalendarId, scope, range.start, range.end]);
+  }, [activeCalendarId, scope, range.start, range.end, queryClientId, queryListingId]);
 
-  // search -> odśwież
   useEffect(() => {
     if (!range.start || !range.end) return;
     loadEvents(range.start, range.end);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
-  // sterowanie widokiem (gdy przełączasz przyciskami)
   useEffect(() => {
     const api = calendarRef.current?.getApi();
     if (!api) return;
@@ -243,7 +260,14 @@ export default function CalendarPage() {
 
   const localeObj = useMemo(() => fcLocale(lang), [lang]);
 
-  function openNewEvent(prefill?: { start?: Date; end?: Date }) {
+  function openNewEvent(
+    prefill?: {
+      start?: Date;
+      end?: Date;
+      clientId?: string;
+      listingId?: string;
+    }
+  ) {
     setEditingEventId(null);
 
     const now = new Date();
@@ -257,6 +281,8 @@ export default function CalendarPage() {
       end: toLocalInput(end),
       locationText: "",
       description: "",
+      clientId: prefill?.clientId ?? queryClientId ?? "",
+      listingId: prefill?.listingId ?? queryListingId ?? "",
     });
 
     setIsModalOpen(true);
@@ -275,10 +301,25 @@ export default function CalendarPage() {
       end: toLocalInput(end),
       locationText: ev.extendedProps?.locationText ?? "",
       description: ev.extendedProps?.description ?? "",
+      clientId: ev.extendedProps?.clientId ?? "",
+      listingId: ev.extendedProps?.listingId ?? "",
     });
 
     setIsModalOpen(true);
   }
+
+  useEffect(() => {
+    if (!router.isReady) return;
+    if (!activeCalendarId) return;
+    if (queryAction !== "new") return;
+    if (autoOpenedRef.current) return;
+
+    autoOpenedRef.current = true;
+    openNewEvent({
+      clientId: queryClientId || "",
+      listingId: queryListingId || "",
+    });
+  }, [router.isReady, activeCalendarId, queryAction, queryClientId, queryListingId]);
 
   async function patchEvent(payload: {
     id: string;
@@ -288,6 +329,8 @@ export default function CalendarPage() {
     locationText?: string | null;
     description?: string | null;
     eventType?: EventType;
+    clientId?: string | null;
+    listingId?: string | null;
   }) {
     if (!officeId || !activeCalendarId) {
       alert(t(lang, "calNoActiveCalendar" as any) ?? "No active calendar.");
@@ -320,8 +363,9 @@ export default function CalendarPage() {
     const title = draft.title.trim();
     if (!title) return alert(t(lang, "calErrorMissingTitle" as any) ?? "Enter a title.");
 
-    if (!draft.start || !draft.end)
+    if (!draft.start || !draft.end) {
       return alert(t(lang, "calErrorMissingDates" as any) ?? "Enter start and end date.");
+    }
 
     setSaving(true);
     try {
@@ -331,7 +375,6 @@ export default function CalendarPage() {
       });
 
       if (editingEventId) {
-        // EDIT (PATCH)
         await patchEvent({
           id: editingEventId,
           title,
@@ -340,9 +383,10 @@ export default function CalendarPage() {
           locationText: draft.locationText || null,
           description: draft.description || null,
           eventType: draft.eventType,
+          clientId: draft.clientId || null,
+          listingId: draft.listingId || null,
         });
       } else {
-        // CREATE (POST)
         const r = await fetch(`/api/calendar/events?${qs.toString()}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -353,6 +397,8 @@ export default function CalendarPage() {
             locationText: draft.locationText || null,
             description: draft.description || null,
             eventType: draft.eventType,
+            clientId: draft.clientId || null,
+            listingId: draft.listingId || null,
           }),
         });
 
@@ -365,7 +411,6 @@ export default function CalendarPage() {
       setEditingEventId(null);
       setIsModalOpen(false);
 
-      // odśwież eventy w bieżącym zakresie
       if (range.start && range.end) await loadEvents(range.start, range.end);
     } catch (e: any) {
       alert(e?.message ?? (t(lang, "calSaveError" as any) ?? "Save failed"));
@@ -382,7 +427,9 @@ export default function CalendarPage() {
     }
 
     if (integrations.length === 0) {
-      alert(t(lang, "calSyncNoSources" as any) ?? "No connected calendars. Add an ICS source first.");
+      alert(
+        t(lang, "calSyncNoSources" as any) ?? "No connected calendars. Add an ICS source first."
+      );
       return;
     }
 
@@ -455,8 +502,11 @@ export default function CalendarPage() {
       });
 
       const j = await r.json().catch(() => null);
-      if (!r.ok)
-        throw new Error(j?.error || (t(lang, "calConnectErrorSave" as any) ?? "Could not save integration."));
+      if (!r.ok) {
+        throw new Error(
+          j?.error || (t(lang, "calConnectErrorSave" as any) ?? "Could not save integration.")
+        );
+      }
 
       setIsConnectOpen(false);
       setConnectDraft({ name: "", icsUrl: "" });
@@ -469,14 +519,17 @@ export default function CalendarPage() {
         alert(t(lang, "calConnectSaved" as any) ?? "Calendar connected.");
       }
     } catch (e: any) {
-      alert(e?.message ?? (t(lang, "calConnectErrorSave" as any) ?? "Could not save integration."));
+      alert(
+        e?.message || (t(lang, "calConnectErrorSave" as any) ?? "Could not save integration.")
+      );
     } finally {
       setConnectSaving(false);
     }
   }
 
   async function deleteIntegration(id: string) {
-    if (!confirm(t(lang, "calIntegrationDeleteConfirm" as any) ?? "Delete this integration?")) return;
+    if (!confirm(t(lang, "calIntegrationDeleteConfirm" as any) ?? "Delete this integration?"))
+      return;
 
     try {
       const r = await fetch(`/api/calendar/integrations?id=${encodeURIComponent(id)}`, {
@@ -493,25 +546,21 @@ export default function CalendarPage() {
 
   return (
     <main className="w-full text-white">
-      {/* ✅ GLOBAL STYLING FullCalendar: glass + dark */}
       <style jsx global>{`
-        /* Base */
         .fc {
           color: rgba(255, 255, 255, 0.92);
-          --fc-border-color: rgba(255, 255, 255, 0.10);
+          --fc-border-color: rgba(255, 255, 255, 0.1);
           --fc-today-bg-color: rgba(255, 255, 255, 0.06);
           --fc-neutral-bg-color: rgba(255, 255, 255, 0.04);
           --fc-page-bg-color: transparent;
         }
 
-        /* Header cells */
         .fc .fc-col-header-cell-cushion,
         .fc .fc-daygrid-day-number {
           color: rgba(255, 255, 255, 0.88);
           text-decoration: none;
         }
 
-        /* Grid backgrounds */
         .fc .fc-scrollgrid,
         .fc .fc-scrollgrid-section > td,
         .fc .fc-scrollgrid-section table {
@@ -524,21 +573,18 @@ export default function CalendarPage() {
           background: transparent;
         }
 
-        /* Time labels */
         .fc .fc-timegrid-axis-cushion,
         .fc .fc-timegrid-slot-label-cushion {
           color: rgba(255, 255, 255, 0.55);
         }
 
-        /* Remove harsh white blocks */
         .fc-theme-standard td,
         .fc-theme-standard th {
-          border-color: rgba(255, 255, 255, 0.10);
+          border-color: rgba(255, 255, 255, 0.1);
         }
 
-        /* Events – office vs private */
         .fc .fc-event.fc-event--office {
-          background: rgba(59, 130, 246, 0.78); /* blue */
+          background: rgba(59, 130, 246, 0.78);
           border: 1px solid rgba(255, 255, 255, 0.18);
           color: #fff;
           box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
@@ -546,7 +592,7 @@ export default function CalendarPage() {
           backdrop-filter: blur(10px);
         }
         .fc .fc-event.fc-event--private {
-          background: rgba(16, 185, 129, 0.72); /* emerald */
+          background: rgba(16, 185, 129, 0.72);
           border: 1px solid rgba(255, 255, 255, 0.18);
           color: #fff;
           box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
@@ -559,7 +605,6 @@ export default function CalendarPage() {
           transition: 140ms ease;
         }
 
-        /* Event text readability */
         .fc .fc-event-title,
         .fc .fc-event-time {
           font-weight: 700;
@@ -568,14 +613,12 @@ export default function CalendarPage() {
           color: rgba(255, 255, 255, 0.95);
         }
 
-        /* Now indicator */
         .fc .fc-timegrid-now-indicator-line {
           border-color: rgba(255, 255, 255, 0.35);
         }
 
-        /* List view */
         .fc .fc-list {
-          border-color: rgba(255, 255, 255, 0.10);
+          border-color: rgba(255, 255, 255, 0.1);
         }
         .fc .fc-list-day-cushion {
           background: rgba(255, 255, 255, 0.06);
@@ -586,9 +629,7 @@ export default function CalendarPage() {
         }
       `}</style>
 
-      {/* Wrapper (bez max-w-7xl) */}
       <div className="w-full">
-        {/* TITLE */}
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-extrabold tracking-tight">
@@ -615,7 +656,9 @@ export default function CalendarPage() {
               disabled={syncing}
               title={t(lang, "calSyncTitle" as any) ?? "Sync calendars"}
             >
-              {syncing ? (t(lang, "calSyncing" as any) ?? "Synchronizing…") : (t(lang, "calSyncButton" as any) ?? "Synchronize")}
+              {syncing
+                ? t(lang, "calSyncing" as any) ?? "Synchronizing…"
+                : t(lang, "calSyncButton" as any) ?? "Synchronize"}
             </button>
 
             <button
@@ -642,11 +685,49 @@ export default function CalendarPage() {
           </div>
         </div>
 
-        {/* TOOLBAR (glass) */}
+        {(queryClientId || queryListingId) && (
+          <div className="mb-4 rounded-3xl border border-white/10 bg-slate-950/45 p-4 shadow-2xl backdrop-blur-xl">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="text-sm text-white/80">
+                {queryClientId ? (
+                  <span className="mr-3">
+                    Filtr klienta: <span className="font-semibold text-white">{queryClientId}</span>
+                  </span>
+                ) : null}
+                {queryListingId ? (
+                  <span>
+                    Filtr oferty: <span className="font-semibold text-white">{queryListingId}</span>
+                  </span>
+                ) : null}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const nextQuery = { ...router.query };
+                  delete nextQuery.clientId;
+                  delete nextQuery.listingId;
+                  delete nextQuery.action;
+                  router.push(
+                    {
+                      pathname: router.pathname,
+                      query: nextQuery,
+                    },
+                    undefined,
+                    { shallow: true }
+                  );
+                }}
+                className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/15"
+              >
+                Wyczyść filtr
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="mb-4 rounded-3xl border border-white/10 bg-slate-950/45 p-4 shadow-2xl backdrop-blur-xl">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-2">
-              {/* View switch */}
               <div className="inline-flex overflow-hidden rounded-2xl border border-white/10 bg-white/5">
                 <button
                   type="button"
@@ -693,14 +774,13 @@ export default function CalendarPage() {
                 </button>
               </div>
 
-              {/* Scope switch */}
               <div className="inline-flex overflow-hidden rounded-2xl border border-white/10 bg-white/5">
                 <button
                   type="button"
                   className={clsx(
                     "px-3 py-2 text-sm font-semibold transition",
                     scope === "user" ? "bg-white/15 text-white" : "text-white/80 hover:bg-white/10",
-                    !userCalendarId && "opacity-60 cursor-not-allowed"
+                    !userCalendarId && "cursor-not-allowed opacity-60"
                   )}
                   disabled={!userCalendarId}
                   title={!userCalendarId ? "Brak kalendarza użytkownika (Mój)" : undefined}
@@ -718,7 +798,7 @@ export default function CalendarPage() {
                   className={clsx(
                     "px-3 py-2 text-sm font-semibold transition",
                     scope === "org" ? "bg-white/15 text-white" : "text-white/80 hover:bg-white/10",
-                    !orgCalendarId && "opacity-60 cursor-not-allowed"
+                    !orgCalendarId && "cursor-not-allowed opacity-60"
                   )}
                   disabled={!orgCalendarId}
                   title={!orgCalendarId ? "Brak kalendarza biura (Biuro)" : undefined}
@@ -732,7 +812,6 @@ export default function CalendarPage() {
                 </button>
               </div>
 
-              {/* Prev/Next */}
               <div className="inline-flex overflow-hidden rounded-2xl border border-white/10 bg-white/5">
                 <button
                   type="button"
@@ -751,14 +830,13 @@ export default function CalendarPage() {
               </div>
             </div>
 
-            {/* Search */}
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <div className="relative">
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder={t(lang, "calSearch" as any) ?? "Szukaj…"}
-                  className="w-full sm:w-72 rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white placeholder:text-white/40 outline-none transition focus:border-white/40 focus:ring-2 focus:ring-white/20"
+                  className="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white placeholder:text-white/40 outline-none transition focus:border-white/40 focus:ring-2 focus:ring-white/20 sm:w-72"
                 />
                 <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs text-white/40">
                   ⌘K
@@ -768,7 +846,6 @@ export default function CalendarPage() {
           </div>
         </div>
 
-        {/* LEGEND */}
         <div className="mb-4 mt-2 flex gap-4 text-xs text-white/70">
           <span className="flex items-center gap-2">
             <span className="h-3 w-3 rounded" style={{ background: "rgba(59,130,246,0.78)" }} />
@@ -780,7 +857,6 @@ export default function CalendarPage() {
           </span>
         </div>
 
-        {/* CONNECTED CALENDARS (Mine only) */}
         {scope === "user" ? (
           <div className="mb-4 rounded-3xl border border-white/10 bg-slate-950/45 p-4 shadow-2xl backdrop-blur-xl">
             <div className="flex items-center justify-between gap-3">
@@ -846,8 +922,8 @@ export default function CalendarPage() {
                           )}
                         >
                           {ok
-                            ? (t(lang, "calIntegrationStatusOk" as any) ?? "OK")
-                            : (t(lang, "calIntegrationStatusError" as any) ?? "Error")}
+                            ? t(lang, "calIntegrationStatusOk" as any) ?? "OK"
+                            : t(lang, "calIntegrationStatusError" as any) ?? "Error"}
                         </span>
 
                         <button
@@ -876,7 +952,6 @@ export default function CalendarPage() {
           </div>
         ) : null}
 
-        {/* CALENDAR GRID (glass) */}
         <div className="rounded-3xl border border-white/10 bg-slate-950/45 p-4 shadow-2xl backdrop-blur-xl">
           <FullCalendar
             ref={calendarRef}
@@ -892,7 +967,6 @@ export default function CalendarPage() {
             eventStartEditable
             eventDurationEditable
             dayMaxEvents={true}
-            // ✅ klik w dzień w miesiącu -> tydzień
             dateClick={(info) => {
               const api = calendarRef.current?.getApi();
               if (!api) return;
@@ -929,7 +1003,9 @@ export default function CalendarPage() {
                 if (range.start && range.end) await loadEvents(range.start, range.end);
               } catch (e: any) {
                 info.revert();
-                alert(e?.message ?? (t(lang, "calUpdateError" as any) ?? "Could not save changes."));
+                alert(
+                  e?.message ?? (t(lang, "calUpdateError" as any) ?? "Could not save changes.")
+                );
               }
             }}
             eventResize={async (info) => {
@@ -956,13 +1032,18 @@ export default function CalendarPage() {
               loadEvents(arg.startStr, arg.endStr);
             }}
             select={(info) => {
-              openNewEvent({ start: info.start, end: info.end });
+              openNewEvent({
+                start: info.start,
+                end: info.end,
+                clientId: queryClientId || "",
+                listingId: queryListingId || "",
+              });
             }}
           />
         </div>
       </div>
 
-          <EventModal
+      <EventModal
         isOpen={isModalOpen}
         lang={lang}
         saving={saving}
@@ -978,7 +1059,6 @@ export default function CalendarPage() {
         activeCalendarId={activeCalendarId}
       />
 
-      {/* CONNECT MODAL */}
       {isConnectOpen ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
@@ -1053,7 +1133,9 @@ export default function CalendarPage() {
                 onClick={() => addIntegration(connectDraft, false)}
                 disabled={connectSaving}
               >
-                {connectSaving ? (t(lang, "calConnectSaving" as any) ?? "Saving…") : (t(lang, "calConnectSave" as any) ?? "Save")}
+                {connectSaving
+                  ? t(lang, "calConnectSaving" as any) ?? "Saving…"
+                  : t(lang, "calConnectSave" as any) ?? "Save"}
               </button>
 
               <button

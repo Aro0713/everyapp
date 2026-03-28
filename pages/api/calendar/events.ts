@@ -128,13 +128,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             e.source,
             e.outcome,
             e.external_listing_id,
+            e.client_id,
+            e.listing_id,
             e.meta,
             cu.owner_user_id as owner_user_id
           FROM events e
           JOIN calendars cu ON cu.id = e.calendar_id
           WHERE cu.org_id = $1
             AND cu.owner_user_id IS NOT NULL
-            AND ($2::timestamptz IS NULL OR e.end_at   > $2::timestamptz)
+            AND ($2::timestamptz IS NULL OR e.end_at > $2::timestamptz)
             AND ($3::timestamptz IS NULL OR e.start_at < $3::timestamptz)
           ORDER BY e.start_at ASC
           `,
@@ -155,6 +157,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               source: r.source ?? null,
               outcome: r.outcome ?? null,
               externalListingId: r.external_listing_id ?? null,
+              clientId: r.client_id ?? null,
+              listingId: r.listing_id ?? null,
               meta: r.meta ?? {},
               ownerUserId: r.owner_user_id ?? null,
             },
@@ -176,10 +180,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           source,
           outcome,
           external_listing_id,
+          client_id,
+          listing_id,
           meta
         FROM events
         WHERE calendar_id = $1
-          AND ($2::timestamptz IS NULL OR end_at   > $2::timestamptz)
+          AND ($2::timestamptz IS NULL OR end_at > $2::timestamptz)
           AND ($3::timestamptz IS NULL OR start_at < $3::timestamptz)
         ORDER BY start_at ASC
         `,
@@ -200,6 +206,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             source: r.source ?? null,
             outcome: r.outcome ?? null,
             externalListingId: r.external_listing_id ?? null,
+            clientId: r.client_id ?? null,
+            listingId: r.listing_id ?? null,
             meta: r.meta ?? {},
           },
         }))
@@ -221,6 +229,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const source = parseEventSource(body.source ?? "calendar_ui");
       const outcome = parseEventOutcome(body.outcome ?? "none");
       const externalListingId = optUuidString(body.externalListingId);
+      const clientId = optUuidString(body.clientId);
+      const listingId = optUuidString(body.listingId);
       const meta = safeJson(body.meta);
 
       const userCal = await pool.query(
@@ -248,6 +258,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           source,
           outcome,
           external_listing_id,
+          client_id,
+          listing_id,
           meta
         )
         VALUES (
@@ -263,7 +275,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           $10,
           $11,
           $12::uuid,
-          $13::jsonb
+          $13::uuid,
+          $14::uuid,
+          $15::jsonb
         )
         RETURNING id
         `,
@@ -280,6 +294,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           source,
           outcome,
           externalListingId,
+          clientId,
+          listingId,
           JSON.stringify(meta),
         ]
       );
@@ -299,6 +315,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const end = optString(body.end);
       const description = optString(body.description);
       const locationText = optString(body.locationText);
+      const clientId = body.clientId === undefined ? undefined : optUuidString(body.clientId);
+      const listingId = body.listingId === undefined ? undefined : optUuidString(body.listingId);
+      const eventType = body.eventType === undefined ? undefined : parseEventType(body.eventType);
 
       const ev = await pool.query(
         `
@@ -329,10 +348,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           description = COALESCE($3, description),
           location_text = COALESCE($4, location_text),
           start_at = COALESCE($5::timestamptz, start_at),
-          end_at   = COALESCE($6::timestamptz, end_at)
+          end_at = COALESCE($6::timestamptz, end_at),
+          client_id = CASE
+            WHEN $7::text = '__KEEP__' THEN client_id
+            ELSE $7::uuid
+          END,
+          listing_id = CASE
+            WHEN $8::text = '__KEEP__' THEN listing_id
+            ELSE $8::uuid
+          END,
+          type = COALESCE($9, type),
+          updated_by = $10,
+          updated_at = now()
         WHERE id = $1
         `,
-        [eventId, title, description, locationText, start, end]
+        [
+          eventId,
+          title,
+          description,
+          locationText,
+          start,
+          end,
+          clientId === undefined ? "__KEEP__" : clientId,
+          listingId === undefined ? "__KEEP__" : listingId,
+          eventType,
+          sessionUserId,
+        ]
       );
 
       return res.status(200).json({ ok: true });
