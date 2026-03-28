@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { t } from "@/utils/i18n";
 import type { LangKey } from "@/utils/translations";
 
@@ -85,6 +85,7 @@ export default function EventModal({
 
   useEffect(() => {
     if (!isOpen) return;
+
     let alive = true;
 
     const run = async () => {
@@ -92,34 +93,31 @@ export default function EventModal({
       try {
         const qs = new URLSearchParams();
         if (query) qs.set("q", query);
+
         const r = await fetch(`/api/calendar/link-options?${qs.toString()}`);
         const j = await r.json().catch(() => null);
+
         if (!alive) return;
 
-        setClients((j?.clients ?? []) as Option[]);
-        setListings((j?.listings ?? []) as Option[]);
+        setClients(Array.isArray(j?.clients) ? (j.clients as Option[]) : []);
+        setListings(Array.isArray(j?.listings) ? (j.listings as Option[]) : []);
       } finally {
         if (alive) setLoading(false);
       }
     };
 
     const tmr = setTimeout(run, 250);
+
     return () => {
       alive = false;
       clearTimeout(tmr);
     };
   }, [query, isOpen]);
 
-  if (!isOpen) return null;
+  const selectedClient = clients.find((c) => c.id === draft.clientId) || null;
+  const selectedListing = listings.find((l) => l.id === draft.listingId) || null;
 
-  const selectedClient = useMemo(
-    () => clients.find((c) => c.id === draft.clientId) || null,
-    [clients, draft.clientId]
-  );
-  const selectedListing = useMemo(
-    () => listings.find((l) => l.id === draft.listingId) || null,
-    [listings, draft.listingId]
-  );
+  if (!isOpen) return null;
 
   return (
     <div
@@ -149,7 +147,6 @@ export default function EventModal({
         </div>
 
         <div className="mt-5 space-y-4">
-          {/* TYPE */}
           <div>
             <label className="text-xs font-semibold text-white/70">Typ</label>
             <select
@@ -160,6 +157,7 @@ export default function EventModal({
                   const autoTitle = labelForEventType(lang, nextType);
                   const prevAuto = labelForEventType(lang, d.eventType);
                   const shouldAuto = !d.title.trim() || d.title.trim() === prevAuto;
+
                   return {
                     ...d,
                     eventType: nextType,
@@ -177,7 +175,6 @@ export default function EventModal({
             </select>
           </div>
 
-          {/* TITLE */}
           <div>
             <label className="text-xs font-semibold text-white/70">
               {t(lang, "calFieldTitle" as any) ?? "Tytuł"}
@@ -189,7 +186,6 @@ export default function EventModal({
             />
           </div>
 
-          {/* TIME */}
           <div className="grid gap-3 sm:grid-cols-2">
             <input
               type="datetime-local"
@@ -205,21 +201,34 @@ export default function EventModal({
             />
           </div>
 
-          {/* SEARCH */}
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Szukaj klienta lub oferty..."
-            className="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm"
-          />
-
-          {/* CLIENT SELECT */}
           <div>
-            <div className="text-xs text-white/60 mb-1">Klient</div>
+            <label className="text-xs font-semibold text-white/70">
+              {t(lang, "calFieldLocation" as any) ?? "Lokalizacja"}
+            </label>
+            <input
+              value={draft.locationText}
+              onChange={(e) => setDraft((d) => ({ ...d, locationText: e.target.value }))}
+              className="mt-1 w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-white/70">Szukaj powiązań</label>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Szukaj klienta lub oferty..."
+              className="mt-1 w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm"
+            />
+            {loading ? <div className="mt-2 text-xs text-white/50">Ładowanie…</div> : null}
+          </div>
+
+          <div>
+            <div className="mb-1 text-xs text-white/60">Klient</div>
             <select
               value={draft.clientId}
               onChange={(e) => setDraft((d) => ({ ...d, clientId: e.target.value }))}
-              className="w-full rounded-2xl bg-white/10 px-4 py-2"
+              className="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm"
             >
               <option value="">— brak —</option>
               {clients.map((c) => (
@@ -228,15 +237,17 @@ export default function EventModal({
                 </option>
               ))}
             </select>
+            {selectedClient?.subtitle ? (
+              <div className="mt-1 text-xs text-white/50">{selectedClient.subtitle}</div>
+            ) : null}
           </div>
 
-          {/* LISTING SELECT */}
           <div>
-            <div className="text-xs text-white/60 mb-1">Oferta</div>
+            <div className="mb-1 text-xs text-white/60">Oferta</div>
             <select
               value={draft.listingId}
               onChange={(e) => setDraft((d) => ({ ...d, listingId: e.target.value }))}
-              className="w-full rounded-2xl bg-white/10 px-4 py-2"
+              className="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm"
             >
               <option value="">— brak —</option>
               {listings.map((l) => (
@@ -245,24 +256,36 @@ export default function EventModal({
                 </option>
               ))}
             </select>
+            {selectedListing?.subtitle ? (
+              <div className="mt-1 text-xs text-white/50">{selectedListing.subtitle}</div>
+            ) : null}
           </div>
 
-          {/* DESCRIPTION */}
-          <textarea
-            value={draft.description}
-            onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
-            className="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm"
-          />
+          <div>
+            <label className="text-xs font-semibold text-white/70">
+              {t(lang, "calFieldDesc" as any) ?? "Opis"}
+            </label>
+            <textarea
+              value={draft.description}
+              onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
+              className="mt-1 w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm"
+              rows={4}
+            />
+          </div>
         </div>
 
         <div className="mt-6 flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 bg-white/10 rounded-2xl">
+          <button
+            onClick={onClose}
+            className="rounded-2xl bg-white/10 px-4 py-2"
+          >
             {t(lang, "calCancel" as any) ?? "Anuluj"}
           </button>
+
           <button
             onClick={onSubmit}
             disabled={saving || !activeCalendarId}
-            className="px-4 py-2 bg-white/20 rounded-2xl"
+            className="rounded-2xl bg-white/20 px-4 py-2 disabled:opacity-60"
           >
             {saving ? "..." : t(lang, "calSave" as any) ?? "Zapisz"}
           </button>
