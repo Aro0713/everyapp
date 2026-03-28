@@ -261,13 +261,15 @@ const [botFilters, setBotFilters] = useState<EverybotFilters>({
   const [eventExternalListingId, setEventExternalListingId] = useState<string | null>(null);
 
   const [eventDraft, setEventDraft] = useState<EventDraft>({
-    eventType: "call",
+  eventType: "call",
     title: "",
     start: "",
     end: "",
     locationText: "",
     description: "",
-  });
+    clientId: "",
+    listingId: "",
+  })
   const [calendarId, setCalendarId] = useState<string | null>(null);
     // --- Save external listing (agent/office) ---
   const [saveMode, setSaveMode] = useState<"agent" | "office">("agent");
@@ -300,13 +302,15 @@ const [botFilters, setBotFilters] = useState<EverybotFilters>({
   setEventExternalListingId(row.id);
 
   setEventDraft({
-    eventType: type,
-    title: `${titlePrefix} – ${row.title ?? ""}`,
-    start: toLocalInput(now),
-    end: toLocalInput(end),
-    locationText: type === "visit" ? location : "",
-    description,
-  });
+  eventType: "call",
+    title: "",
+    start: "",
+    end: "",
+    locationText: "",
+    description: "",
+    clientId: "",
+    listingId: "",
+  })
 
   setEventModalOpen(true);
 }
