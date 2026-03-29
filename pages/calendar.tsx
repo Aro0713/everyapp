@@ -119,6 +119,7 @@ export default function CalendarPage() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
   type IntegrationRow = {
@@ -351,6 +352,46 @@ export default function CalendarPage() {
     if (!r.ok) {
       const err = await r.json().catch(() => null);
       throw new Error(err?.error || "Nie udało się zapisać zmian terminu");
+    }
+  }
+
+  async function deleteEvent() {
+    if (!editingEventId || !officeId || !activeCalendarId) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      t(lang, "calDeleteConfirm" as any) ?? "Na pewno usunąć ten termin?"
+    );
+    if (!confirmed) return;
+
+    setDeleting(true);
+    try {
+      const qs = new URLSearchParams({
+        orgId: officeId,
+        calendarId: activeCalendarId,
+        id: editingEventId,
+      });
+
+      const r = await fetch(`/api/calendar/events?${qs.toString()}`, {
+        method: "DELETE",
+      });
+
+      const j = await r.json().catch(() => null);
+      if (!r.ok) {
+        throw new Error(j?.error || "Nie udało się usunąć terminu");
+      }
+
+      setEditingEventId(null);
+      setIsModalOpen(false);
+
+      if (range.start && range.end) {
+        await loadEvents(range.start, range.end);
+      }
+    } catch (e: any) {
+      alert(e?.message ?? (t(lang, "calDeleteError" as any) ?? "Delete failed"));
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -733,7 +774,9 @@ export default function CalendarPage() {
                   type="button"
                   className={clsx(
                     "px-3 py-2 text-sm font-semibold transition",
-                    view === "dayGridMonth" ? "bg-white/15 text-white" : "text-white/80 hover:bg-white/10"
+                    view === "dayGridMonth"
+                      ? "bg-white/15 text-white"
+                      : "text-white/80 hover:bg-white/10"
                   )}
                   onClick={() => setView("dayGridMonth")}
                 >
@@ -744,7 +787,9 @@ export default function CalendarPage() {
                   type="button"
                   className={clsx(
                     "px-3 py-2 text-sm font-semibold transition",
-                    view === "timeGridWeek" ? "bg-white/15 text-white" : "text-white/80 hover:bg-white/10"
+                    view === "timeGridWeek"
+                      ? "bg-white/15 text-white"
+                      : "text-white/80 hover:bg-white/10"
                   )}
                   onClick={() => setView("timeGridWeek")}
                 >
@@ -755,7 +800,9 @@ export default function CalendarPage() {
                   type="button"
                   className={clsx(
                     "px-3 py-2 text-sm font-semibold transition",
-                    view === "timeGridDay" ? "bg-white/15 text-white" : "text-white/80 hover:bg-white/10"
+                    view === "timeGridDay"
+                      ? "bg-white/15 text-white"
+                      : "text-white/80 hover:bg-white/10"
                   )}
                   onClick={() => setView("timeGridDay")}
                 >
@@ -766,7 +813,9 @@ export default function CalendarPage() {
                   type="button"
                   className={clsx(
                     "px-3 py-2 text-sm font-semibold transition",
-                    view === "listWeek" ? "bg-white/15 text-white" : "text-white/80 hover:bg-white/10"
+                    view === "listWeek"
+                      ? "bg-white/15 text-white"
+                      : "text-white/80 hover:bg-white/10"
                   )}
                   onClick={() => setView("listWeek")}
                 >
@@ -779,7 +828,9 @@ export default function CalendarPage() {
                   type="button"
                   className={clsx(
                     "px-3 py-2 text-sm font-semibold transition",
-                    scope === "user" ? "bg-white/15 text-white" : "text-white/80 hover:bg-white/10",
+                    scope === "user"
+                      ? "bg-white/15 text-white"
+                      : "text-white/80 hover:bg-white/10",
                     !userCalendarId && "cursor-not-allowed opacity-60"
                   )}
                   disabled={!userCalendarId}
@@ -797,7 +848,9 @@ export default function CalendarPage() {
                   type="button"
                   className={clsx(
                     "px-3 py-2 text-sm font-semibold transition",
-                    scope === "org" ? "bg-white/15 text-white" : "text-white/80 hover:bg-white/10",
+                    scope === "org"
+                      ? "bg-white/15 text-white"
+                      : "text-white/80 hover:bg-white/10",
                     !orgCalendarId && "cursor-not-allowed opacity-60"
                   )}
                   disabled={!orgCalendarId}
@@ -918,7 +971,9 @@ export default function CalendarPage() {
                         <span
                           className={clsx(
                             "rounded-full px-3 py-1 text-xs font-semibold",
-                            ok ? "bg-emerald-500/15 text-emerald-200" : "bg-red-500/15 text-red-200"
+                            ok
+                              ? "bg-emerald-500/15 text-emerald-200"
+                              : "bg-red-500/15 text-red-200"
                           )}
                         >
                           {ok
@@ -1046,16 +1101,20 @@ export default function CalendarPage() {
       <EventModal
         isOpen={isModalOpen}
         lang={lang}
-        saving={saving}
+        saving={saving || deleting}
         editingEventId={editingEventId}
         scopeLabel={scope === "user" ? "Zapis do mojego kalendarza" : "Zapis do kalendarza biura"}
         draft={draft}
         setDraft={setDraft}
         onClose={() => {
+          if (saving || deleting) return;
           setIsModalOpen(false);
           setEditingEventId(null);
         }}
         onSubmit={submitNewEvent}
+        onDelete={deleteEvent}
+        showDelete={Boolean(editingEventId)}
+        deleteBusy={deleting}
         activeCalendarId={activeCalendarId}
       />
 

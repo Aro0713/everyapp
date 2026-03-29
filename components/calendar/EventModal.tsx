@@ -63,6 +63,9 @@ type EventModalProps = {
   setDraft: React.Dispatch<React.SetStateAction<EventDraft>>;
   onClose: () => void;
   onSubmit: () => void;
+  onDelete?: () => void;
+  showDelete?: boolean;
+  deleteBusy?: boolean;
   activeCalendarId?: string | null;
 };
 
@@ -76,6 +79,9 @@ export default function EventModal({
   setDraft,
   onClose,
   onSubmit,
+  onDelete,
+  showDelete = false,
+  deleteBusy = false,
   activeCalendarId,
 }: EventModalProps) {
   const [query, setQuery] = useState("");
@@ -274,21 +280,39 @@ export default function EventModal({
           </div>
         </div>
 
-        <div className="mt-6 flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="rounded-2xl bg-white/10 px-4 py-2"
-          >
-            {t(lang, "calCancel" as any) ?? "Anuluj"}
-          </button>
+        <div className="mt-6 flex items-center justify-between gap-2">
+          <div>
+            {showDelete ? (
+              <button
+                type="button"
+                onClick={onDelete}
+                disabled={saving || deleteBusy}
+                className="rounded-2xl border border-red-500/20 bg-red-600/80 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-600 disabled:opacity-60"
+              >
+                {deleteBusy
+                  ? t(lang, "calDeleting" as any) ?? "Usuwanie..."
+                  : t(lang, "calDelete" as any) ?? "Usuń"}
+              </button>
+            ) : null}
+          </div>
 
-          <button
-            onClick={onSubmit}
-            disabled={saving || !activeCalendarId}
-            className="rounded-2xl bg-white/20 px-4 py-2 disabled:opacity-60"
-          >
-            {saving ? "..." : t(lang, "calSave" as any) ?? "Zapisz"}
-          </button>
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={onClose}
+              disabled={saving || deleteBusy}
+              className="rounded-2xl bg-white/10 px-4 py-2 disabled:opacity-60"
+            >
+              {t(lang, "calCancel" as any) ?? "Anuluj"}
+            </button>
+
+            <button
+              onClick={onSubmit}
+              disabled={saving || deleteBusy || !activeCalendarId}
+              className="rounded-2xl bg-white/20 px-4 py-2 disabled:opacity-60"
+            >
+              {saving ? "..." : t(lang, "calSave" as any) ?? "Zapisz"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

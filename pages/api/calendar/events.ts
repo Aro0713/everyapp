@@ -379,7 +379,51 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({ ok: true });
     }
 
-    res.setHeader("Allow", "GET,POST,PATCH");
+    if (req.method === "DELETE") {
+      const sessionUserId = getUserIdFromRequest(req);
+      if (!sessionUserId) return res.status(401).json({ error: "UNAUTHORIZED" });
+
+      const eventId = mustString(
+        typeof req.query.id === "string" ? req.query.id : req.body?.id,
+        "id"
+      );
+
+      const ev = await pool.query(
+        `
+        SELECT
+          e.id,
+          e.created_by,
+          e.org_id,
+          e.calendar_id,
+          c.owner_user_id
+        FROM events e
+        JOIN calendars c ON c.id = e.calendar_id
+        WHERE e.id = $1
+        LIMIT 1
+        `,
+        [eventId]
+      );
+
+      const row = ev.rows[0];
+      if (!row) return res.status(404).json({ error: "Event not found" });
+
+      if (row.org_id !== orgId) {
+        return res.status(403).json({ error: "FORBIDDEN" });
+      }
+
+      const isOwner = row.created_by === sessionUserId;
+      const isOfficeEvent = row.owner_user_id === null;
+
+      if (!isOwner && !isOfficeEvent) {
+        return res.status(403).json({ error: "FORBIDDEN" });
+      }
+
+      await pool.query(`DELETE FROM events WHERE id = $1`, [eventId]);
+
+      return res.status(200).json({ ok: true });
+    }
+
+    res.setHeader("Allow", "GET,POST,PATCH,DELETE");
     return res.status(405).json({ error: "Method not allowed" });
   } catch (e: any) {
     console.error("CAL_EVENTS_ERROR", e);
