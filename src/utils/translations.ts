@@ -8614,6 +8614,16 @@ contactsPipelineClosedLost: {
   lt: "Prarastas sandoris",
   vi: "Chốt thất bại",
 },
+calDelete: {
+  pl: "Usuń termin",
+  en: "Delete event",
+  de: "Termin löschen",
+  cs: "Smazat událost",
+  sk: "Vymazať udalosť",
+  ua: "Видалити подію",
+  lt: "Ištrinti įvykį",
+  vi: "Xóa sự kiện",
+},
 
 } as const);
 
