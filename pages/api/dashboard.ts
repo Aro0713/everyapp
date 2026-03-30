@@ -45,12 +45,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const scope = (optString(req.query.scope) === "agent" ? "agent" : "office") as Scope;
 
-   const actionScopeSql =
+    const actionScopeSql =
       scope === "agent"
         ? `ela.office_id = $1::uuid AND ela.user_id = $2::uuid`
         : `ela.office_id = $1::uuid`;
 
-    const listingsOverviewScopeSql =
+    const overviewScopeSql =
       scope === "agent"
         ? `office_id = $1::uuid AND case_owner_user_id = $2::uuid`
         : `office_id = $1::uuid`;
@@ -112,8 +112,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         SELECT COUNT(*)::text AS count
         FROM external_listing_actions ela
         WHERE ${actionScopeSql}
-          AND action = 'call'
-          AND created_at >= date_trunc('day', now())
+          AND ela.action = 'call'
+          AND ela.created_at >= date_trunc('day', now())
         `,
         scope === "agent" ? [officeId, userId] : [officeId]
       ),
@@ -153,7 +153,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           parties_summary,
           case_owner_user_id::text
         FROM office_listings_overview
-        WHERE ${listingsOverviewScopeSql}
+        WHERE ${overviewScopeSql}
           AND status IN ('draft', 'active')
         ORDER BY created_at DESC
         LIMIT 8
@@ -176,13 +176,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         `
         WITH my_saved AS (
           SELECT
-            external_listing_id,
+            ela.external_listing_id,
             TRUE AS my_office_saved
-          FROM external_listing_actions
-          WHERE office_id = $1::uuid
-            AND action = 'save'
-            AND ($2::text <> 'agent' OR user_id = $3::uuid)
-          GROUP BY external_listing_id
+          FROM external_listing_actions ela
+          WHERE ela.office_id = $1::uuid
+            AND ela.action = 'save'
+            AND ($2::text <> 'agent' OR ela.user_id = $3::uuid)
+          GROUP BY ela.external_listing_id
         )
         SELECT
           l.id::text,
@@ -267,7 +267,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           parties_summary,
           case_owner_user_id::text
         FROM office_listings_overview
-        WHERE ${listingsOverviewScopeSql}
+        WHERE ${overviewScopeSql}
           AND status = 'active'
         ORDER BY created_at DESC
         LIMIT 8
@@ -320,12 +320,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }>(
         `
         SELECT
-          COUNT(*) FILTER (WHERE action = 'call')::text AS calls,
-          COUNT(*) FILTER (WHERE action = 'visit')::text AS visits,
-          COUNT(*) FILTER (WHERE action = 'save')::text AS saved
-        FROM external_listing_actions
+          COUNT(*) FILTER (WHERE ela.action = 'call')::text AS calls,
+          COUNT(*) FILTER (WHERE ela.action = 'visit')::text AS visits,
+          COUNT(*) FILTER (WHERE ela.action = 'save')::text AS saved
+        FROM external_listing_actions ela
         WHERE ${actionScopeSql}
-          AND created_at >= date_trunc('month', now())
+          AND ela.created_at >= date_trunc('month', now())
         `,
         scope === "agent" ? [officeId, userId] : [officeId]
       ),
@@ -353,9 +353,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         `
         SELECT
           COUNT(*)::text AS closed_total,
-          COALESCE(SUM(price_amount), 0)::text AS closed_value
-          FROM listings l
-          WHERE ${listingsOverviewScopeSql}
+          COALESCE(SUM(l.price_amount), 0)::text AS closed_value
+        FROM listings l
+        WHERE ${listingsTableScopeSql}
           AND l.status = 'closed'
         `,
         scope === "agent" ? [officeId, userId] : [officeId]
@@ -376,7 +376,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ON l.id = lp.listing_id
         JOIN parties p
           ON p.id = lp.party_id
-        WHERE ${listingsOverviewScopeSql}
+        WHERE ${listingsTableScopeSql}
           AND lp.role = 'buyer'
         GROUP BY p.id, p.full_name
         ORDER BY COUNT(*) DESC, p.full_name ASC
@@ -395,12 +395,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         `
         SELECT
           COUNT(*)::text AS all_listings,
-          COUNT(*) FILTER (WHERE status = 'draft')::text AS draft_listings,
-          COUNT(*) FILTER (WHERE status = 'active')::text AS active_listings,
-          COUNT(*) FILTER (WHERE status = 'closed')::text AS closed_listings,
-          COUNT(*) FILTER (WHERE status = 'archived')::text AS archived_listings
-        FROM listings
-        WHERE ${listingsOverviewScopeSql}
+          COUNT(*) FILTER (WHERE l.status = 'draft')::text AS draft_listings,
+          COUNT(*) FILTER (WHERE l.status = 'active')::text AS active_listings,
+          COUNT(*) FILTER (WHERE l.status = 'closed')::text AS closed_listings,
+          COUNT(*) FILTER (WHERE l.status = 'archived')::text AS archived_listings
+        FROM listings l
+        WHERE ${listingsTableScopeSql}
         `,
         scope === "agent" ? [officeId, userId] : [officeId]
       ),
