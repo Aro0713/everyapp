@@ -11,6 +11,7 @@ import OffersView from "@/components/OffersView";
 import OfficeDealsView from "@/components/OfficeDealsView";
 import Image from "next/image";
 import ContactsView from "@/components/ContactsView";
+import KanbanView from "@/components/KanbanView";
 
 function getCookie(name: string) {
   if (typeof document === "undefined") return null;
@@ -28,7 +29,8 @@ type PanelView =
   | "downloads"
   | "notes"
   | "reports"
-  | "menuSettings";
+  | "menuSettings"
+  | "pipeline";
 
 type NavItem = {
   key: string;
@@ -208,7 +210,8 @@ function isPanelView(value: unknown): value is PanelView {
     value === "downloads" ||
     value === "notes" ||
     value === "reports" ||
-    value === "menuSettings"
+    value === "menuSettings" ||
+    value === "pipeline"
   );
 }
 
@@ -385,6 +388,7 @@ export default function PanelPage() {
       { key: "panelNavNotes", view: "notes", subKey: "panelNotesSub" },
       { key: "panelNavReports", view: "reports", subKey: "panelReportsSub" },
       { key: "panelNavMenuSettings", view: "menuSettings", subKey: "panelMenuSettingsSub" },
+      { key: "panelNavPipeline", view: "pipeline", subKey: "panelPipelineSub" },
     ],
     []
   );
@@ -1278,6 +1282,10 @@ export default function PanelPage() {
             ) : activeView === "team" ? (
               <div className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-4 sm:px-4 lg:px-6">
                 <TeamView />
+              </div>
+              ) : activeView === "pipeline" ? (
+              <div className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-4 sm:px-4 lg:px-6">
+                <KanbanView />
               </div>
             ) : activeView === "officeTransactions" ? (
               <div className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-4 sm:px-4 lg:px-6">

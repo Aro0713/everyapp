@@ -8624,7 +8624,27 @@ calDelete: {
   lt: "Ištrinti įvykį",
   vi: "Xóa sự kiện",
 },
+panelNavPipeline: {
+  pl: "Pipeline",
+  en: "Pipeline",
+  de: "Pipeline",
+  cs: "Pipeline",
+  sk: "Pipeline",
+  ua: "Воронка",
+  lt: "Pipeline",
+  vi: "Pipeline",
+},
 
+panelPipelineSub: {
+  pl: "Kanban spraw i etapów sprzedaży",
+  en: "Kanban of cases and sales stages",
+  de: "Kanban für Fälle und Verkaufsphasen",
+  cs: "Kanban případů a prodejních fází",
+  sk: "Kanban prípadov a predajných fáz",
+  ua: "Канбан справ і етапів продажу",
+  lt: "Atvejų ir pardavimo etapų kanban lenta",
+  vi: "Kanban cho hồ sơ và giai đoạn bán hàng",
+},
 } as const);
 
 export type TranslationKey = keyof typeof translations;
