@@ -10,10 +10,11 @@ import {
 } from "@dnd-kit/sortable";
 
 type KanbanItem = {
-  client_case_id: string;
+  client_case_id?: string | null;
+  party_id: string;
   full_name: string;
-  phone?: string;
-  case_type?: string;
+  phone?: string | null;
+  case_type?: string | null;
   latest_listing_id?: string | null;
 };
 
@@ -47,7 +48,7 @@ export default function KanbanView() {
     if (!over) return;
 
     const fromCol = columns.find((c) =>
-      c.items.some((i) => i.client_case_id === active.id)
+      c.items.some((i) => i.party_id === active.id)
     );
     const toCol = columns.find((c) => c.id === over.id);
 
@@ -55,7 +56,7 @@ export default function KanbanView() {
     if (fromCol.id === toCol.id) return;
 
     // optimistic UI
-    const item = fromCol.items.find((i) => i.client_case_id === active.id);
+    const item = fromCol.items.find((i) => i.party_id === active.id);
     if (!item) return;
 
     setColumns((prev) =>
@@ -63,7 +64,7 @@ export default function KanbanView() {
         if (c.id === fromCol.id) {
           return {
             ...c,
-            items: c.items.filter((i) => i.client_case_id !== active.id),
+            items: c.items.filter((i) => i.party_id !== active.id),
           };
         }
         if (c.id === toCol.id) {
@@ -82,12 +83,12 @@ export default function KanbanView() {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        clientCaseId: item.client_case_id,
+        body: JSON.stringify({
+        partyId: item.party_id,
         pipelineStage: toCol.id,
-      }),
-    });
-  }
+        }),
+        });
+    }
 
   if (loading) {
     return <div className="text-white">Ładowanie pipeline...</div>;
@@ -105,17 +106,19 @@ export default function KanbanView() {
               {col.title}
             </div>
 
-            <SortableContext
-              items={col.items.map((i) => i.client_case_id)}
-              strategy={verticalListSortingStrategy}
-            >
+              <SortableContext
+                items={col.items
+                    .map((i) => i.party_id)
+                    .filter((id): id is string => typeof id === "string" && id.length > 0)}
+                strategy={verticalListSortingStrategy}
+                >
               <div className="space-y-2">
                 {col.items.map((item) => (
-                  <div
-                    key={item.client_case_id}
-                    id={item.client_case_id}
-                    className="cursor-grab rounded-xl border border-white/10 bg-white/10 p-3 text-sm text-white"
-                  >
+                    <div
+                        key={item.party_id}
+                        id={item.party_id}
+                        className="cursor-grab rounded-xl border border-white/10 bg-white/10 p-3 text-sm text-white"
+                    >
                     <div className="font-semibold">
                       {item.full_name}
                     </div>

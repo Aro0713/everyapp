@@ -66,49 +66,47 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const userId = mustUserId(req);
     const officeId = await getOfficeIdForUserId(userId);
 
-    const clientCaseId = mustString(req.body?.clientCaseId, "clientCaseId");
+    const partyId = mustString(req.body?.partyId, "partyId");
     const nextStage = parseStage(req.body?.pipelineStage);
 
     const existing = await pool.query<{
       id: string;
       office_id: string;
-      assigned_user_id: string | null;
       pipeline_stage: string | null;
     }>(
       `
       SELECT
-        cc.id::text,
-        cc.office_id::text,
-        cc.assigned_user_id::text,
-        cc.pipeline_stage::text
-      FROM public.client_cases cc
-      WHERE cc.id = $1::uuid
-        AND cc.office_id = $2::uuid
+        p.id::text,
+        p.office_id::text,
+        p.pipeline_stage::text
+      FROM public.parties p
+      WHERE p.id = $1::uuid
+        AND p.office_id = $2::uuid
       LIMIT 1
       `,
-      [clientCaseId, officeId]
+      [partyId, officeId]
     );
 
     const row = existing.rows[0];
     if (!row) {
-      return res.status(404).json({ error: "CLIENT_CASE_NOT_FOUND" });
+      return res.status(404).json({ error: "PARTY_NOT_FOUND" });
     }
 
     await pool.query(
       `
-      UPDATE public.client_cases
+      UPDATE public.parties
       SET
-        pipeline_stage = $2,
+        pipeline_stage = $2::public.party_pipeline_stage_type,
         updated_at = now()
       WHERE id = $1::uuid
         AND office_id = $3::uuid
       `,
-      [clientCaseId, nextStage, officeId]
+      [partyId, nextStage, officeId]
     );
 
     return res.status(200).json({
       ok: true,
-      clientCaseId,
+      partyId,
       previousStage: row.pipeline_stage,
       pipelineStage: nextStage,
     });

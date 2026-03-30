@@ -70,48 +70,45 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const params: any[] = [officeId];
     let idx = 2;
 
-    const where: string[] = [`cc.office_id = $1::uuid`];
+    const where: string[] = [`c.office_id = $1::uuid`];
 
     if (scope === "agent") {
-      where.push(`cc.assigned_user_id = $${idx}::uuid`);
+      where.push(`COALESCE(pc.case_assigned_user_id, c.assigned_user_id)::uuid = $${idx}::uuid`);
       params.push(userId);
       idx++;
     }
 
     if (assignedUserId) {
-      where.push(`cc.assigned_user_id = $${idx}::uuid`);
+      where.push(`COALESCE(pc.case_assigned_user_id, c.assigned_user_id)::uuid = $${idx}::uuid`);
       params.push(assignedUserId);
       idx++;
     }
 
     if (caseType) {
-      where.push(`cc.case_type::text = $${idx}`);
+      where.push(`COALESCE(pc.case_type::text, '') = $${idx}`);
       params.push(caseType);
       idx++;
     }
 
     const sql = `
-      WITH primary_phone AS (
+      WITH primary_cases AS (
         SELECT
-          pc.party_id,
-          pc.value,
+          cc.id,
+          cc.office_id,
+          cc.party_id,
+          cc.case_type,
+          cc.status AS case_status,
+          cc.assigned_user_id AS case_assigned_user_id,
+          cc.created_at AS case_created_at,
+          cc.updated_at AS case_updated_at,
           ROW_NUMBER() OVER (
-            PARTITION BY pc.party_id
-            ORDER BY pc.is_primary DESC, pc.created_at ASC, pc.id ASC
+            PARTITION BY cc.party_id
+            ORDER BY
+              CASE WHEN cc.status = 'active' THEN 0 ELSE 1 END,
+              cc.created_at ASC
           ) AS rn
-        FROM public.party_contacts pc
-        WHERE pc.kind = 'phone'::public.contact_kind
-      ),
-      primary_email AS (
-        SELECT
-          pc.party_id,
-          pc.value,
-          ROW_NUMBER() OVER (
-            PARTITION BY pc.party_id
-            ORDER BY pc.is_primary DESC, pc.created_at ASC, pc.id ASC
-          ) AS rn
-        FROM public.party_contacts pc
-        WHERE pc.kind = 'email'::public.contact_kind
+        FROM public.client_cases cc
+        WHERE cc.office_id = $1::uuid
       ),
       listing_rollup AS (
         SELECT
@@ -131,7 +128,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             NULL
           ) AS listing_titles,
           (
-            ARRAY_AGG(l.id::text ORDER BY l.updated_at DESC NULLS LAST, l.created_at DESC NULLS LAST, l.id DESC)
+            ARRAY_AGG(
+              l.id::text
+              ORDER BY l.updated_at DESC NULLS LAST, l.created_at DESC NULLS LAST, l.id DESC
+            )
           )[1] AS latest_listing_id
         FROM public.listing_parties lp
         JOIN public.listings l
@@ -140,44 +140,42 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         GROUP BY lp.party_id
       )
       SELECT
-        cc.id::text AS client_case_id,
-        cc.party_id::text AS party_id,
-        cc.case_type::text AS case_type,
-        cc.status::text AS case_status,
-        cc.pipeline_stage::text AS pipeline_stage,
-        cc.client_bucket,
-        cc.assigned_user_id::text AS assigned_user_id,
-        cc.created_at,
-        cc.updated_at,
+        c.id::text AS party_id,
+        c.full_name,
+        c.party_type,
+        c.phone,
+        c.email,
+        c.status,
+        c.pipeline_stage,
+        c.assigned_user_id::text AS contact_assigned_user_id,
 
-        p.full_name,
-        p.party_type::text AS party_type,
-
-        ph.value AS phone,
-        em.value AS email,
+        pc.id::text AS client_case_id,
+        pc.case_type::text AS case_type,
+        pc.case_status::text AS case_status,
+        pc.case_assigned_user_id::text AS case_assigned_user_id,
+        pc.case_created_at,
+        pc.case_updated_at,
 
         m.full_name AS assigned_user_name,
 
         COALESCE(lr.listing_count, 0) AS listing_count,
         COALESCE(lr.listing_ids, ARRAY[]::text[]) AS listing_ids,
         COALESCE(lr.listing_titles, ARRAY[]::text[]) AS listing_titles,
-        lr.latest_listing_id
+        lr.latest_listing_id,
 
-      FROM public.client_cases cc
-      JOIN public.parties p
-        ON p.id = cc.party_id
-       AND p.office_id = cc.office_id
-      LEFT JOIN primary_phone ph
-        ON ph.party_id = cc.party_id
-       AND ph.rn = 1
-      LEFT JOIN primary_email em
-        ON em.party_id = cc.party_id
-       AND em.rn = 1
+        c.created_at,
+        c.updated_at
+
+      FROM public.crm_contacts_view c
+      LEFT JOIN primary_cases pc
+        ON pc.party_id = c.id
+       AND pc.office_id = c.office_id
+       AND pc.rn = 1
       LEFT JOIN public.memberships m
-        ON m.office_id = cc.office_id
-       AND m.user_id = cc.assigned_user_id
+        ON m.office_id = c.office_id
+       AND m.user_id = COALESCE(pc.case_assigned_user_id, c.assigned_user_id)
       LEFT JOIN listing_rollup lr
-        ON lr.party_id = cc.party_id
+        ON lr.party_id = c.id
       WHERE ${where.join(" AND ")}
       ORDER BY
         array_position(
@@ -195,11 +193,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             'closed_won',
             'closed_lost'
           ]::text[],
-          cc.pipeline_stage::text
+          c.pipeline_stage::text
         ) ASC NULLS LAST,
-        cc.updated_at DESC NULLS LAST,
-        cc.created_at DESC NULLS LAST,
-        p.full_name ASC
+        COALESCE(pc.case_updated_at, c.updated_at) DESC NULLS LAST,
+        COALESCE(pc.case_created_at, c.created_at) DESC NULLS LAST,
+        c.full_name ASC
     `;
 
     const { rows } = await pool.query(sql, params);
@@ -217,7 +215,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const stage = isKanbanStage(row.pipeline_stage) ? row.pipeline_stage : "lead";
 
       byStage.get(stage)!.push({
-        client_case_id: row.client_case_id,
+        client_case_id: row.client_case_id ?? null,
         party_id: row.party_id,
         full_name: row.full_name,
         party_type: row.party_type,
@@ -226,15 +224,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         case_type: row.case_type,
         case_status: row.case_status,
         pipeline_stage: stage,
-        client_bucket: row.client_bucket,
-        assigned_user_id: row.assigned_user_id,
+        assigned_user_id: row.case_assigned_user_id ?? row.contact_assigned_user_id ?? null,
         assigned_user_name: row.assigned_user_name,
         listing_count: Number(row.listing_count ?? 0),
         listing_ids: Array.isArray(row.listing_ids) ? row.listing_ids : [],
         listing_titles: Array.isArray(row.listing_titles) ? row.listing_titles : [],
         latest_listing_id: row.latest_listing_id ?? null,
-        created_at: row.created_at,
-        updated_at: row.updated_at,
+        created_at: row.case_created_at ?? row.created_at,
+        updated_at: row.case_updated_at ?? row.updated_at,
       });
     }
 
