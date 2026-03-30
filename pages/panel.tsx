@@ -1285,7 +1285,7 @@ export default function PanelPage() {
               </div>
               ) : activeView === "pipeline" ? (
               <div className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-4 sm:px-4 lg:px-6">
-                <KanbanView />
+                <KanbanView lang={lang} />
               </div>
             ) : activeView === "officeTransactions" ? (
               <div className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-4 sm:px-4 lg:px-6">

@@ -8645,6 +8645,151 @@ panelPipelineSub: {
   lt: "Atvejų ir pardavimo etapų kanban lenta",
   vi: "Kanban cho hồ sơ và giai đoạn bán hàng",
 },
+
+// kolumny pipeline (KLUCZOWE)
+pipelineLead: {
+  pl: "Lead",
+  en: "Lead",
+  de: "Lead",
+  cs: "Lead",
+  sk: "Lead",
+  ua: "Лід",
+  lt: "Lead",
+  vi: "Lead",
+},
+
+pipelineQualified: {
+  pl: "Zakwalifikowany",
+  en: "Qualified",
+  de: "Qualifiziert",
+  cs: "Kvalifikovaný",
+  sk: "Kvalifikovaný",
+  ua: "Кваліфікований",
+  lt: "Kvalifikuotas",
+  vi: "Đã đủ điều kiện",
+},
+
+pipelineContacted: {
+  pl: "Kontakt",
+  en: "Contacted",
+  de: "Kontaktiert",
+  cs: "Kontaktováno",
+  sk: "Kontaktované",
+  ua: "Контакт",
+  lt: "Kontaktuota",
+  vi: "Đã liên hệ",
+},
+
+pipelineMeeting: {
+  pl: "Spotkanie",
+  en: "Meeting scheduled",
+  de: "Termin geplant",
+  cs: "Naplánovaná schůzka",
+  sk: "Naplánované stretnutie",
+  ua: "Призначена зустріч",
+  lt: "Susitikimas",
+  vi: "Đã lên lịch",
+},
+
+pipelineNeeds: {
+  pl: "Analiza potrzeb",
+  en: "Needs analysis",
+  de: "Bedarfsanalyse",
+  cs: "Analýza potřeb",
+  sk: "Analýza potrieb",
+  ua: "Аналіз потреб",
+  lt: "Poreikių analizė",
+  vi: "Phân tích nhu cầu",
+},
+
+pipelineMatch: {
+  pl: "Dopasowanie oferty",
+  en: "Property match",
+  de: "Objektabgleich",
+  cs: "Shoda nemovitosti",
+  sk: "Zladenie nehnuteľnosti",
+  ua: "Підбір об'єкта",
+  lt: "Objekto parinkimas",
+  vi: "Phù hợp bất động sản",
+},
+
+pipelineOfferPrep: {
+  pl: "Przygotowanie oferty",
+  en: "Offer preparation",
+  de: "Angebot Vorbereitung",
+  cs: "Příprava nabídky",
+  sk: "Príprava ponuky",
+  ua: "Підготовка пропозиції",
+  lt: "Pasiūlymo paruošimas",
+  vi: "Chuẩn bị đề xuất",
+},
+
+pipelineOfferSent: {
+  pl: "Oferta wysłana",
+  en: "Offer sent",
+  de: "Angebot gesendet",
+  cs: "Nabídka odeslána",
+  sk: "Ponuka odoslaná",
+  ua: "Пропозицію надіслано",
+  lt: "Pasiūlymas išsiųstas",
+  vi: "Đã gửi đề xuất",
+},
+
+pipelineNegotiation: {
+  pl: "Negocjacje",
+  en: "Negotiation",
+  de: "Verhandlung",
+  cs: "Vyjednávání",
+  sk: "Vyjednávanie",
+  ua: "Переговори",
+  lt: "Derybos",
+  vi: "Đàm phán",
+},
+
+pipelineContract: {
+  pl: "Umowa",
+  en: "Contract preparation",
+  de: "Vertrag",
+  cs: "Smlouva",
+  sk: "Zmluva",
+  ua: "Договір",
+  lt: "Sutartis",
+  vi: "Hợp đồng",
+},
+
+pipelineWon: {
+  pl: "Wygrana",
+  en: "Closed won",
+  de: "Gewonnen",
+  cs: "Vyhráno",
+  sk: "Vyhraté",
+  ua: "Успішно",
+  lt: "Laimėta",
+  vi: "Thành công",
+},
+
+pipelineLost: {
+  pl: "Przegrana",
+  en: "Closed lost",
+  de: "Verloren",
+  cs: "Prohráno",
+  sk: "Prehraté",
+  ua: "Втрачено",
+  lt: "Prarasta",
+  vi: "Thất bại",
+},
+
+// karta
+pipelineOpenListing: {
+  pl: "Otwórz ofertę",
+  en: "Open listing",
+  de: "Angebot öffnen",
+  cs: "Otevřít nabídku",
+  sk: "Otvoriť ponuku",
+  ua: "Відкрити пропозицію",
+  lt: "Atidaryti pasiūlymą",
+  vi: "Mở bất động sản",
+},
 } as const);
 
 export type TranslationKey = keyof typeof translations;
