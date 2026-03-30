@@ -1530,6 +1530,26 @@ return (
                                   >
                                     Usuń z mojej listy
                                   </button>
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      const price = prompt("Podaj cenę finalną (opcjonalnie)");
+                                      
+                                      await fetch("/api/listings/close", {
+                                        method: "POST",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({
+                                          listingId: r.id,
+                                          finalPrice: price ? Number(price) : null,
+                                        }),
+                                      });
+
+                                      await load(); // refresh listy
+                                    }}
+                                    className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-[11px] font-semibold text-emerald-200 hover:bg-emerald-500/15"
+                                  >
+                                    ✅ Zamknij
+                                  </button>
                                 </>
                               )}
                             </div>

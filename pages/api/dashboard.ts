@@ -89,15 +89,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     };
 
     const [
-      callsRes,
-      meetingsRes,
+      callsTodayRes,
+      meetingsTodayRes,
       offersInProgressRes,
       newExternalRes,
       todayEventsRes,
       recentActivatedRes,
       recentPriceChangesRes,
-      monthGoalsRes,
+      monthlyActionsRes,
       teamRes,
+      closedDealsRes,
+      topBuyersRes,
+      listingsSummaryRes,
     ] = await Promise.all([
       pool.query<{ count: string }>(
         `
@@ -150,9 +153,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ORDER BY created_at DESC
         LIMIT 8
         `,
-        scope === "agent"
-          ? [officeId, userId]
-          : [officeId]
+        scope === "agent" ? [officeId, userId] : [officeId]
       ),
 
       pool.query<{
@@ -266,9 +267,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ORDER BY created_at DESC
         LIMIT 8
         `,
-        scope === "agent"
-          ? [officeId, userId]
-          : [officeId]
+        scope === "agent" ? [officeId, userId] : [officeId]
       ),
 
       pool.query<{
@@ -341,6 +340,65 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         `,
         [officeId]
       ),
+
+      pool.query<{
+        closed_total: string;
+        closed_value: string | null;
+      }>(
+        `
+        SELECT
+          COUNT(*)::text AS closed_total,
+          COALESCE(SUM(price_amount), 0)::text AS closed_value
+        FROM listings
+        WHERE ${listingsScopeSql}
+          AND status = 'closed'
+        `,
+        scope === "agent" ? [officeId, userId] : [officeId]
+      ),
+
+      pool.query<{
+        id: string;
+        full_name: string | null;
+        cnt: string;
+      }>(
+        `
+        SELECT
+          p.id::text AS id,
+          p.full_name,
+          COUNT(*)::text AS cnt
+        FROM listing_parties lp
+        JOIN listings l
+          ON l.id = lp.listing_id
+        JOIN parties p
+          ON p.id = lp.party_id
+        WHERE ${listingsScopeSql}
+          AND lp.role = 'buyer'
+        GROUP BY p.id, p.full_name
+        ORDER BY COUNT(*) DESC, p.full_name ASC
+        LIMIT 8
+        `,
+        scope === "agent" ? [officeId, userId] : [officeId]
+      ),
+
+      pool.query<{
+        all_listings: string;
+        draft_listings: string;
+        active_listings: string;
+        closed_listings: string;
+        archived_listings: string;
+      }>(
+        `
+        SELECT
+          COUNT(*)::text AS all_listings,
+          COUNT(*) FILTER (WHERE status = 'draft')::text AS draft_listings,
+          COUNT(*) FILTER (WHERE status = 'active')::text AS active_listings,
+          COUNT(*) FILTER (WHERE status = 'closed')::text AS closed_listings,
+          COUNT(*) FILTER (WHERE status = 'archived')::text AS archived_listings
+        FROM listings
+        WHERE ${listingsScopeSql}
+        `,
+        scope === "agent" ? [officeId, userId] : [officeId]
+      ),
     ]);
 
     return res.status(200).json({
@@ -353,12 +411,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         officeName: me.office_name,
         membershipRole: me.membership_role,
       },
+
       kpis: {
-        calls: Number(callsRes.rows[0]?.count ?? 0),
-        meetings: Number(meetingsRes.rows[0]?.count ?? 0),
-        exports: 0,
+        calls: Number(callsTodayRes.rows[0]?.count ?? 0),
+        meetings: Number(meetingsTodayRes.rows[0]?.count ?? 0),
+        exports: Number(monthlyActionsRes.rows[0]?.saved ?? 0),
         aiNotes: 0,
       },
+
       offersInProgress: offersInProgressRes.rows.map((r) => ({
         listing_id: r.listing_id,
         office_id: r.office_id,
@@ -369,7 +429,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         case_owner_name: r.case_owner_name,
         parties_summary: r.parties_summary,
       })),
-      topBuyers: [],
+
+      topBuyers: topBuyersRes.rows.map((r) => ({
+        id: r.id,
+        name: r.full_name,
+        cnt: Number(r.cnt ?? 0),
+      })),
+
       newExternalListings: newExternalRes.rows.map((r) => ({
         id: r.id,
         source: r.source,
@@ -382,6 +448,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         updated_at: toIso(r.updated_at),
         my_office_saved: !!r.my_office_saved,
       })),
+
       todayEvents: todayEventsRes.rows.map((r) => ({
         id: r.id,
         title: r.title,
@@ -391,6 +458,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         description: r.description,
         owner_user_id: r.owner_user_id,
       })),
+
       recentActivatedOffers: recentActivatedRes.rows.map((r) => ({
         listing_id: r.listing_id,
         office_id: r.office_id,
@@ -401,6 +469,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         case_owner_name: r.case_owner_name,
         parties_summary: r.parties_summary,
       })),
+
       recentPriceChanges: recentPriceChangesRes.rows.map((r) => ({
         id: r.id,
         source: r.source,
@@ -410,17 +479,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         updated_at: toIso(r.updated_at),
         location_text: r.location_text,
       })),
+
       goals: {
-        calls: Number(monthGoalsRes.rows[0]?.calls ?? 0),
-        visits: Number(monthGoalsRes.rows[0]?.visits ?? 0),
-        saved: Number(monthGoalsRes.rows[0]?.saved ?? 0),
-        revenue: 0,
+        calls: Number(monthlyActionsRes.rows[0]?.calls ?? 0),
+        visits: Number(monthlyActionsRes.rows[0]?.visits ?? 0),
+        saved: Number(monthlyActionsRes.rows[0]?.saved ?? 0),
+        revenue: Number(closedDealsRes.rows[0]?.closed_value ?? 0),
       },
+
       teamSnapshot: {
         membersCount: Number(teamRes.rows[0]?.members_count ?? 0),
         activeAgents: Number(teamRes.rows[0]?.active_agents ?? 0),
         pendingMembers: Number(teamRes.rows[0]?.pending_members ?? 0),
       },
+
+      sales: {
+        closedTotal: Number(closedDealsRes.rows[0]?.closed_total ?? 0),
+        closedValue: Number(closedDealsRes.rows[0]?.closed_value ?? 0),
+      },
+
+      listingsSummary: {
+        all: Number(listingsSummaryRes.rows[0]?.all_listings ?? 0),
+        draft: Number(listingsSummaryRes.rows[0]?.draft_listings ?? 0),
+        active: Number(listingsSummaryRes.rows[0]?.active_listings ?? 0),
+        closed: Number(listingsSummaryRes.rows[0]?.closed_listings ?? 0),
+        archived: Number(listingsSummaryRes.rows[0]?.archived_listings ?? 0),
+      },
+
       exportErrors: [],
       generatedAt: new Date().toISOString(),
     });
