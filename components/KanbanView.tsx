@@ -180,69 +180,73 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
     router.push(`/panel/offers/${listingId}`);
   }
 
-  async function handleDragEnd(event: DragEndEvent) {
-    const activeId = String(event.active?.id ?? "");
-    const overId = String(event.over?.id ?? "");
+ async function handleDragEnd(event: DragEndEvent) {
+  const activeId = String(event.active?.id ?? "");
+  const overId = String(event.over?.id ?? "");
 
-    if (!activeId || !overId) return;
+  if (!activeId || !overId) return;
+  console.log("KANBAN_DND", { activeId, overId });
 
-    const fromCol = columns.find((c) => c.items.some((i) => i.party_id === activeId));
-    const toCol = columns.find((c) => c.id === overId);
+  const fromCol = columns.find((c) => c.items.some((i) => i.party_id === activeId));
 
-    if (!fromCol || !toCol) return;
-    if (fromCol.id === toCol.id) return;
+  const toCol =
+    columns.find((c) => c.id === overId) ||
+    columns.find((c) => c.items.some((i) => i.party_id === overId));
 
-    const movedItem = allItemsByPartyId.get(activeId);
-    if (!movedItem) return;
+  if (!fromCol || !toCol) return;
+  if (fromCol.id === toCol.id) return;
 
-    const prevColumns = columns;
+  const movedItem = allItemsByPartyId.get(activeId);
+  if (!movedItem) return;
 
-    setColumns((prev) =>
-      prev.map((col) => {
-        if (col.id === fromCol.id) {
-          return {
-            ...col,
-            items: col.items.filter((item) => item.party_id !== activeId),
-          };
-        }
+  const prevColumns = columns;
 
-        if (col.id === toCol.id) {
-          return {
-            ...col,
-            items: [{ ...movedItem, pipeline_stage: toCol.id }, ...col.items],
-          };
-        }
-
-        return col;
-      })
-    );
-
-    try {
-      setSavingId(activeId);
-
-      const r = await fetch("/api/kanban/move", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          partyId: movedItem.party_id,
-          pipelineStage: toCol.id,
-        }),
-      });
-
-      const j = await r.json().catch(() => null);
-
-      if (!r.ok) {
-        throw new Error(j?.error ?? `HTTP ${r.status}`);
+  setColumns((prev) =>
+    prev.map((col) => {
+      if (col.id === fromCol.id) {
+        return {
+          ...col,
+          items: col.items.filter((item) => item.party_id !== activeId),
+        };
       }
-    } catch (e: any) {
-      setColumns(prevColumns);
-      setErr(e?.message ?? "KANBAN_MOVE_ERROR");
-    } finally {
-      setSavingId(null);
+
+      if (col.id === toCol.id) {
+        return {
+          ...col,
+          items: [{ ...movedItem, pipeline_stage: toCol.id }, ...col.items],
+        };
+      }
+
+      return col;
+    })
+  );
+
+  try {
+    setSavingId(activeId);
+
+    const r = await fetch("/api/kanban/move", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        partyId: movedItem.party_id,
+        pipelineStage: toCol.id,
+      }),
+    });
+
+    const j = await r.json().catch(() => null);
+
+    if (!r.ok) {
+      throw new Error(j?.error ?? `HTTP ${r.status}`);
     }
+  } catch (e: any) {
+    setColumns(prevColumns);
+    setErr(e?.message ?? "KANBAN_MOVE_ERROR");
+  } finally {
+    setSavingId(null);
   }
+}
 
   if (loading) {
     return (
