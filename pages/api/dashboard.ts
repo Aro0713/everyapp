@@ -45,15 +45,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const scope = (optString(req.query.scope) === "agent" ? "agent" : "office") as Scope;
 
-    const actionScopeSql =
+   const actionScopeSql =
       scope === "agent"
-        ? `office_id = $1::uuid AND user_id = $2::uuid`
-        : `office_id = $1::uuid`;
+        ? `ela.office_id = $1::uuid AND ela.user_id = $2::uuid`
+        : `ela.office_id = $1::uuid`;
 
-    const listingsScopeSql =
+    const listingsOverviewScopeSql =
       scope === "agent"
         ? `office_id = $1::uuid AND case_owner_user_id = $2::uuid`
         : `office_id = $1::uuid`;
+
+    const listingsTableScopeSql =
+      scope === "agent"
+        ? `l.office_id = $1::uuid AND l.case_owner_user_id = $2::uuid`
+        : `l.office_id = $1::uuid`;
 
     const meRes = await pool.query<{
       full_name: string | null;
@@ -105,7 +110,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       pool.query<{ count: string }>(
         `
         SELECT COUNT(*)::text AS count
-        FROM external_listing_actions
+        FROM external_listing_actions ela
         WHERE ${actionScopeSql}
           AND action = 'call'
           AND created_at >= date_trunc('day', now())
@@ -148,7 +153,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           parties_summary,
           case_owner_user_id::text
         FROM office_listings_overview
-        WHERE ${listingsScopeSql}
+        WHERE ${listingsOverviewScopeSql}
           AND status IN ('draft', 'active')
         ORDER BY created_at DESC
         LIMIT 8
@@ -262,7 +267,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           parties_summary,
           case_owner_user_id::text
         FROM office_listings_overview
-        WHERE ${listingsScopeSql}
+        WHERE ${listingsOverviewScopeSql}
           AND status = 'active'
         ORDER BY created_at DESC
         LIMIT 8
@@ -349,9 +354,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         SELECT
           COUNT(*)::text AS closed_total,
           COALESCE(SUM(price_amount), 0)::text AS closed_value
-        FROM listings
-        WHERE ${listingsScopeSql}
-          AND status = 'closed'
+          FROM listings l
+          WHERE ${listingsOverviewScopeSql}
+          AND l.status = 'closed'
         `,
         scope === "agent" ? [officeId, userId] : [officeId]
       ),
@@ -371,7 +376,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ON l.id = lp.listing_id
         JOIN parties p
           ON p.id = lp.party_id
-        WHERE ${listingsScopeSql}
+        WHERE ${listingsOverviewScopeSql}
           AND lp.role = 'buyer'
         GROUP BY p.id, p.full_name
         ORDER BY COUNT(*) DESC, p.full_name ASC
@@ -395,7 +400,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           COUNT(*) FILTER (WHERE status = 'closed')::text AS closed_listings,
           COUNT(*) FILTER (WHERE status = 'archived')::text AS archived_listings
         FROM listings
-        WHERE ${listingsScopeSql}
+        WHERE ${listingsOverviewScopeSql}
         `,
         scope === "agent" ? [officeId, userId] : [officeId]
       ),
