@@ -334,8 +334,7 @@ export default function PanelPage() {
   const [stats, setStats] = useState<PhoneBackfillStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsError, setStatsError] = useState<string | null>(null);
-  const [runStatus, setRunStatus] = useState<"idle" | "running" | "success" | "error">("idle");
-  const [runMessage, setRunMessage] = useState<string | null>(null);
+  
   const statsRequestSeqRef = useRef(0);
 
   useEffect(() => {
@@ -508,31 +507,6 @@ export default function PanelPage() {
     }
   }
 
-  async function runCrawlerBackfill() {
-    try {
-      setRunStatus("running");
-      setRunMessage(t(lang, "panelCrawlerRunning" as any));
-
-      const res = await fetch("/api/external-listings/run-phone-backfill", {
-        method: "POST",
-      });
-
-      const data = await res.json().catch(() => null);
-
-      if (data?.ok) {
-        setRunStatus("success");
-        setRunMessage(t(lang, "panelCrawlerRunSuccess" as any));
-        await fetchPhoneBackfillStats(backfillScope);
-      } else {
-        setRunStatus("error");
-        setRunMessage(t(lang, "panelCrawlerRunError" as any));
-      }
-    } catch (err) {
-      console.error(err);
-      setRunStatus("error");
-      setRunMessage(t(lang, "panelCrawlerRunError" as any));
-    }
-  }
 
   async function fetchPhoneBackfillStats(scope: BackfillScope) {
     const requestSeq = ++statsRequestSeqRef.current;
@@ -1342,34 +1316,10 @@ export default function PanelPage() {
                           {t(lang, "panelCrawlerScopeGlobal" as any)}
                         </button>
                       </div>
-
-                      <button
-                        type="button"
-                        onClick={runCrawlerBackfill}
-                        disabled={runStatus === "running"}
-                        className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-xs font-semibold text-white transition hover:bg-white/15 disabled:opacity-60"
-                      >
-                        {runStatus === "running"
-                          ? (t(lang, "panelCrawlerRunning" as any) ?? "Uruchamianie...")
-                          : (t(lang, "panelCrawlerRun" as any) ?? "Uruchom crawler")}
-                      </button>
                     </div>
                   }
                 >
                   <div className="space-y-5">
-                    {runMessage ? (
-                      <div
-                        className={clsx(
-                          "rounded-2xl px-4 py-3 text-sm",
-                          runStatus === "success" && "border border-emerald-500/20 bg-emerald-500/10 text-emerald-200",
-                          runStatus === "error" && "border border-rose-500/20 bg-rose-500/10 text-rose-200",
-                          runStatus === "running" && "border border-white/10 bg-white/5 text-white/80"
-                        )}
-                      >
-                        {runMessage}
-                      </div>
-                    ) : null}
-
                     {statsLoading ? (
                       <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 px-4 py-10 text-sm text-white/60">
                         {t(lang, "panelCrawlerLoading" as any)}
