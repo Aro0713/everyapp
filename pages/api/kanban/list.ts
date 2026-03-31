@@ -70,47 +70,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const params: any[] = [officeId];
     let idx = 2;
 
-    const where: string[] = [`c.office_id = $1::uuid`];
+    const where: string[] = [`cc.office_id = $1::uuid`];
 
     if (scope === "agent") {
-      where.push(`COALESCE(pc.case_assigned_user_id, c.assigned_user_id)::uuid = $${idx}::uuid`);
+      where.push(`cc.assigned_user_id = $${idx}::uuid`);
       params.push(userId);
       idx++;
     }
 
     if (assignedUserId) {
-      where.push(`COALESCE(pc.case_assigned_user_id, c.assigned_user_id)::uuid = $${idx}::uuid`);
+      where.push(`cc.assigned_user_id = $${idx}::uuid`);
       params.push(assignedUserId);
       idx++;
     }
 
     if (caseType) {
-      where.push(`COALESCE(pc.case_type::text, '') = $${idx}`);
+      where.push(`cc.case_type = $${idx}`);
       params.push(caseType);
       idx++;
     }
 
     const sql = `
-      WITH primary_cases AS (
-        SELECT
-          cc.id,
-          cc.office_id,
-          cc.party_id,
-          cc.case_type,
-          cc.status AS case_status,
-          cc.assigned_user_id AS case_assigned_user_id,
-          cc.created_at AS case_created_at,
-          cc.updated_at AS case_updated_at,
-          ROW_NUMBER() OVER (
-            PARTITION BY cc.party_id
-            ORDER BY
-              CASE WHEN cc.status = 'active' THEN 0 ELSE 1 END,
-              cc.created_at ASC
-          ) AS rn
-        FROM public.client_cases cc
-        WHERE cc.office_id = $1::uuid
-      ),
-      listing_rollup AS (
+      WITH listing_rollup AS (
         SELECT
           lp.party_id,
           COUNT(DISTINCT l.id)::int AS listing_count,
@@ -121,7 +102,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 WHEN COALESCE(l.title, '') <> '' THEN l.title
                 ELSE CONCAT(
                   COALESCE(l.record_type::text, ''),
-                  CASE WHEN l.transaction_type IS NOT NULL THEN ' / ' || l.transaction_type::text ELSE '' END
+                  CASE
+                    WHEN l.transaction_type IS NOT NULL
+                      THEN ' / ' || l.transaction_type::text
+                    ELSE ''
+                  END
                 )
               END
             ),
@@ -140,42 +125,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         GROUP BY lp.party_id
       )
       SELECT
-        c.id::text AS party_id,
+        cc.id::text AS client_case_id,
+        cc.office_id::text AS office_id,
+        cc.party_id::text AS party_id,
+        cc.case_type::text AS case_type,
+        cc.status::text AS case_status,
+        cc.assigned_user_id::text AS case_assigned_user_id,
+        cc.pipeline_stage::text AS pipeline_stage,
+        cc.created_at AS case_created_at,
+        cc.updated_at AS case_updated_at,
+
         c.full_name,
         c.party_type,
         c.phone,
         c.email,
-        c.status,
-        c.pipeline_stage,
+        c.status::text AS contact_status,
         c.assigned_user_id::text AS contact_assigned_user_id,
-
-        pc.id::text AS client_case_id,
-        pc.case_type::text AS case_type,
-        pc.case_status::text AS case_status,
-        pc.case_assigned_user_id::text AS case_assigned_user_id,
-        pc.case_created_at,
-        pc.case_updated_at,
+        c.created_at AS contact_created_at,
+        c.updated_at AS contact_updated_at,
 
         m.full_name AS assigned_user_name,
 
         COALESCE(lr.listing_count, 0) AS listing_count,
         COALESCE(lr.listing_ids, ARRAY[]::text[]) AS listing_ids,
         COALESCE(lr.listing_titles, ARRAY[]::text[]) AS listing_titles,
-        lr.latest_listing_id,
+        lr.latest_listing_id
 
-        c.created_at,
-        c.updated_at
-
-      FROM public.crm_contacts_view c
-      LEFT JOIN primary_cases pc
-        ON pc.party_id = c.id
-       AND pc.office_id = c.office_id
-       AND pc.rn = 1
+      FROM public.client_cases cc
+      JOIN public.crm_contacts_view c
+        ON c.id = cc.party_id
+       AND c.office_id = cc.office_id
       LEFT JOIN public.memberships m
-        ON m.office_id = c.office_id
-       AND m.user_id = COALESCE(pc.case_assigned_user_id, c.assigned_user_id)
+        ON m.office_id = cc.office_id
+       AND m.user_id = COALESCE(cc.assigned_user_id, c.assigned_user_id)
       LEFT JOIN listing_rollup lr
-        ON lr.party_id = c.id
+        ON lr.party_id = cc.party_id
       WHERE ${where.join(" AND ")}
       ORDER BY
         array_position(
@@ -193,10 +177,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             'closed_won',
             'closed_lost'
           ]::text[],
-          c.pipeline_stage::text
+          cc.pipeline_stage::text
         ) ASC NULLS LAST,
-        COALESCE(pc.case_updated_at, c.updated_at) DESC NULLS LAST,
-        COALESCE(pc.case_created_at, c.created_at) DESC NULLS LAST,
+        cc.updated_at DESC NULLS LAST,
+        cc.created_at DESC NULLS LAST,
         c.full_name ASC
     `;
 
@@ -209,7 +193,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }));
 
     const byStage = new Map<KanbanStage, any[]>();
-    for (const stage of PIPELINE_ORDER) byStage.set(stage, []);
+    for (const stage of PIPELINE_ORDER) {
+      byStage.set(stage, []);
+    }
 
     for (const row of rows) {
       const stage = isKanbanStage(row.pipeline_stage) ? row.pipeline_stage : "lead";
@@ -230,8 +216,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         listing_ids: Array.isArray(row.listing_ids) ? row.listing_ids : [],
         listing_titles: Array.isArray(row.listing_titles) ? row.listing_titles : [],
         latest_listing_id: row.latest_listing_id ?? null,
-        created_at: row.case_created_at ?? row.created_at,
-        updated_at: row.case_updated_at ?? row.updated_at,
+        created_at: row.case_created_at ?? row.contact_created_at,
+        updated_at: row.case_updated_at ?? row.contact_updated_at,
       });
     }
 

@@ -92,8 +92,8 @@ const COLUMN_GAP = 16;
 const TRACK_STEP = COLUMN_WIDTH + COLUMN_GAP;
 
 const ANIMATION_MS = 420;
-const EDGE_THRESHOLD_PX = 84;
-const EDGE_HOLD_MS = 280;
+const EDGE_THRESHOLD_PX = 96;
+const EDGE_HOLD_MS = 320;
 
 function clsx(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
@@ -187,7 +187,9 @@ function SortableCard({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: item.party_id });
+  } = useSortable({
+    id: item.party_id,
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -200,73 +202,76 @@ function SortableCard({
       style={style}
       className={clsx(
         "transition-all duration-200",
-        isDragging && "z-30 opacity-70 scale-[0.985]"
+        isDragging && "z-40 opacity-75 scale-[0.985]"
       )}
     >
       <div
+        {...attributes}
+        {...listeners}
         className={clsx(
-          "w-full rounded-2xl border border-white/10 bg-white/10 p-4 text-left text-white shadow-lg transition hover:bg-white/15",
-          saving && "opacity-70"
+          "w-full cursor-grab rounded-2xl border border-white/10 bg-white/10 p-4 text-left text-white shadow-lg transition select-none",
+          "hover:bg-white/15 active:cursor-grabbing",
+          saving && "opacity-70",
+          isDragging && "shadow-2xl ring-1 ring-white/15"
         )}
+        title="Przeciągnij kartę"
+        aria-label="Przeciągnij kartę"
       >
         <div className="flex items-start justify-between gap-3">
-          <button
-            type="button"
-            onClick={() => onOpenContact(item.party_id)}
-            className="min-w-0 flex-1 text-left"
-          >
-            <div className="truncate text-sm font-bold text-white">
-              {item.full_name || "—"}
-            </div>
-
-            <div className="mt-1 flex flex-wrap gap-1.5">
-              {item.case_type ? (
-                <span className="rounded-lg bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
-                  {item.case_type}
-                </span>
-              ) : null}
-
-              {item.case_status ? (
-                <span className="rounded-lg bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
-                  {item.case_status}
-                </span>
-              ) : null}
-
-              {typeof item.listing_count === "number" ? (
-                <span className="rounded-lg bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
-                  oferty: {item.listing_count}
-                </span>
-              ) : null}
-            </div>
-
-            <div className="mt-3 space-y-1 text-xs text-white/65">
-              <div>{item.phone || "—"}</div>
-              <div className="truncate">{item.email || "—"}</div>
-              <div>
-                {item.assigned_user_name || "—"} • {formatDate(item.updated_at)}
+          <div className="min-w-0 flex-1">
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenContact(item.party_id);
+              }}
+              className="min-w-0 w-full text-left"
+            >
+              <div className="truncate text-sm font-bold text-white">
+                {item.full_name || "—"}
               </div>
-            </div>
-          </button>
 
-          <button
-            type="button"
-            {...attributes}
-            {...listeners}
-            className={clsx(
-              "shrink-0 cursor-grab rounded-2xl border border-white/10 bg-white/10 px-3 py-2 text-sm text-white/75 shadow-sm transition",
-              "hover:bg-white/15 hover:text-white active:cursor-grabbing"
-            )}
-            title="Przeciągnij kartę"
-            aria-label="Przeciągnij kartę"
-          >
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {item.case_type ? (
+                  <span className="rounded-lg bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
+                    {item.case_type}
+                  </span>
+                ) : null}
+
+                {item.case_status ? (
+                  <span className="rounded-lg bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
+                    {item.case_status}
+                  </span>
+                ) : null}
+
+                {typeof item.listing_count === "number" ? (
+                  <span className="rounded-lg bg-white/10 px-2 py-0.5 text-[10px] text-white/75 ring-1 ring-white/10">
+                    oferty: {item.listing_count}
+                  </span>
+                ) : null}
+              </div>
+
+              <div className="mt-3 space-y-1 text-xs text-white/65">
+                <div>{item.phone || "—"}</div>
+                <div className="truncate">{item.email || "—"}</div>
+                <div>
+                  {item.assigned_user_name || "—"} • {formatDate(item.updated_at)}
+                </div>
+              </div>
+            </button>
+          </div>
+
+          <div className="shrink-0 rounded-xl border border-white/10 bg-white/10 px-2.5 py-1.5 text-xs text-white/70">
             ⋮⋮
-          </button>
+          </div>
         </div>
 
         {item.latest_listing_id ? (
           <div className="mt-3">
             <button
               type="button"
+              onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
                 onOpenListing(item.latest_listing_id!);
@@ -390,7 +395,7 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
 
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
+  const [isDraggingCard, setIsDraggingCard] = useState(false);
   const [trackOffset, setTrackOffset] = useState(-TRACK_STEP);
 
   const [edgeHint, setEdgeHint] = useState<EdgeSide>(null);
@@ -408,7 +413,7 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 4,
+        distance: 6,
       },
     })
   );
@@ -514,7 +519,6 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
     setCarouselIndex(nextIndex);
     setTrackOffset(-TRACK_STEP);
     setIsAnimating(false);
-
     edgeEnteredAtRef.current = performance.now();
   }
 
@@ -568,16 +572,8 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
     const leftDistance = clientX - rect.left;
     const rightDistance = rect.right - clientX;
 
-    const leftStrength = clamp(
-      1 - leftDistance / EDGE_THRESHOLD_PX,
-      0,
-      1
-    );
-    const rightStrength = clamp(
-      1 - rightDistance / EDGE_THRESHOLD_PX,
-      0,
-      1
-    );
+    const leftStrength = clamp(1 - leftDistance / EDGE_THRESHOLD_PX, 0, 1);
+    const rightStrength = clamp(1 - rightDistance / EDGE_THRESHOLD_PX, 0, 1);
 
     setEdgeGlowLeft(leftStrength);
     setEdgeGlowRight(rightStrength);
@@ -596,7 +592,7 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
   }
 
   useEffect(() => {
-    if (!isDragging) {
+    if (!isDraggingCard) {
       pointerXRef.current = null;
       resetEdgeFeedback();
       if (rafRef.current) {
@@ -620,11 +616,8 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
         const heldMs = now - edgeEnteredAt;
 
         if (heldMs >= EDGE_HOLD_MS) {
-          if (activeEdge === "left") {
-            goPrev();
-          } else {
-            goNext();
-          }
+          if (activeEdge === "left") goPrev();
+          if (activeEdge === "right") goNext();
           edgeEnteredAtRef.current = performance.now();
         }
       }
@@ -639,7 +632,7 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
         window.cancelAnimationFrame(rafRef.current);
       }
     };
-  }, [isDragging, isAnimating, carouselIndex, rotatingColumns.length]);
+  }, [isDraggingCard, isAnimating, carouselIndex, rotatingColumns.length]);
 
   function openContact(partyId: string) {
     router.push(`/panel?view=contacts&clientId=${encodeURIComponent(partyId)}`);
@@ -654,8 +647,6 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
 
     const activeId = String(event.active?.id ?? "");
     const overId = String(event.over?.id ?? "");
-
-    console.log("KANBAN_DND", { activeId, overId });
 
     if (!activeId || !overId) return;
 
@@ -704,6 +695,7 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          clientCaseId: movedItem.client_case_id ?? null,
           partyId: movedItem.party_id,
           pipelineStage: toCol.id,
         }),
@@ -803,7 +795,7 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
           sensors={sensors}
           collisionDetection={closestCorners}
           onDragStart={() => {
-            setIsDragging(true);
+            setIsDraggingCard(true);
             edgeEnteredAtRef.current = null;
           }}
           onDragMove={(event) => {
@@ -819,13 +811,13 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
             }
           }}
           onDragEnd={(event) => {
-            setIsDragging(false);
+            setIsDraggingCard(false);
             pointerXRef.current = null;
             resetEdgeFeedback();
             handleDragEnd(event);
           }}
           onDragCancel={() => {
-            setIsDragging(false);
+            setIsDraggingCard(false);
             pointerXRef.current = null;
             resetEdgeFeedback();
           }}
@@ -849,30 +841,26 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
                 className="relative w-[1080px] max-w-[calc(100vw-520px)] overflow-hidden rounded-[28px]"
               >
                 <div
-                  className={clsx(
-                    "pointer-events-none absolute inset-y-0 left-0 z-20 w-20 transition-all duration-150"
-                  )}
+                  className="pointer-events-none absolute inset-y-0 left-0 z-20 w-24 transition-all duration-150"
                   style={{
-                    background: `linear-gradient(to right, rgba(56, 189, 248, ${0.06 + edgeGlowLeft * 0.22}), rgba(56, 189, 248, ${0.02 + edgeGlowLeft * 0.08}), transparent)`,
+                    background: `linear-gradient(to right, rgba(56, 189, 248, ${0.05 + edgeGlowLeft * 0.22}), rgba(56, 189, 248, ${0.02 + edgeGlowLeft * 0.08}), transparent)`,
                     boxShadow:
                       edgeHint === "left"
-                        ? `inset 16px 0 40px rgba(56, 189, 248, ${0.08 + edgeGlowLeft * 0.22})`
+                        ? `inset 18px 0 44px rgba(56, 189, 248, ${0.08 + edgeGlowLeft * 0.22})`
                         : "none",
-                    opacity: 0.35 + edgeGlowLeft * 0.65,
+                    opacity: 0.3 + edgeGlowLeft * 0.7,
                   }}
                 />
 
                 <div
-                  className={clsx(
-                    "pointer-events-none absolute inset-y-0 right-0 z-20 w-20 transition-all duration-150"
-                  )}
+                  className="pointer-events-none absolute inset-y-0 right-0 z-20 w-24 transition-all duration-150"
                   style={{
-                    background: `linear-gradient(to left, rgba(56, 189, 248, ${0.06 + edgeGlowRight * 0.22}), rgba(56, 189, 248, ${0.02 + edgeGlowRight * 0.08}), transparent)`,
+                    background: `linear-gradient(to left, rgba(56, 189, 248, ${0.05 + edgeGlowRight * 0.22}), rgba(56, 189, 248, ${0.02 + edgeGlowRight * 0.08}), transparent)`,
                     boxShadow:
                       edgeHint === "right"
-                        ? `inset -16px 0 40px rgba(56, 189, 248, ${0.08 + edgeGlowRight * 0.22})`
+                        ? `inset -18px 0 44px rgba(56, 189, 248, ${0.08 + edgeGlowRight * 0.22})`
                         : "none",
-                    opacity: 0.35 + edgeGlowRight * 0.65,
+                    opacity: 0.3 + edgeGlowRight * 0.7,
                   }}
                 />
 

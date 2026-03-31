@@ -56,6 +56,234 @@ function parseStage(v: unknown): KanbanStage {
   return s as KanbanStage;
 }
 
+async function resolveClientCase(params: {
+  officeId: string;
+  clientCaseId?: string | null;
+  partyId?: string | null;
+}) {
+  const { officeId, clientCaseId, partyId } = params;
+
+  if (clientCaseId) {
+    const byCaseId = await pool.query<{
+      client_case_id: string;
+      office_id: string;
+      party_id: string;
+      pipeline_stage: string | null;
+      full_name: string | null;
+    }>(
+      `
+      SELECT
+        cc.id::text AS client_case_id,
+        cc.office_id::text AS office_id,
+        cc.party_id::text AS party_id,
+        cc.pipeline_stage::text AS pipeline_stage,
+        p.full_name
+      FROM public.client_cases cc
+      JOIN public.parties p
+        ON p.id = cc.party_id
+       AND p.office_id = cc.office_id
+      WHERE cc.id = $1::uuid
+        AND cc.office_id = $2::uuid
+      LIMIT 1
+      `,
+      [clientCaseId, officeId]
+    );
+
+    return byCaseId.rows[0] ?? null;
+  }
+
+  if (partyId) {
+    const byPartyId = await pool.query<{
+      client_case_id: string;
+      office_id: string;
+      party_id: string;
+      pipeline_stage: string | null;
+      full_name: string | null;
+    }>(
+      `
+      SELECT
+        cc.id::text AS client_case_id,
+        cc.office_id::text AS office_id,
+        cc.party_id::text AS party_id,
+        cc.pipeline_stage::text AS pipeline_stage,
+        p.full_name
+      FROM public.client_cases cc
+      JOIN public.parties p
+        ON p.id = cc.party_id
+       AND p.office_id = cc.office_id
+      WHERE cc.party_id = $1::uuid
+        AND cc.office_id = $2::uuid
+      ORDER BY
+        CASE WHEN cc.status = 'active' THEN 0 ELSE 1 END,
+        cc.created_at ASC,
+        cc.id ASC
+      LIMIT 1
+      `,
+      [partyId, officeId]
+    );
+
+    return byPartyId.rows[0] ?? null;
+  }
+
+  throw new Error("MISSING_CLIENT_CASE_ID_OR_PARTY_ID");
+}
+
+async function findCalendarId(officeId: string, userId: string) {
+  const calRes = await pool.query<{ id: string }>(
+    `
+    SELECT id::text
+    FROM public.calendars
+    WHERE org_id = $1::uuid
+      AND owner_user_id = $2::uuid
+    ORDER BY is_default DESC, created_at ASC
+    LIMIT 1
+    `,
+    [officeId, userId]
+  );
+
+  return calRes.rows[0]?.id ?? null;
+}
+
+async function ensureWorkflowEvent(params: {
+  officeId: string;
+  calendarId: string;
+  userId: string;
+  partyId: string;
+  clientCaseId: string;
+  title: string;
+  type: "call" | "meeting";
+  durationMinutes: number;
+}) {
+  const {
+    officeId,
+    calendarId,
+    userId,
+    partyId,
+    clientCaseId,
+    title,
+    type,
+    durationMinutes,
+  } = params;
+
+  const duplicateCheck = await pool.query<{ id: string }>(
+    `
+    SELECT e.id::text
+    FROM public.events e
+    WHERE e.org_id = $1::uuid
+      AND e.calendar_id = $2::uuid
+      AND e.client_id = $3::uuid
+      AND e.type = $4::public.event_type
+      AND e.source = 'workflow'::public.event_source
+      AND e.start_at >= now() - interval '10 minutes'
+    ORDER BY e.created_at DESC
+    LIMIT 1
+    `,
+    [officeId, calendarId, partyId, type]
+  );
+
+  if (duplicateCheck.rows[0]) {
+    return duplicateCheck.rows[0].id;
+  }
+
+  const insertRes = await pool.query<{ id: string }>(
+    `
+    INSERT INTO public.events (
+      org_id,
+      calendar_id,
+      title,
+      start_at,
+      end_at,
+      created_by,
+      updated_by,
+      type,
+      source,
+      client_id,
+      meta
+    )
+    VALUES (
+      $1::uuid,
+      $2::uuid,
+      $3,
+      now(),
+      now() + ($4::text || ' minutes')::interval,
+      $5::uuid,
+      $5::uuid,
+      $6::public.event_type,
+      'workflow'::public.event_source,
+      $7::uuid,
+      jsonb_build_object(
+        'workflow', true,
+        'clientCaseId', $8::uuid
+      )
+    )
+    RETURNING id::text
+    `,
+    [officeId, calendarId, title, String(durationMinutes), userId, type, partyId, clientCaseId]
+  );
+
+  return insertRes.rows[0]?.id ?? null;
+}
+
+async function ensureOfferDraft(params: {
+  req: NextApiRequest;
+  officeId: string;
+  partyId: string;
+}) {
+  const { req, officeId, partyId } = params;
+
+  const listingCheck = await pool.query<{ listing_id: string }>(
+    `
+    SELECT lp.listing_id::text
+    FROM public.listing_parties lp
+    JOIN public.listings l
+      ON l.id = lp.listing_id
+    WHERE lp.party_id = $1::uuid
+      AND l.office_id = $2::uuid
+      AND l.status IN ('draft', 'active')
+    LIMIT 1
+    `,
+    [partyId, officeId]
+  );
+
+  if (listingCheck.rows[0]?.listing_id) {
+    return listingCheck.rows[0].listing_id;
+  }
+
+  const proto =
+    optString(req.headers["x-forwarded-proto"]) ||
+    (req.headers.host?.includes("localhost") ? "http" : "https");
+
+  const host =
+    optString(req.headers["x-forwarded-host"]) ||
+    optString(req.headers.host);
+
+  if (!host) {
+    throw new Error("MISSING_REQUEST_HOST");
+  }
+
+  const offerRes = await fetch(`${proto}://${host}/api/offers/create`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      cookie: req.headers.cookie || "",
+    },
+    body: JSON.stringify({
+      recordType: "offer",
+      transactionType: "sale",
+      status: "draft",
+      clientId: partyId,
+    }),
+  });
+
+  const offerJson = await offerRes.json().catch(() => null);
+
+  if (!offerRes.ok) {
+    throw new Error(offerJson?.error ?? `OFFERS_CREATE_HTTP_${offerRes.status}`);
+  }
+
+  return offerJson?.listingId ?? null;
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     if (req.method !== "POST") {
@@ -66,172 +294,84 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const userId = mustUserId(req);
     const officeId = await getOfficeIdForUserId(userId);
 
-    const partyId = mustString(req.body?.partyId, "partyId");
     const nextStage = parseStage(req.body?.pipelineStage);
+    const clientCaseId = optString(req.body?.clientCaseId);
+    const partyId = optString(req.body?.partyId);
 
-    const existing = await pool.query<{
-      id: string;
-      office_id: string;
-      pipeline_stage: string | null;
-      full_name: string | null;
-    }>(
-      `
-      SELECT
-        p.id::text,
-        p.office_id::text,
-        p.pipeline_stage::text,
-        p.full_name
-      FROM public.parties p
-      WHERE p.id = $1::uuid
-        AND p.office_id = $2::uuid
-      LIMIT 1
-      `,
-      [partyId, officeId]
-    );
+    const existing = await resolveClientCase({
+      officeId,
+      clientCaseId,
+      partyId,
+    });
 
-    const row = existing.rows[0];
-    if (!row) {
-      return res.status(404).json({ error: "PARTY_NOT_FOUND" });
+    if (!existing) {
+      return res.status(404).json({ error: "CLIENT_CASE_NOT_FOUND" });
     }
 
-    const partyName = row.full_name?.trim() || "Klient";
+    const resolvedClientCaseId = existing.client_case_id;
+    const resolvedPartyId = existing.party_id;
+    const previousStage = existing.pipeline_stage;
+    const partyName = existing.full_name?.trim() || "Klient";
 
     await pool.query(
       `
-      UPDATE public.parties
+      UPDATE public.client_cases
       SET
         pipeline_stage = $2::public.party_pipeline_stage_type,
         updated_at = now()
       WHERE id = $1::uuid
         AND office_id = $3::uuid
       `,
-      [partyId, nextStage, officeId]
+      [resolvedClientCaseId, nextStage, officeId]
     );
 
-    // ======================
-    // WORKFLOW LOGIC
-    // ======================
+    let workflowEventId: string | null = null;
+    let createdListingId: string | null = null;
 
-    const calRes = await pool.query<{ id: string }>(
-      `
-      SELECT id
-      FROM calendars
-      WHERE org_id = $1
-        AND owner_user_id = $2
-      ORDER BY is_default DESC
-      LIMIT 1
-      `,
-      [officeId, userId]
-    );
+    const calendarId = await findCalendarId(officeId, userId);
 
-    const calendarId = calRes.rows[0]?.id ?? null;
-
-    // CONTACTED -> event typu call
     if (nextStage === "contacted" && calendarId) {
-      await pool.query(
-        `
-        INSERT INTO events (
-          org_id,
-          calendar_id,
-          title,
-          start_at,
-          end_at,
-          created_by,
-          type,
-          source,
-          client_id
-        )
-        VALUES (
-          $1,
-          $2,
-          $3,
-          now(),
-          now() + interval '5 minutes',
-          $4,
-          'call',
-          'workflow',
-          $5
-        )
-        `,
-        [officeId, calendarId, `Telefon: ${partyName}`, userId, partyId]
-      );
+      workflowEventId = await ensureWorkflowEvent({
+        officeId,
+        calendarId,
+        userId,
+        partyId: resolvedPartyId,
+        clientCaseId: resolvedClientCaseId,
+        title: `Telefon: ${partyName}`,
+        type: "call",
+        durationMinutes: 5,
+      });
     }
 
-    // MEETING -> event typu meeting
     if (nextStage === "meeting_scheduled" && calendarId) {
-      await pool.query(
-        `
-        INSERT INTO events (
-          org_id,
-          calendar_id,
-          title,
-          start_at,
-          end_at,
-          created_by,
-          type,
-          source,
-          client_id
-        )
-        VALUES (
-          $1,
-          $2,
-          $3,
-          now(),
-          now() + interval '30 minutes',
-          $4,
-          'meeting',
-          'workflow',
-          $5
-        )
-        `,
-        [officeId, calendarId, `Spotkanie: ${partyName}`, userId, partyId]
-      );
+      workflowEventId = await ensureWorkflowEvent({
+        officeId,
+        calendarId,
+        userId,
+        partyId: resolvedPartyId,
+        clientCaseId: resolvedClientCaseId,
+        title: `Spotkanie: ${partyName}`,
+        type: "meeting",
+        durationMinutes: 30,
+      });
     }
 
-    // OFFER PREPARATION -> utwórz draft oferty, jeśli nie ma aktywnej/draft
     if (nextStage === "offer_preparation") {
-      const listingCheck = await pool.query<{ listing_id: string }>(
-        `
-        SELECT lp.listing_id::text
-        FROM public.listing_parties lp
-        JOIN public.listings l
-          ON l.id = lp.listing_id
-        WHERE lp.party_id = $1::uuid
-          AND l.office_id = $2::uuid
-          AND l.status IN ('draft', 'active')
-        LIMIT 1
-        `,
-        [partyId, officeId]
-      );
-
-      if (!listingCheck.rows[0]) {
-        const offerRes = await fetch(`${req.headers["x-forwarded-proto"] ?? "https"}://${req.headers["x-forwarded-host"] ?? req.headers.host}/api/offers/create`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            cookie: req.headers.cookie || "",
-          },
-          body: JSON.stringify({
-            recordType: "offer",
-            transactionType: "sale",
-            status: "draft",
-            clientId: partyId,
-          }),
-        });
-
-        const offerJson = await offerRes.json().catch(() => null);
-
-        if (!offerRes.ok) {
-          throw new Error(offerJson?.error ?? `OFFERS_CREATE_HTTP_${offerRes.status}`);
-        }
-      }
+      createdListingId = await ensureOfferDraft({
+        req,
+        officeId,
+        partyId: resolvedPartyId,
+      });
     }
 
     return res.status(200).json({
       ok: true,
-      partyId,
-      previousStage: row.pipeline_stage,
+      clientCaseId: resolvedClientCaseId,
+      partyId: resolvedPartyId,
+      previousStage,
       pipelineStage: nextStage,
+      workflowEventId,
+      listingId: createdListingId,
     });
   } catch (e: any) {
     if (e?.message === "UNAUTHORIZED") {
