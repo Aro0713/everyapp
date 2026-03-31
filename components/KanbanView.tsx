@@ -270,7 +270,7 @@ function DroppableColumn({
   return (
     <div
       className={clsx(
-        "w-[260px] xl:w-[280px] shrink-0 rounded-3xl border p-3 shadow-xl backdrop-blur-xl",
+        "w-[300px] xl:w-[340px] shrink-0 rounded-3xl border p-3 shadow-xl backdrop-blur-xl",
         stageTone(col.id),
         isOver && "ring-2 ring-white/20"
       )}
@@ -323,7 +323,7 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
   const [err, setErr] = useState<string | null>(null);
   const [carouselIndex, setCarouselIndex] = useState(0);
 
-  const visibleColumnsCount = 4;
+  const visibleColumnsCount = 3;
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -563,7 +563,7 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
                 </div>
               ) : null}
 
-              <div className="flex min-w-0 flex-1 gap-4 overflow-hidden">
+              <div className="flex min-w-0 flex-1 gap-4 overflow-hidden transition-all duration-300">
                 {visibleColumns.map((col) => (
                   <div key={col.id} className="shrink-0">
                     <DroppableColumn
