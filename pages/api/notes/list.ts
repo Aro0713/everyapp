@@ -65,7 +65,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         SELECT
           cn.id::text AS id,
           'client'::text AS note_source,
-          cn.office_id::text AS office_id,
+          cn.office_id AS office_id,
           COALESCE(cn.author_user_id, cn.user_id)::text AS user_id,
           cn.note,
           cn.created_at,
@@ -90,7 +90,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         SELECT
           ln.id::text AS id,
           'listing'::text AS note_source,
-          ln.office_id::text AS office_id,
+          ln.office_id AS office_id,
           ln.user_id::text AS user_id,
           ln.note,
           ln.created_at,
@@ -150,7 +150,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         SELECT
           en.id::text AS id,
           'external_listing'::text AS note_source,
-          en.office_id::text AS office_id,
+          en.office_id AS office_id,
           en.user_id::text AS user_id,
           en.note,
           en.created_at,
