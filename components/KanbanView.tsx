@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import { t } from "@/utils/i18n";
 import type { LangKey } from "@/utils/translations";
@@ -325,6 +325,9 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
 
   const visibleColumnsCount = 3;
 
+  const carouselViewportRef = useRef<HTMLDivElement | null>(null);
+  const dragRotateTsRef = useRef(0);
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -410,6 +413,28 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
       if (!rotatingColumns.length) return 0;
       return (prev + 1) % rotatingColumns.length;
     });
+  }
+
+  function maybeRotateCarousel(clientX: number) {
+    const el = carouselViewportRef.current;
+    if (!el || !rotatingColumns.length) return;
+
+    const rect = el.getBoundingClientRect();
+    const edgeThreshold = 120;
+    const now = Date.now();
+
+    if (now - dragRotateTsRef.current < 280) return;
+
+    if (clientX >= rect.right - edgeThreshold) {
+      dragRotateTsRef.current = now;
+      goNext();
+      return;
+    }
+
+    if (clientX <= rect.left + edgeThreshold) {
+      dragRotateTsRef.current = now;
+      goPrev();
+    }
   }
 
   function openContact(partyId: string) {
@@ -547,7 +572,24 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
-          onDragEnd={handleDragEnd}
+          onDragMove={(event) => {
+            const activatorEvent = event.activatorEvent as MouseEvent | undefined;
+            const x =
+              activatorEvent && typeof activatorEvent.clientX === "number"
+                ? activatorEvent.clientX
+                : null;
+
+            if (x != null) {
+              maybeRotateCarousel(x);
+            }
+          }}
+          onDragEnd={(event) => {
+            dragRotateTsRef.current = 0;
+            handleDragEnd(event);
+          }}
+          onDragCancel={() => {
+            dragRotateTsRef.current = 0;
+          }}
         >
           <div className="overflow-hidden pb-3">
             <div className="flex gap-4">
@@ -563,7 +605,10 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
                 </div>
               ) : null}
 
-              <div className="flex min-w-0 flex-1 gap-4 overflow-hidden transition-all duration-300">
+              <div
+                ref={carouselViewportRef}
+                className="flex w-[1080px] max-w-[calc(100vw-520px)] gap-4 overflow-hidden transition-all duration-300"
+              >
                 {visibleColumns.map((col) => (
                   <div key={col.id} className="shrink-0">
                     <DroppableColumn
