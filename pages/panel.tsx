@@ -11,6 +11,7 @@ import OffersView from "@/components/OffersView";
 import OfficeDealsView from "@/components/OfficeDealsView";
 import Image from "next/image";
 import ContactsView from "@/components/ContactsView";
+import NotesView from "@/components/NotesView";
 import KanbanView from "@/components/KanbanView";
 
 function getCookie(name: string) {
@@ -1425,10 +1426,9 @@ export default function PanelPage() {
                 subtitle={t(lang, "panelDownloadsSub" as any)}
               />
             ) : activeView === "notes" ? (
-              <PlaceholderView
-                title={t(lang, "panelNavNotes" as any)}
-                subtitle={t(lang, "panelNotesSub" as any)}
-              />
+              <div className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-4 sm:px-4 lg:px-6">
+                <NotesView lang={lang} />
+              </div>
             ) : activeView === "menuSettings" ? (
               <PlaceholderView
                 title={t(lang, "panelNavMenuSettings" as any)}
