@@ -66,6 +66,8 @@ type KanbanResponse = {
   stages?: KanbanStage[];
 };
 
+type EdgeSide = "left" | "right" | null;
+
 const LEAD_STAGE: KanbanStage = "lead";
 
 const CAROUSEL_STAGES: KanbanStage[] = [
@@ -84,13 +86,21 @@ const CAROUSEL_STAGES: KanbanStage[] = [
 
 const VISIBLE_COLUMNS_COUNT = 3;
 const SIDE_PREVIEW_COUNT = 1;
+
 const COLUMN_WIDTH = 340;
 const COLUMN_GAP = 16;
 const TRACK_STEP = COLUMN_WIDTH + COLUMN_GAP;
+
 const ANIMATION_MS = 420;
+const EDGE_THRESHOLD_PX = 84;
+const EDGE_HOLD_MS = 280;
 
 function clsx(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function mapStageToKey(stage: string) {
@@ -188,7 +198,10 @@ function SortableCard({
     <div
       ref={setNodeRef}
       style={style}
-      className={clsx(isDragging && "z-20 opacity-60")}
+      className={clsx(
+        "transition-all duration-200",
+        isDragging && "z-30 opacity-70 scale-[0.985]"
+      )}
     >
       <div
         className={clsx(
@@ -239,8 +252,12 @@ function SortableCard({
             type="button"
             {...attributes}
             {...listeners}
-            className="cursor-grab rounded-xl border border-white/10 bg-white/10 px-2 py-1 text-xs text-white/70 active:cursor-grabbing"
-            title="Przeciągnij"
+            className={clsx(
+              "shrink-0 cursor-grab rounded-2xl border border-white/10 bg-white/10 px-3 py-2 text-sm text-white/75 shadow-sm transition",
+              "hover:bg-white/15 hover:text-white active:cursor-grabbing"
+            )}
+            title="Przeciągnij kartę"
+            aria-label="Przeciągnij kartę"
           >
             ⋮⋮
           </button>
@@ -285,9 +302,9 @@ function DroppableColumn({
   return (
     <div
       className={clsx(
-        "w-[300px] xl:w-[340px] shrink-0 rounded-3xl border p-3 shadow-xl backdrop-blur-xl",
+        "w-[300px] xl:w-[340px] shrink-0 rounded-3xl border p-3 shadow-xl backdrop-blur-xl transition-all duration-200",
         stageTone(col.id),
-        isOver && "ring-2 ring-white/20"
+        isOver && "ring-2 ring-white/25 shadow-2xl"
       )}
     >
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -348,7 +365,7 @@ function CarouselStageColumn({
     <div
       className={clsx(
         "w-[300px] xl:w-[340px] shrink-0 transition-all duration-500 ease-out",
-        isDimmed && "opacity-35 scale-[0.96]"
+        isDimmed && "opacity-35 scale-[0.965]"
       )}
       aria-hidden={isDimmed ? true : undefined}
     >
@@ -373,16 +390,25 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
 
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [trackOffset, setTrackOffset] = useState(-TRACK_STEP);
 
+  const [edgeHint, setEdgeHint] = useState<EdgeSide>(null);
+  const [edgeGlowLeft, setEdgeGlowLeft] = useState(0);
+  const [edgeGlowRight, setEdgeGlowRight] = useState(0);
+
   const carouselViewportRef = useRef<HTMLDivElement | null>(null);
-  const dragRotateTsRef = useRef(0);
   const animationTimerRef = useRef<number | null>(null);
+  const rafRef = useRef<number | null>(null);
+
+  const pointerXRef = useRef<number | null>(null);
+  const edgeEnteredAtRef = useRef<number | null>(null);
+  const currentEdgeRef = useRef<EdgeSide>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 6,
+        distance: 4,
       },
     })
   );
@@ -421,6 +447,9 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
     return () => {
       if (animationTimerRef.current) {
         window.clearTimeout(animationTimerRef.current);
+      }
+      if (rafRef.current) {
+        window.cancelAnimationFrame(rafRef.current);
       }
     };
   }, []);
@@ -473,10 +502,20 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
     setTrackOffset(-TRACK_STEP);
   }, [rotatingColumns.length, isAnimating]);
 
+  function resetEdgeFeedback() {
+    setEdgeHint(null);
+    setEdgeGlowLeft(0);
+    setEdgeGlowRight(0);
+    currentEdgeRef.current = null;
+    edgeEnteredAtRef.current = null;
+  }
+
   function finishSlide(nextIndex: number) {
     setCarouselIndex(nextIndex);
     setTrackOffset(-TRACK_STEP);
     setIsAnimating(false);
+
+    edgeEnteredAtRef.current = performance.now();
   }
 
   function goNext() {
@@ -516,31 +555,91 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
 
     animationTimerRef.current = window.setTimeout(() => {
       setIsAnimating(false);
+      edgeEnteredAtRef.current = performance.now();
     }, ANIMATION_MS);
   }
 
-  function maybeRotateCarousel(clientX: number) {
+  function updateEdgeState(clientX: number) {
     const el = carouselViewportRef.current;
-    if (!el || !rotatingColumns.length) return;
+    if (!el) return;
 
     const rect = el.getBoundingClientRect();
-    const edgeThreshold = 150;
-    const now = Date.now();
 
-    if (isAnimating) return;
-    if (now - dragRotateTsRef.current < 520) return;
+    const leftDistance = clientX - rect.left;
+    const rightDistance = rect.right - clientX;
 
-    if (clientX >= rect.right - edgeThreshold) {
-      dragRotateTsRef.current = now;
-      goNext();
+    const leftStrength = clamp(
+      1 - leftDistance / EDGE_THRESHOLD_PX,
+      0,
+      1
+    );
+    const rightStrength = clamp(
+      1 - rightDistance / EDGE_THRESHOLD_PX,
+      0,
+      1
+    );
+
+    setEdgeGlowLeft(leftStrength);
+    setEdgeGlowRight(rightStrength);
+
+    let nextEdge: EdgeSide = null;
+
+    if (leftDistance <= EDGE_THRESHOLD_PX) nextEdge = "left";
+    else if (rightDistance <= EDGE_THRESHOLD_PX) nextEdge = "right";
+
+    setEdgeHint(nextEdge);
+
+    if (currentEdgeRef.current !== nextEdge) {
+      currentEdgeRef.current = nextEdge;
+      edgeEnteredAtRef.current = nextEdge ? performance.now() : null;
+    }
+  }
+
+  useEffect(() => {
+    if (!isDragging) {
+      pointerXRef.current = null;
+      resetEdgeFeedback();
+      if (rafRef.current) {
+        window.cancelAnimationFrame(rafRef.current);
+      }
       return;
     }
 
-    if (clientX <= rect.left + edgeThreshold) {
-      dragRotateTsRef.current = now;
-      goPrev();
-    }
-  }
+    const tick = () => {
+      const pointerX = pointerXRef.current;
+      const activeEdge = currentEdgeRef.current;
+      const edgeEnteredAt = edgeEnteredAtRef.current;
+
+      if (
+        pointerX != null &&
+        activeEdge &&
+        edgeEnteredAt != null &&
+        !isAnimating
+      ) {
+        const now = performance.now();
+        const heldMs = now - edgeEnteredAt;
+
+        if (heldMs >= EDGE_HOLD_MS) {
+          if (activeEdge === "left") {
+            goPrev();
+          } else {
+            goNext();
+          }
+          edgeEnteredAtRef.current = performance.now();
+        }
+      }
+
+      rafRef.current = window.requestAnimationFrame(tick);
+    };
+
+    rafRef.current = window.requestAnimationFrame(tick);
+
+    return () => {
+      if (rafRef.current) {
+        window.cancelAnimationFrame(rafRef.current);
+      }
+    };
+  }, [isDragging, isAnimating, carouselIndex, rotatingColumns.length]);
 
   function openContact(partyId: string) {
     router.push(`/panel?view=contacts&clientId=${encodeURIComponent(partyId)}`);
@@ -703,6 +802,10 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
+          onDragStart={() => {
+            setIsDragging(true);
+            edgeEnteredAtRef.current = null;
+          }}
           onDragMove={(event) => {
             const activatorEvent = event.activatorEvent as MouseEvent | undefined;
             const x =
@@ -711,15 +814,20 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
                 : null;
 
             if (x != null) {
-              maybeRotateCarousel(x);
+              pointerXRef.current = x;
+              updateEdgeState(x);
             }
           }}
           onDragEnd={(event) => {
-            dragRotateTsRef.current = 0;
+            setIsDragging(false);
+            pointerXRef.current = null;
+            resetEdgeFeedback();
             handleDragEnd(event);
           }}
           onDragCancel={() => {
-            dragRotateTsRef.current = 0;
+            setIsDragging(false);
+            pointerXRef.current = null;
+            resetEdgeFeedback();
           }}
         >
           <div className="overflow-hidden pb-3">
@@ -740,8 +848,36 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
                 ref={carouselViewportRef}
                 className="relative w-[1080px] max-w-[calc(100vw-520px)] overflow-hidden rounded-[28px]"
               >
-                <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-16 bg-gradient-to-r from-slate-950/75 to-transparent" />
-                <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-16 bg-gradient-to-l from-slate-950/75 to-transparent" />
+                <div
+                  className={clsx(
+                    "pointer-events-none absolute inset-y-0 left-0 z-20 w-20 transition-all duration-150"
+                  )}
+                  style={{
+                    background: `linear-gradient(to right, rgba(56, 189, 248, ${0.06 + edgeGlowLeft * 0.22}), rgba(56, 189, 248, ${0.02 + edgeGlowLeft * 0.08}), transparent)`,
+                    boxShadow:
+                      edgeHint === "left"
+                        ? `inset 16px 0 40px rgba(56, 189, 248, ${0.08 + edgeGlowLeft * 0.22})`
+                        : "none",
+                    opacity: 0.35 + edgeGlowLeft * 0.65,
+                  }}
+                />
+
+                <div
+                  className={clsx(
+                    "pointer-events-none absolute inset-y-0 right-0 z-20 w-20 transition-all duration-150"
+                  )}
+                  style={{
+                    background: `linear-gradient(to left, rgba(56, 189, 248, ${0.06 + edgeGlowRight * 0.22}), rgba(56, 189, 248, ${0.02 + edgeGlowRight * 0.08}), transparent)`,
+                    boxShadow:
+                      edgeHint === "right"
+                        ? `inset -16px 0 40px rgba(56, 189, 248, ${0.08 + edgeGlowRight * 0.22})`
+                        : "none",
+                    opacity: 0.35 + edgeGlowRight * 0.65,
+                  }}
+                />
+
+                <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-12 bg-gradient-to-r from-slate-950/70 to-transparent" />
+                <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-gradient-to-l from-slate-950/70 to-transparent" />
 
                 <div
                   className="flex gap-4 will-change-transform"
