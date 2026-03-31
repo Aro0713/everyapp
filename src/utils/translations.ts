@@ -8645,8 +8645,39 @@ panelPipelineSub: {
   lt: "Atvejų ir pardavimo etapų kanban lenta",
   vi: "Kanban cho hồ sơ và giai đoạn bán hàng",
 },
+pipelineInstructionTitle: {
+  pl: "Jak korzystać z pipeline",
+  en: "How to use the pipeline",
+  de: "So verwendest du die Pipeline",
+  cs: "Jak používat pipeline",
+  sk: "Ako používať pipeline",
+  ua: "Як користуватися воронкою",
+  lt: "Kaip naudotis pipeline",
+  vi: "Cách sử dụng pipeline",
+},
 
-// kolumny pipeline (KLUCZOWE)
+pipelineInstructionBody: {
+  pl: "Przeciągnij kartę do kolejnego etapu sprzedaży. Strzałki przewijają karuzelę etapów. Kliknięcie karty otwiera kontakt, a link na karcie otwiera powiązaną ofertę.",
+  en: "Drag a card to the next sales stage. The arrows scroll through the stage carousel. Clicking a card opens the contact, and the link on the card opens the related listing.",
+  de: "Ziehe eine Karte in die nächste Verkaufsphase. Mit den Pfeilen blätterst du durch das Karussell der Phasen. Ein Klick auf die Karte öffnet den Kontakt, der Link auf der Karte die verknüpfte Immobilie.",
+  cs: "Přetáhni kartu do další fáze prodeje. Šipky posouvají karusel fází. Kliknutí na kartu otevře kontakt a odkaz na kartě otevře související nabídku.",
+  sk: "Potiahni kartu do ďalšej fázy predaja. Šípky posúvajú karusel fáz. Kliknutie na kartu otvorí kontakt a odkaz na karte otvorí súvisiacu ponuku.",
+  ua: "Перетягни картку до наступного етапу продажу. Стрілки прокручують карусель етапів. Натискання на картку відкриває контакт, а посилання на картці відкриває пов’язану пропозицію.",
+  lt: "Perkelk kortelę į kitą pardavimo etapą. Rodyklės slenka etapų karuselę. Spustelėjus kortelę atidaromas kontaktas, o nuoroda kortelėje atidaro susijusį pasiūlymą.",
+  vi: "Kéo thẻ sang giai đoạn bán hàng tiếp theo. Các mũi tên sẽ cuộn qua vòng quay các giai đoạn. Nhấp vào thẻ để mở liên hệ, còn liên kết trên thẻ sẽ mở bất động sản liên quan.",
+},
+
+pipelineInstructionLeadPinned: {
+  pl: "Kolumna Lead jest przypięta na stałe po lewej stronie.",
+  en: "The Lead column is pinned on the left side.",
+  de: "Die Lead-Spalte ist dauerhaft links angeheftet.",
+  cs: "Sloupec Lead je trvale připnutý vlevo.",
+  sk: "Stĺpec Lead je natrvalo pripnutý vľavo.",
+  ua: "Стовпець Lead постійно закріплений ліворуч.",
+  lt: "Lead stulpelis visada prisegtas kairėje pusėje.",
+  vi: "Cột Lead luôn được ghim cố định ở bên trái.",
+},
+
 pipelineLead: {
   pl: "Lead",
   en: "Lead",

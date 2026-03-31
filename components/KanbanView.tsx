@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import { t } from "@/utils/i18n";
 import type { LangKey } from "@/utils/translations";
@@ -82,6 +82,13 @@ const CAROUSEL_STAGES: KanbanStage[] = [
   "closed_lost",
 ];
 
+const VISIBLE_COLUMNS_COUNT = 3;
+const SIDE_PREVIEW_COUNT = 1;
+const COLUMN_WIDTH = 340;
+const COLUMN_GAP = 16;
+const TRACK_STEP = COLUMN_WIDTH + COLUMN_GAP;
+const ANIMATION_MS = 420;
+
 function clsx(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
 }
@@ -133,12 +140,20 @@ function stageTone(stage: string) {
   return "border-white/10 bg-white/5";
 }
 
-function rotateStages<T>(arr: T[], startIndex: number, visibleCount: number) {
+function buildCarouselWindow<T>(
+  arr: T[],
+  startIndex: number,
+  visibleCount: number,
+  sidePreview = 1
+) {
   if (!arr.length) return [];
   const out: T[] = [];
-  for (let i = 0; i < visibleCount; i++) {
-    out.push(arr[(startIndex + i) % arr.length]);
+
+  for (let i = -sidePreview; i < visibleCount + sidePreview; i++) {
+    const idx = (startIndex + i + arr.length) % arr.length;
+    out.push(arr[idx]);
   }
+
   return out;
 }
 
@@ -314,6 +329,40 @@ function DroppableColumn({
   );
 }
 
+function CarouselStageColumn({
+  col,
+  lang,
+  savingId,
+  onOpenContact,
+  onOpenListing,
+  isDimmed,
+}: {
+  col: KanbanColumn;
+  lang: LangKey;
+  savingId: string | null;
+  onOpenContact: (partyId: string) => void;
+  onOpenListing: (listingId: string) => void;
+  isDimmed?: boolean;
+}) {
+  return (
+    <div
+      className={clsx(
+        "w-[300px] xl:w-[340px] shrink-0 transition-all duration-500 ease-out",
+        isDimmed && "opacity-35 scale-[0.96]"
+      )}
+      aria-hidden={isDimmed ? true : undefined}
+    >
+      <DroppableColumn
+        col={col}
+        lang={lang}
+        savingId={savingId}
+        onOpenContact={onOpenContact}
+        onOpenListing={onOpenListing}
+      />
+    </div>
+  );
+}
+
 export default function KanbanView({ lang }: { lang: LangKey }) {
   const router = useRouter();
 
@@ -321,12 +370,14 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [carouselIndex, setCarouselIndex] = useState(0);
 
-  const visibleColumnsCount = 3;
+  const [carouselIndex, setCarouselIndex] = useState(0);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [trackOffset, setTrackOffset] = useState(-TRACK_STEP);
 
   const carouselViewportRef = useRef<HTMLDivElement | null>(null);
   const dragRotateTsRef = useRef(0);
+  const animationTimerRef = useRef<number | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -349,7 +400,9 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
       const j = (await r.json().catch(() => null)) as KanbanResponse | null;
 
       if (!r.ok) {
-        throw new Error(j && "error" in (j as any) ? (j as any).error : `HTTP ${r.status}`);
+        throw new Error(
+          j && "error" in (j as any) ? (j as any).error : `HTTP ${r.status}`
+        );
       }
 
       setColumns(Array.isArray(j?.columns) ? j.columns : []);
@@ -362,6 +415,14 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
 
   useEffect(() => {
     load();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (animationTimerRef.current) {
+        window.clearTimeout(animationTimerRef.current);
+      }
+    };
   }, []);
 
   const allItemsByPartyId = useMemo(() => {
@@ -381,15 +442,21 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
 
   const rotatingColumns = useMemo(
     () =>
-      CAROUSEL_STAGES
-        .map((id) => columns.find((c) => c.id === id))
-        .filter(Boolean) as KanbanColumn[],
+      CAROUSEL_STAGES.map((id) => columns.find((c) => c.id === id)).filter(
+        Boolean
+      ) as KanbanColumn[],
     [columns]
   );
 
-  const visibleColumns = useMemo(
-    () => rotateStages(rotatingColumns, carouselIndex, visibleColumnsCount),
-    [rotatingColumns, carouselIndex, visibleColumnsCount]
+  const carouselWindow = useMemo(
+    () =>
+      buildCarouselWindow(
+        rotatingColumns,
+        carouselIndex,
+        VISIBLE_COLUMNS_COUNT,
+        SIDE_PREVIEW_COUNT
+      ),
+    [rotatingColumns, carouselIndex]
   );
 
   useEffect(() => {
@@ -401,18 +468,55 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
     setCarouselIndex((prev) => prev % rotatingColumns.length);
   }, [rotatingColumns.length]);
 
-  function goPrev() {
-    setCarouselIndex((prev) => {
-      if (!rotatingColumns.length) return 0;
-      return (prev - 1 + rotatingColumns.length) % rotatingColumns.length;
-    });
+  useLayoutEffect(() => {
+    if (!rotatingColumns.length || isAnimating) return;
+    setTrackOffset(-TRACK_STEP);
+  }, [rotatingColumns.length, isAnimating]);
+
+  function finishSlide(nextIndex: number) {
+    setCarouselIndex(nextIndex);
+    setTrackOffset(-TRACK_STEP);
+    setIsAnimating(false);
   }
 
   function goNext() {
-    setCarouselIndex((prev) => {
-      if (!rotatingColumns.length) return 0;
-      return (prev + 1) % rotatingColumns.length;
+    if (!rotatingColumns.length || isAnimating) return;
+
+    const nextIndex = (carouselIndex + 1) % rotatingColumns.length;
+
+    setIsAnimating(true);
+    setTrackOffset(-(TRACK_STEP * 2));
+
+    if (animationTimerRef.current) {
+      window.clearTimeout(animationTimerRef.current);
+    }
+
+    animationTimerRef.current = window.setTimeout(() => {
+      finishSlide(nextIndex);
+    }, ANIMATION_MS);
+  }
+
+  function goPrev() {
+    if (!rotatingColumns.length || isAnimating) return;
+
+    const prevIndex =
+      (carouselIndex - 1 + rotatingColumns.length) % rotatingColumns.length;
+
+    setCarouselIndex(prevIndex);
+    setTrackOffset(-(TRACK_STEP * 2));
+
+    requestAnimationFrame(() => {
+      setIsAnimating(true);
+      setTrackOffset(-TRACK_STEP);
     });
+
+    if (animationTimerRef.current) {
+      window.clearTimeout(animationTimerRef.current);
+    }
+
+    animationTimerRef.current = window.setTimeout(() => {
+      setIsAnimating(false);
+    }, ANIMATION_MS);
   }
 
   function maybeRotateCarousel(clientX: number) {
@@ -420,10 +524,11 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
     if (!el || !rotatingColumns.length) return;
 
     const rect = el.getBoundingClientRect();
-    const edgeThreshold = 120;
+    const edgeThreshold = 150;
     const now = Date.now();
 
-    if (now - dragRotateTsRef.current < 280) return;
+    if (isAnimating) return;
+    if (now - dragRotateTsRef.current < 520) return;
 
     if (clientX >= rect.right - edgeThreshold) {
       dragRotateTsRef.current = now;
@@ -446,6 +551,8 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
   }
 
   async function handleDragEnd(event: DragEndEvent) {
+    if (isAnimating) return;
+
     const activeId = String(event.active?.id ?? "");
     const overId = String(event.over?.id ?? "");
 
@@ -453,7 +560,10 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
 
     if (!activeId || !overId) return;
 
-    const fromCol = columns.find((c) => c.items.some((i) => i.party_id === activeId));
+    const fromCol = columns.find((c) =>
+      c.items.some((i) => i.party_id === activeId)
+    );
+
     const toCol =
       columns.find((c) => c.id === overId) ||
       columns.find((c) => c.items.some((i) => i.party_id === overId));
@@ -532,21 +642,38 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
       ) : null}
 
       <div className="rounded-3xl border border-white/10 bg-slate-950/45 p-4 shadow-2xl backdrop-blur-xl">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div>
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="max-w-3xl">
             <h2 className="text-base font-extrabold tracking-tight text-white">
               {t(lang, "panelNavPipeline" as any)}
             </h2>
+
             <p className="mt-0.5 text-xs text-white/50">
               {t(lang, "panelPipelineSub" as any)}
             </p>
+
+            <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+              <p className="text-xs font-semibold text-white/85">
+                {t(lang, "pipelineInstructionTitle" as any)}
+              </p>
+              <p className="mt-1 text-xs leading-5 text-white/60">
+                {t(lang, "pipelineInstructionBody" as any)}
+              </p>
+              <p className="mt-1 text-xs leading-5 text-white/50">
+                {t(lang, "pipelineInstructionLeadPinned" as any)}
+              </p>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={goPrev}
-              className="rounded-xl border border-white/10 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-white/15"
+              disabled={isAnimating}
+              className={clsx(
+                "rounded-xl border border-white/10 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-white/15",
+                isAnimating && "cursor-not-allowed opacity-50"
+              )}
             >
               ←
             </button>
@@ -554,7 +681,11 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
             <button
               type="button"
               onClick={goNext}
-              className="rounded-xl border border-white/10 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-white/15"
+              disabled={isAnimating}
+              className={clsx(
+                "rounded-xl border border-white/10 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-white/15",
+                isAnimating && "cursor-not-allowed opacity-50"
+              )}
             >
               →
             </button>
@@ -607,19 +738,37 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
 
               <div
                 ref={carouselViewportRef}
-                className="flex w-[1080px] max-w-[calc(100vw-520px)] gap-4 overflow-hidden transition-all duration-300"
+                className="relative w-[1080px] max-w-[calc(100vw-520px)] overflow-hidden rounded-[28px]"
               >
-                {visibleColumns.map((col) => (
-                  <div key={col.id} className="shrink-0">
-                    <DroppableColumn
-                      col={col}
-                      lang={lang}
-                      savingId={savingId}
-                      onOpenContact={openContact}
-                      onOpenListing={openListing}
-                    />
-                  </div>
-                ))}
+                <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-16 bg-gradient-to-r from-slate-950/75 to-transparent" />
+                <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-16 bg-gradient-to-l from-slate-950/75 to-transparent" />
+
+                <div
+                  className="flex gap-4 will-change-transform"
+                  style={{
+                    transform: `translateX(${trackOffset}px)`,
+                    transition: isAnimating
+                      ? `transform ${ANIMATION_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`
+                      : "none",
+                  }}
+                >
+                  {carouselWindow.map((col, index) => {
+                    const isSidePreview =
+                      index === 0 || index === carouselWindow.length - 1;
+
+                    return (
+                      <CarouselStageColumn
+                        key={`${col.id}-${index}-${carouselIndex}`}
+                        col={col}
+                        lang={lang}
+                        savingId={savingId}
+                        onOpenContact={openContact}
+                        onOpenListing={openListing}
+                        isDimmed={isSidePreview}
+                      />
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
