@@ -20,15 +20,6 @@ function optInt(v: unknown, fallback: number) {
   return Number.isFinite(n) && n > 0 ? Math.trunc(n) : fallback;
 }
 
-function isNoteSource(v: string | null): v is NoteSource {
-  return (
-    v === "client" ||
-    v === "listing" ||
-    v === "event" ||
-    v === "external_listing"
-  );
-}
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     if (req.method !== "GET") {
@@ -39,45 +30,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const userId = mustUserId(req);
     const officeId = await getOfficeIdForUserId(userId);
 
-    const source = optString(req.query.source);
-    const clientId = optString(req.query.clientId);
-    const listingId = optString(req.query.listingId);
-    const eventId = optString(req.query.eventId);
-    const externalListingId = optString(req.query.externalListingId);
-    const q = optString(req.query.q);
-    const limit = Math.min(optInt(req.query.limit, 100), 300);
+    const source = optString(req.query.source) as NoteSource | null;
+    const q = optString(req.query.q) ?? "";
+    const limit = Math.min(optInt(req.query.limit, 150), 300);
 
     const params: any[] = [officeId];
     let idx = 2;
-    const where: string[] = [];
 
-    if (isNoteSource(source)) {
+    const where: string[] = ["x.office_id = $1::uuid"];
+
+    if (source && ["client", "listing", "event", "external_listing"].includes(source)) {
       where.push(`x.note_source = $${idx}`);
       params.push(source);
-      idx++;
-    }
-
-    if (clientId) {
-      where.push(`x.client_id = $${idx}::uuid`);
-      params.push(clientId);
-      idx++;
-    }
-
-    if (listingId) {
-      where.push(`x.listing_id = $${idx}::uuid`);
-      params.push(listingId);
-      idx++;
-    }
-
-    if (eventId) {
-      where.push(`x.event_id = $${idx}::uuid`);
-      params.push(eventId);
-      idx++;
-    }
-
-    if (externalListingId) {
-      where.push(`x.external_listing_id = $${idx}::uuid`);
-      params.push(externalListingId);
       idx++;
     }
 
@@ -85,8 +49,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       where.push(`
         (
           x.note ILIKE '%' || $${idx} || '%'
-          OR coalesce(x.subject_title, '') ILIKE '%' || $${idx} || '%'
-          OR coalesce(x.author_name, '') ILIKE '%' || $${idx} || '%'
+          OR COALESCE(x.subject_title, '') ILIKE '%' || $${idx} || '%'
+          OR COALESCE(x.author_name, '') ILIKE '%' || $${idx} || '%'
         )
       `);
       params.push(q);
@@ -96,33 +60,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     params.push(limit);
 
     const sql = `
-      WITH unified AS (
+      WITH all_notes AS (
+        -- CLIENT NOTES
         SELECT
-          cn.id::text,
+          cn.id::text AS id,
           'client'::text AS note_source,
-          cn.office_id::text,
-          cn.user_id::text,
+          cn.office_id::text AS office_id,
+          COALESCE(cn.author_user_id, cn.user_id)::text AS user_id,
           cn.note,
           cn.created_at,
           cn.updated_at,
-          cn.client_id::text AS client_id,
+          cn.party_id::text AS client_id,
           NULL::text AS listing_id,
           NULL::text AS event_id,
           NULL::text AS external_listing_id,
-          p.full_name AS subject_title
+          p.full_name AS subject_title,
+          m.full_name AS author_name
         FROM public.client_notes cn
-        JOIN public.parties p
-          ON p.id = cn.client_id
+        LEFT JOIN public.parties p
+          ON p.id = cn.party_id
          AND p.office_id = cn.office_id
-        WHERE cn.office_id = $1::uuid
+        LEFT JOIN public.memberships m
+          ON m.office_id = cn.office_id
+         AND m.user_id = COALESCE(cn.author_user_id, cn.user_id)
 
         UNION ALL
 
+        -- CRM LISTING NOTES
         SELECT
-          ln.id::text,
+          ln.id::text AS id,
           'listing'::text AS note_source,
-          ln.office_id::text,
-          ln.user_id::text,
+          ln.office_id::text AS office_id,
+          ln.user_id::text AS user_id,
           ln.note,
           ln.created_at,
           ln.updated_at,
@@ -130,53 +99,78 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ln.listing_id::text AS listing_id,
           NULL::text AS event_id,
           NULL::text AS external_listing_id,
-          COALESCE(l.title, CONCAT(l.record_type::text, ' / ', l.transaction_type::text)) AS subject_title
+          COALESCE(
+            l.title,
+            CONCAT_WS(' / ', l.record_type::text, l.transaction_type::text, l.status::text),
+            l.id::text
+          ) AS subject_title,
+          m.full_name AS author_name
         FROM public.listing_notes ln
         JOIN public.listings l
           ON l.id = ln.listing_id
          AND l.office_id = ln.office_id
-        WHERE ln.office_id = $1::uuid
+        LEFT JOIN public.memberships m
+          ON m.office_id = ln.office_id
+         AND m.user_id = ln.user_id
+        WHERE ln.listing_id IS NOT NULL
 
         UNION ALL
 
+        -- LEGACY/ALT EXTERNAL NOTES FROM listing_notes.external_listing_id
         SELECT
-          en.id::text,
-          'event'::text AS note_source,
-          en.office_id::text,
-          en.user_id::text,
+          ln.id::text AS id,
+          'external_listing'::text AS note_source,
+          ln.office_id::text AS office_id,
+          ln.user_id::text AS user_id,
+          ln.note,
+          ln.created_at,
+          ln.updated_at,
+          NULL::text AS client_id,
+          NULL::text AS listing_id,
+          NULL::text AS event_id,
+          ln.external_listing_id::text AS external_listing_id,
+          COALESCE(
+            el.title,
+            el.source_url,
+            el.id::text
+          ) AS subject_title,
+          m.full_name AS author_name
+        FROM public.listing_notes ln
+        JOIN public.external_listings el
+          ON el.id = ln.external_listing_id
+        LEFT JOIN public.memberships m
+          ON m.office_id = ln.office_id
+         AND m.user_id = ln.user_id
+        WHERE ln.external_listing_id IS NOT NULL
+          AND ln.listing_id IS NULL
+
+        UNION ALL
+
+        -- EXTERNAL LISTING NOTES
+        SELECT
+          en.id::text AS id,
+          'external_listing'::text AS note_source,
+          en.office_id::text AS office_id,
+          en.user_id::text AS user_id,
           en.note,
           en.created_at,
           en.updated_at,
           NULL::text AS client_id,
           NULL::text AS listing_id,
-          en.event_id::text AS event_id,
-          NULL::text AS external_listing_id,
-          e.title AS subject_title
-        FROM public.event_notes en
-        JOIN public.events e
-          ON e.id = en.event_id
-         AND e.org_id = en.office_id
-        WHERE en.office_id = $1::uuid
-
-        UNION ALL
-
-        SELECT
-          exn.id::text,
-          'external_listing'::text AS note_source,
-          exn.office_id::text,
-          exn.user_id::text,
-          exn.note,
-          exn.created_at,
-          exn.updated_at,
-          NULL::text AS client_id,
-          NULL::text AS listing_id,
           NULL::text AS event_id,
-          exn.external_listing_id::text AS external_listing_id,
-          COALESCE(el.title, el.source_url, el.id::text) AS subject_title
-        FROM public.external_listing_notes exn
+          en.external_listing_id::text AS external_listing_id,
+          COALESCE(
+            el.title,
+            el.source_url,
+            el.id::text
+          ) AS subject_title,
+          m.full_name AS author_name
+        FROM public.external_listing_notes en
         JOIN public.external_listings el
-          ON el.id = exn.external_listing_id
-        WHERE exn.office_id = $1::uuid
+          ON el.id = en.external_listing_id
+        LEFT JOIN public.memberships m
+          ON m.office_id = en.office_id
+         AND m.user_id = en.user_id
       )
       SELECT
         x.id,
@@ -191,22 +185,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         x.event_id,
         x.external_listing_id,
         x.subject_title,
-        m.full_name AS author_name
-      FROM unified x
-      LEFT JOIN public.memberships m
-        ON m.office_id::text = x.office_id
-       AND m.user_id::text = x.user_id
-      ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+        x.author_name
+      FROM all_notes x
+      WHERE ${where.join(" AND ")}
       ORDER BY x.updated_at DESC NULLS LAST, x.created_at DESC NULLS LAST
       LIMIT $${params.length}
     `;
 
     const { rows } = await pool.query(sql, params);
 
-    return res.status(200).json({
-      ok: true,
-      rows,
-    });
+    return res.status(200).json({ rows });
   } catch (e: any) {
     if (e?.message === "UNAUTHORIZED") {
       return res.status(401).json({ error: "UNAUTHORIZED" });
