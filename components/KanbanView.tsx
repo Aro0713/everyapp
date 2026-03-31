@@ -66,6 +66,22 @@ type KanbanResponse = {
   stages?: KanbanStage[];
 };
 
+const LEAD_STAGE: KanbanStage = "lead";
+
+const CAROUSEL_STAGES: KanbanStage[] = [
+  "qualified",
+  "contacted",
+  "meeting_scheduled",
+  "needs_analysis",
+  "property_match",
+  "offer_preparation",
+  "offer_sent",
+  "negotiation",
+  "contract_preparation",
+  "closed_won",
+  "closed_lost",
+];
+
 function clsx(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
 }
@@ -115,6 +131,15 @@ function stageTone(stage: string) {
     return "border-amber-500/25 bg-amber-500/10";
   }
   return "border-white/10 bg-white/5";
+}
+
+function rotateStages<T>(arr: T[], startIndex: number, visibleCount: number) {
+  if (!arr.length) return [];
+  const out: T[] = [];
+  for (let i = 0; i < visibleCount; i++) {
+    out.push(arr[(startIndex + i) % arr.length]);
+  }
+  return out;
 }
 
 function SortableCard({
@@ -245,7 +270,7 @@ function DroppableColumn({
   return (
     <div
       className={clsx(
-        "w-[320px] shrink-0 rounded-3xl border p-3 shadow-xl backdrop-blur-xl",
+        "w-[260px] xl:w-[280px] shrink-0 rounded-3xl border p-3 shadow-xl backdrop-blur-xl",
         stageTone(col.id),
         isOver && "ring-2 ring-white/20"
       )}
@@ -296,6 +321,9 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [carouselIndex, setCarouselIndex] = useState(0);
+
+  const visibleColumnsCount = 4;
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -321,7 +349,7 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
         throw new Error(j && "error" in (j as any) ? (j as any).error : `HTTP ${r.status}`);
       }
 
-      setColumns(Array.isArray(j?.columns) ? j!.columns : []);
+      setColumns(Array.isArray(j?.columns) ? j.columns : []);
     } catch (e: any) {
       setErr(e?.message ?? "KANBAN_LOAD_ERROR");
     } finally {
@@ -342,6 +370,47 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
     }
     return map;
   }, [columns]);
+
+  const leadColumn = useMemo(
+    () => columns.find((c) => c.id === LEAD_STAGE) ?? null,
+    [columns]
+  );
+
+  const rotatingColumns = useMemo(
+    () =>
+      CAROUSEL_STAGES
+        .map((id) => columns.find((c) => c.id === id))
+        .filter(Boolean) as KanbanColumn[],
+    [columns]
+  );
+
+  const visibleColumns = useMemo(
+    () => rotateStages(rotatingColumns, carouselIndex, visibleColumnsCount),
+    [rotatingColumns, carouselIndex, visibleColumnsCount]
+  );
+
+  useEffect(() => {
+    if (!rotatingColumns.length) {
+      setCarouselIndex(0);
+      return;
+    }
+
+    setCarouselIndex((prev) => prev % rotatingColumns.length);
+  }, [rotatingColumns.length]);
+
+  function goPrev() {
+    setCarouselIndex((prev) => {
+      if (!rotatingColumns.length) return 0;
+      return (prev - 1 + rotatingColumns.length) % rotatingColumns.length;
+    });
+  }
+
+  function goNext() {
+    setCarouselIndex((prev) => {
+      if (!rotatingColumns.length) return 0;
+      return (prev + 1) % rotatingColumns.length;
+    });
+  }
 
   function openContact(partyId: string) {
     router.push(`/panel?view=contacts&clientId=${encodeURIComponent(partyId)}`);
@@ -448,13 +517,31 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={load}
-            className="rounded-xl border border-white/10 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-white/15"
-          >
-            {t(lang, "offersRefresh" as any)}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={goPrev}
+              className="rounded-xl border border-white/10 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-white/15"
+            >
+              ←
+            </button>
+
+            <button
+              type="button"
+              onClick={goNext}
+              className="rounded-xl border border-white/10 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-white/15"
+            >
+              →
+            </button>
+
+            <button
+              type="button"
+              onClick={load}
+              className="rounded-xl border border-white/10 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-white/15"
+            >
+              {t(lang, "offersRefresh" as any)}
+            </button>
+          </div>
         </div>
 
         <DndContext
@@ -462,18 +549,33 @@ export default function KanbanView({ lang }: { lang: LangKey }) {
           collisionDetection={closestCorners}
           onDragEnd={handleDragEnd}
         >
-          <div className="overflow-x-auto pb-3">
-            <div className="flex min-w-max gap-4">
-              {columns.map((col) => (
-                <DroppableColumn
-                  key={col.id}
-                  col={col}
-                  lang={lang}
-                  savingId={savingId}
-                  onOpenContact={openContact}
-                  onOpenListing={openListing}
-                />
-              ))}
+          <div className="overflow-hidden pb-3">
+            <div className="flex gap-4">
+              {leadColumn ? (
+                <div className="shrink-0">
+                  <DroppableColumn
+                    col={leadColumn}
+                    lang={lang}
+                    savingId={savingId}
+                    onOpenContact={openContact}
+                    onOpenListing={openListing}
+                  />
+                </div>
+              ) : null}
+
+              <div className="flex min-w-0 flex-1 gap-4 overflow-hidden">
+                {visibleColumns.map((col) => (
+                  <div key={col.id} className="shrink-0">
+                    <DroppableColumn
+                      col={col}
+                      lang={lang}
+                      savingId={savingId}
+                      onOpenContact={openContact}
+                      onOpenListing={openListing}
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </DndContext>
