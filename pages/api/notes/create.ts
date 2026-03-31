@@ -13,9 +13,9 @@ function optString(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null;
 }
 
-function mustString(v: unknown, name: string) {
+function mustNote(v: unknown) {
   const s = optString(v);
-  if (!s) throw new Error(`MISSING_${name.toUpperCase()}`);
+  if (!s) throw new Error("MISSING_NOTE");
   return s;
 }
 
@@ -29,161 +29,104 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const userId = mustUserId(req);
     const officeId = await getOfficeIdForUserId(userId);
 
-    const note = mustString(req.body?.note, "note");
+    const note = mustNote(req.body?.note);
+
     const clientId = optString(req.body?.clientId);
     const listingId = optString(req.body?.listingId);
     const eventId = optString(req.body?.eventId);
     const externalListingId = optString(req.body?.externalListingId);
 
     const targets = [clientId, listingId, eventId, externalListingId].filter(Boolean);
+
     if (targets.length !== 1) {
-      throw new Error("EXACTLY_ONE_TARGET_REQUIRED");
+      return res.status(400).json({
+        error: "EXACTLY_ONE_TARGET_REQUIRED",
+      });
     }
 
     if (clientId) {
-      const exists = await pool.query(
-        `
-        SELECT id
-        FROM public.parties
-        WHERE id = $1::uuid
-          AND office_id = $2::uuid
-        LIMIT 1
-        `,
-        [clientId, officeId]
-      );
-
-      if (!exists.rows[0]) {
-        return res.status(404).json({ error: "CLIENT_NOT_FOUND" });
-      }
-
-      const result = await pool.query(
+      await pool.query(
         `
         INSERT INTO public.client_notes (
           office_id,
-          client_id,
+          party_id,
           user_id,
-          note
+          author_user_id,
+          note,
+          created_at,
+          updated_at
         )
-        VALUES ($1::uuid, $2::uuid, $3::uuid, $4)
-        RETURNING id::text, created_at, updated_at
+        VALUES (
+          $1::uuid,
+          $2::uuid,
+          $3::uuid,
+          $3::uuid,
+          $4,
+          now(),
+          now()
+        )
         `,
         [officeId, clientId, userId, note]
       );
 
-      return res.status(201).json({
-        ok: true,
-        noteSource: "client",
-        ...result.rows[0],
-      });
+      return res.status(200).json({ ok: true, source: "client" });
     }
 
     if (listingId) {
-      const exists = await pool.query(
-        `
-        SELECT id
-        FROM public.listings
-        WHERE id = $1::uuid
-          AND office_id = $2::uuid
-        LIMIT 1
-        `,
-        [listingId, officeId]
-      );
-
-      if (!exists.rows[0]) {
-        return res.status(404).json({ error: "LISTING_NOT_FOUND" });
-      }
-
-      const result = await pool.query(
+      await pool.query(
         `
         INSERT INTO public.listing_notes (
           office_id,
           listing_id,
           user_id,
-          note
+          note,
+          created_at,
+          updated_at
         )
-        VALUES ($1::uuid, $2::uuid, $3::uuid, $4)
-        RETURNING id::text, created_at, updated_at
+        VALUES (
+          $1::uuid,
+          $2::uuid,
+          $3::uuid,
+          $4,
+          now(),
+          now()
+        )
         `,
         [officeId, listingId, userId, note]
       );
 
-      return res.status(201).json({
-        ok: true,
-        noteSource: "listing",
-        ...result.rows[0],
-      });
-    }
-
-    if (eventId) {
-      const exists = await pool.query(
-        `
-        SELECT id
-        FROM public.events
-        WHERE id = $1::uuid
-          AND org_id = $2::uuid
-        LIMIT 1
-        `,
-        [eventId, officeId]
-      );
-
-      if (!exists.rows[0]) {
-        return res.status(404).json({ error: "EVENT_NOT_FOUND" });
-      }
-
-      const result = await pool.query(
-        `
-        INSERT INTO public.event_notes (
-          office_id,
-          event_id,
-          user_id,
-          note
-        )
-        VALUES ($1::uuid, $2::uuid, $3::uuid, $4)
-        RETURNING id::text, created_at, updated_at
-        `,
-        [officeId, eventId, userId, note]
-      );
-
-      return res.status(201).json({
-        ok: true,
-        noteSource: "event",
-        ...result.rows[0],
-      });
+      return res.status(200).json({ ok: true, source: "listing" });
     }
 
     if (externalListingId) {
-      const exists = await pool.query(
-        `
-        SELECT id
-        FROM public.external_listings
-        WHERE id = $1::uuid
-        LIMIT 1
-        `,
-        [externalListingId]
-      );
-
-      if (!exists.rows[0]) {
-        return res.status(404).json({ error: "EXTERNAL_LISTING_NOT_FOUND" });
-      }
-
-      const result = await pool.query(
+      await pool.query(
         `
         INSERT INTO public.external_listing_notes (
           office_id,
           external_listing_id,
           user_id,
-          note
+          note,
+          created_at,
+          updated_at
         )
-        VALUES ($1::uuid, $2::uuid, $3::uuid, $4)
-        RETURNING id::text, created_at, updated_at
+        VALUES (
+          $1::uuid,
+          $2::uuid,
+          $3::uuid,
+          $4,
+          now(),
+          now()
+        )
         `,
         [officeId, externalListingId, userId, note]
       );
 
-      return res.status(201).json({
-        ok: true,
-        noteSource: "external_listing",
-        ...result.rows[0],
+      return res.status(200).json({ ok: true, source: "external_listing" });
+    }
+
+    if (eventId) {
+      return res.status(400).json({
+        error: "EVENT_NOTES_TABLE_MISSING",
       });
     }
 
@@ -195,6 +138,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (e?.message === "NO_OFFICE_MEMBERSHIP") {
       return res.status(403).json({ error: "NO_OFFICE_MEMBERSHIP" });
+    }
+
+    if (e?.message === "MISSING_NOTE") {
+      return res.status(400).json({ error: "MISSING_NOTE" });
     }
 
     console.error("NOTES_CREATE_ERROR", e);
