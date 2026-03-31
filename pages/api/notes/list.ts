@@ -20,6 +20,10 @@ function optInt(v: unknown, fallback: number) {
   return Number.isFinite(n) && n > 0 ? Math.trunc(n) : fallback;
 }
 
+function isAllowedSource(v: string | null): v is NoteSource {
+  return v === "client" || v === "listing" || v === "event" || v === "external_listing";
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     if (req.method !== "GET") {
@@ -30,17 +34,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const userId = mustUserId(req);
     const officeId = await getOfficeIdForUserId(userId);
 
-    const source = optString(req.query.source) as NoteSource | null;
+    const rawSource = optString(req.query.source);
+    const source = isAllowedSource(rawSource) ? rawSource : null;
     const q = optString(req.query.q) ?? "";
     const limit = Math.min(optInt(req.query.limit, 150), 300);
 
     const params: any[] = [officeId];
     let idx = 2;
 
-    const where: string[] = ["x.office_id = $1::uuid"];
+    const where: string[] = ["x.office_id = $1::text"];
 
-    if (source && ["client", "listing", "event", "external_listing"].includes(source)) {
-      where.push(`x.note_source = $${idx}`);
+    if (source) {
+      where.push(`x.note_source = $${idx}::text`);
       params.push(source);
       idx++;
     }
@@ -61,21 +66,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const sql = `
       WITH all_notes AS (
+        -- =========================
         -- CLIENT NOTES
+        -- =========================
         SELECT
           cn.id::text AS id,
           'client'::text AS note_source,
-          cn.office_id AS office_id,
+          cn.office_id::text AS office_id,
           COALESCE(cn.author_user_id, cn.user_id)::text AS user_id,
-          cn.note,
+          cn.note::text AS note,
           cn.created_at,
           cn.updated_at,
           cn.party_id::text AS client_id,
           NULL::text AS listing_id,
           NULL::text AS event_id,
           NULL::text AS external_listing_id,
-          p.full_name AS subject_title,
-          m.full_name AS author_name
+          p.full_name::text AS subject_title,
+          m.full_name::text AS author_name
         FROM public.client_notes cn
         LEFT JOIN public.parties p
           ON p.id = cn.party_id
@@ -86,13 +93,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         UNION ALL
 
+        -- =========================
         -- CRM LISTING NOTES
+        -- =========================
         SELECT
           ln.id::text AS id,
           'listing'::text AS note_source,
-          ln.office_id AS office_id,
+          ln.office_id::text AS office_id,
           ln.user_id::text AS user_id,
-          ln.note,
+          ln.note::text AS note,
           ln.created_at,
           ln.updated_at,
           NULL::text AS client_id,
@@ -100,11 +109,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           NULL::text AS event_id,
           NULL::text AS external_listing_id,
           COALESCE(
-            l.title,
-            CONCAT_WS(' / ', l.record_type::text, l.transaction_type::text, l.status::text),
+            l.title::text,
+            CONCAT_WS(
+              ' / ',
+              l.record_type::text,
+              l.transaction_type::text,
+              l.status::text
+            ),
             l.id::text
           ) AS subject_title,
-          m.full_name AS author_name
+          m.full_name::text AS author_name
         FROM public.listing_notes ln
         JOIN public.listings l
           ON l.id = ln.listing_id
@@ -116,13 +130,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         UNION ALL
 
-        -- LEGACY/ALT EXTERNAL NOTES FROM listing_notes.external_listing_id
+        -- =========================
+        -- EXTERNAL NOTES WRITTEN INTO listing_notes.external_listing_id
+        -- =========================
         SELECT
           ln.id::text AS id,
           'external_listing'::text AS note_source,
           ln.office_id::text AS office_id,
           ln.user_id::text AS user_id,
-          ln.note,
+          ln.note::text AS note,
           ln.created_at,
           ln.updated_at,
           NULL::text AS client_id,
@@ -130,11 +146,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           NULL::text AS event_id,
           ln.external_listing_id::text AS external_listing_id,
           COALESCE(
-            el.title,
-            el.source_url,
+            el.title::text,
+            el.source_url::text,
             el.id::text
           ) AS subject_title,
-          m.full_name AS author_name
+          m.full_name::text AS author_name
         FROM public.listing_notes ln
         JOIN public.external_listings el
           ON el.id = ln.external_listing_id
@@ -146,13 +162,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         UNION ALL
 
+        -- =========================
         -- EXTERNAL LISTING NOTES
+        -- =========================
         SELECT
           en.id::text AS id,
           'external_listing'::text AS note_source,
-          en.office_id AS office_id,
+          en.office_id::text AS office_id,
           en.user_id::text AS user_id,
-          en.note,
+          en.note::text AS note,
           en.created_at,
           en.updated_at,
           NULL::text AS client_id,
@@ -160,11 +178,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           NULL::text AS event_id,
           en.external_listing_id::text AS external_listing_id,
           COALESCE(
-            el.title,
-            el.source_url,
+            el.title::text,
+            el.source_url::text,
             el.id::text
           ) AS subject_title,
-          m.full_name AS author_name
+          m.full_name::text AS author_name
         FROM public.external_listing_notes en
         JOIN public.external_listings el
           ON el.id = en.external_listing_id
