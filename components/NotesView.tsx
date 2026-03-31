@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { t } from "@/utils/i18n";
 import type { LangKey } from "@/utils/translations";
 
@@ -20,6 +20,57 @@ type NoteRow = {
   author_name: string | null;
 };
 
+type ClientSearchRow = {
+  id: string;
+  full_name: string | null;
+  company_name?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  party_type?: string | null;
+};
+
+type ListingSearchRow = {
+  id: string;
+  item_source?: "crm" | "portal";
+  title: string | null;
+  location_text?: string | null;
+  price_amount?: string | number | null;
+  currency?: string | null;
+  transaction_type?: string | null;
+  status?: string | null;
+  source?: string | null;
+  source_url?: string | null;
+};
+
+type EventSearchRow = {
+  id: string;
+  title: string;
+  start_at: string | null;
+  end_at: string | null;
+  location_text: string | null;
+  event_type: string | null;
+  source: string | null;
+  calendar_id: string | null;
+  owner_user_id: string | null;
+};
+
+type ExternalListingSearchRow = {
+  id: string;
+  title: string | null;
+  location_text?: string | null;
+  price_amount?: string | number | null;
+  currency?: string | null;
+  source?: string | null;
+  source_url?: string | null;
+};
+
+type SearchState<T> = {
+  query: string;
+  results: T[];
+  loading: boolean;
+  open: boolean;
+};
+
 function clsx(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
 }
@@ -29,6 +80,26 @@ function fmtDate(v?: string | null) {
   const ms = Date.parse(v);
   if (!Number.isFinite(ms)) return "—";
   return new Date(ms).toLocaleString();
+}
+
+function fmtShortEvent(v?: string | null) {
+  if (!v) return "—";
+  const ms = Date.parse(v);
+  if (!Number.isFinite(ms)) return "—";
+  return new Date(ms).toLocaleString([], {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function fmtMoney(v?: string | number | null, currency?: string | null) {
+  if (v === null || v === undefined || v === "") return "—";
+  const n = typeof v === "number" ? v : Number(v);
+  if (!Number.isFinite(n)) return String(v);
+  return `${n.toLocaleString()} ${currency ?? ""}`.trim();
 }
 
 function getSourceLabel(lang: LangKey, source: NoteSource) {
@@ -46,6 +117,156 @@ function getSourceLabel(lang: LangKey, source: NoteSource) {
   }
 }
 
+function clientOptionLabel(row: ClientSearchRow) {
+  const name =
+    row.full_name?.trim() ||
+    row.company_name?.trim() ||
+    "—";
+  const extras = [row.phone, row.email].filter(Boolean).join(" • ");
+  return extras ? `${name} • ${extras}` : name;
+}
+
+function listingOptionLabel(row: ListingSearchRow) {
+  const title = row.title?.trim() || "—";
+  const price = fmtMoney(row.price_amount, row.currency);
+  const location = row.location_text?.trim() || "";
+  const meta = [price !== "—" ? price : "", location].filter(Boolean).join(" • ");
+  return meta ? `${title} • ${meta}` : title;
+}
+
+function eventOptionLabel(row: EventSearchRow) {
+  const datePart = row.start_at ? fmtShortEvent(row.start_at) : "—";
+  const locationPart = row.location_text?.trim() ? ` • ${row.location_text.trim()}` : "";
+  return `${row.title || "—"} • ${datePart}${locationPart}`;
+}
+
+function externalOptionLabel(row: ExternalListingSearchRow) {
+  const title = row.title?.trim() || row.source_url?.trim() || "—";
+  const price = fmtMoney(row.price_amount, row.currency);
+  const location = row.location_text?.trim() || "";
+  const source = row.source?.trim() || "";
+  const meta = [source, price !== "—" ? price : "", location].filter(Boolean).join(" • ");
+  return meta ? `${title} • ${meta}` : title;
+}
+
+function SearchBox<T>({
+  label,
+  placeholder,
+  state,
+  setState,
+  selectedId,
+  selectedLabel,
+  onPick,
+  onClear,
+  renderOption,
+}: {
+  label: string;
+  placeholder: string;
+  state: SearchState<T>;
+  setState: React.Dispatch<React.SetStateAction<SearchState<T>>>;
+  selectedId: string;
+  selectedLabel: string;
+  onPick: (item: T) => void;
+  onClear: () => void;
+  renderOption: (item: T, index: number) => React.ReactNode;
+}) {
+  const boxRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      const el = boxRef.current;
+      if (!el) return;
+      if (!el.contains(e.target as Node)) {
+        setState((prev) => ({ ...prev, open: false }));
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [setState]);
+
+  return (
+    <div ref={boxRef} className="relative">
+      <div className="mb-1 block text-xs text-white/60">{label}</div>
+
+      <input
+        value={state.query}
+        onChange={(e) =>
+          setState((prev) => ({
+            ...prev,
+            query: e.target.value,
+            open: true,
+          }))
+        }
+        onFocus={() =>
+          setState((prev) => ({
+            ...prev,
+            open: true,
+          }))
+        }
+        placeholder={placeholder}
+        className="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white placeholder:text-white/35 outline-none transition focus:border-white/40 focus:ring-2 focus:ring-white/20"
+      />
+
+      {selectedId ? (
+        <div className="mt-1 flex items-center justify-between gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2">
+          <div className="min-w-0">
+            <div className="truncate text-[11px] font-semibold text-emerald-200">
+              Wybrane
+            </div>
+            <div className="truncate text-[11px] text-emerald-100/80">
+              {selectedLabel}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClear}
+            className="shrink-0 rounded-lg border border-white/10 bg-white/10 px-2 py-1 text-[11px] font-semibold text-white/85 transition hover:bg-white/15"
+          >
+            Wyczyść
+          </button>
+        </div>
+      ) : null}
+
+      {state.open ? (
+        <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 max-h-72 overflow-y-auto rounded-2xl border border-white/10 bg-slate-950/95 p-2 shadow-2xl backdrop-blur-xl">
+          {state.loading ? (
+            <div className="px-3 py-2 text-xs text-white/55">Wyszukiwanie...</div>
+          ) : state.query.trim().length < 2 ? (
+            <div className="px-3 py-2 text-xs text-white/45">Wpisz minimum 2 znaki.</div>
+          ) : state.results.length === 0 ? (
+            <div className="px-3 py-2 text-xs text-white/45">Brak wyników.</div>
+          ) : (
+            <div className="space-y-1">
+              {state.results.map((item, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  onClick={() => onPick(item)}
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-left transition hover:bg-white/10"
+                >
+                  {renderOption(item, index)}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-2 flex justify-end">
+            <button
+              type="button"
+              onClick={() => setState((prev) => ({ ...prev, open: false }))}
+              className="rounded-xl border border-white/10 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white/85 transition hover:bg-white/15"
+            >
+              Zamknij
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function NotesView({ lang }: { lang: LangKey }) {
   const [rows, setRows] = useState<NoteRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -60,7 +281,41 @@ export default function NotesView({ lang }: { lang: LangKey }) {
   const [listingId, setListingId] = useState("");
   const [eventId, setEventId] = useState("");
   const [externalListingId, setExternalListingId] = useState("");
+
+  const [clientLabel, setClientLabel] = useState("");
+  const [listingLabel, setListingLabel] = useState("");
+  const [eventLabel, setEventLabel] = useState("");
+  const [externalListingLabel, setExternalListingLabel] = useState("");
+
   const [note, setNote] = useState("");
+
+  const [clientSearch, setClientSearch] = useState<SearchState<ClientSearchRow>>({
+    query: "",
+    results: [],
+    loading: false,
+    open: false,
+  });
+
+  const [listingSearch, setListingSearch] = useState<SearchState<ListingSearchRow>>({
+    query: "",
+    results: [],
+    loading: false,
+    open: false,
+  });
+
+  const [eventSearch, setEventSearch] = useState<SearchState<EventSearchRow>>({
+    query: "",
+    results: [],
+    loading: false,
+    open: false,
+  });
+
+  const [externalSearch, setExternalSearch] = useState<SearchState<ExternalListingSearchRow>>({
+    query: "",
+    results: [],
+    loading: false,
+    open: false,
+  });
 
   async function load(next?: {
     source?: "" | NoteSource;
@@ -94,10 +349,204 @@ export default function NotesView({ lang }: { lang: LangKey }) {
     }
   }
 
+  async function searchClients(term: string) {
+    const trimmed = term.trim();
+
+    if (trimmed.length < 2) {
+      setClientSearch((prev) => ({ ...prev, results: [], loading: false }));
+      return;
+    }
+
+    setClientSearch((prev) => ({ ...prev, loading: true }));
+
+    try {
+      const qs = new URLSearchParams();
+      qs.set("q", trimmed);
+      qs.set("limit", "12");
+
+      const r = await fetch(`/api/contacts/list?${qs.toString()}`, {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      const j = await r.json().catch(() => null);
+      if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
+
+      setClientSearch((prev) => ({
+        ...prev,
+        results: Array.isArray(j?.rows) ? j.rows : [],
+        loading: false,
+      }));
+    } catch (e: any) {
+      setClientSearch((prev) => ({ ...prev, results: [], loading: false }));
+      setError(e?.message ?? "CLIENT_SEARCH_ERROR");
+    }
+  }
+
+  async function searchListings(term: string) {
+    const trimmed = term.trim();
+
+    if (trimmed.length < 2) {
+      setListingSearch((prev) => ({ ...prev, results: [], loading: false }));
+      return;
+    }
+
+    setListingSearch((prev) => ({ ...prev, loading: true }));
+
+    try {
+      const qs = new URLSearchParams();
+      qs.set("q", trimmed);
+
+      const r = await fetch(`/api/offers/list?${qs.toString()}`, {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      const j = await r.json().catch(() => null);
+      if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
+
+      const rows = Array.isArray(j?.rows) ? j.rows.slice(0, 12) : [];
+
+      setListingSearch((prev) => ({
+        ...prev,
+        results: rows,
+        loading: false,
+      }));
+    } catch (e: any) {
+      setListingSearch((prev) => ({ ...prev, results: [], loading: false }));
+      setError(e?.message ?? "LISTING_SEARCH_ERROR");
+    }
+  }
+
+  async function searchEvents(term: string) {
+    const trimmed = term.trim();
+
+    if (trimmed.length < 2) {
+      setEventSearch((prev) => ({ ...prev, results: [], loading: false }));
+      return;
+    }
+
+    setEventSearch((prev) => ({ ...prev, loading: true }));
+
+    try {
+      const qs = new URLSearchParams();
+      qs.set("q", trimmed);
+      qs.set("limit", "12");
+
+      const r = await fetch(`/api/notes/search-events?${qs.toString()}`, {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      const j = await r.json().catch(() => null);
+      if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
+
+      setEventSearch((prev) => ({
+        ...prev,
+        results: Array.isArray(j?.rows) ? j.rows : [],
+        loading: false,
+      }));
+    } catch (e: any) {
+      setEventSearch((prev) => ({ ...prev, results: [], loading: false }));
+      setError(e?.message ?? "EVENT_SEARCH_ERROR");
+    }
+  }
+
+  async function searchExternalListings(term: string) {
+    const trimmed = term.trim();
+
+    if (trimmed.length < 2) {
+      setExternalSearch((prev) => ({ ...prev, results: [], loading: false }));
+      return;
+    }
+
+    setExternalSearch((prev) => ({ ...prev, loading: true }));
+
+    try {
+      const qs = new URLSearchParams();
+      qs.set("q", trimmed);
+      qs.set("limit", "12");
+      qs.set("includeInactive", "1");
+      qs.set("includePreview", "1");
+      qs.set("onlyEnriched", "0");
+
+      const r = await fetch(`/api/external_listings/list?${qs.toString()}`, {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      const j = await r.json().catch(() => null);
+      if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
+
+      setExternalSearch((prev) => ({
+        ...prev,
+        results: Array.isArray(j?.rows) ? j.rows : [],
+        loading: false,
+      }));
+    } catch (e: any) {
+      setExternalSearch((prev) => ({ ...prev, results: [], loading: false }));
+      setError(e?.message ?? "EXTERNAL_LISTING_SEARCH_ERROR");
+    }
+  }
+
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (clientSearch.open) searchClients(clientSearch.query);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [clientSearch.query, clientSearch.open]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (listingSearch.open) searchListings(listingSearch.query);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [listingSearch.query, listingSearch.open]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (eventSearch.open) searchEvents(eventSearch.query);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [eventSearch.query, eventSearch.open]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (externalSearch.open) searchExternalListings(externalSearch.query);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [externalSearch.query, externalSearch.open]);
+
+  function clearAllTargetsExcept(kind: NoteSource) {
+    if (kind !== "client") {
+      setClientId("");
+      setClientLabel("");
+      setClientSearch((prev) => ({ ...prev, query: "", results: [], open: false }));
+    }
+
+    if (kind !== "listing") {
+      setListingId("");
+      setListingLabel("");
+      setListingSearch((prev) => ({ ...prev, query: "", results: [], open: false }));
+    }
+
+    if (kind !== "event") {
+      setEventId("");
+      setEventLabel("");
+      setEventSearch((prev) => ({ ...prev, query: "", results: [], open: false }));
+    }
+
+    if (kind !== "external_listing") {
+      setExternalListingId("");
+      setExternalListingLabel("");
+      setExternalSearch((prev) => ({ ...prev, query: "", results: [], open: false }));
+    }
+  }
 
   async function createNote() {
     const trimmed = note.trim();
@@ -114,7 +563,7 @@ export default function NotesView({ lang }: { lang: LangKey }) {
     ].filter(Boolean);
 
     if (targets.length !== 1) {
-      alert("Podaj dokładnie jedno powiązanie: klient albo oferta CRM albo event albo oferta EveryBOT.");
+      alert("Wybierz dokładnie jedno powiązanie: klient albo oferta CRM albo event albo oferta EveryBOT.");
       return;
     }
 
@@ -144,6 +593,15 @@ export default function NotesView({ lang }: { lang: LangKey }) {
       setListingId("");
       setEventId("");
       setExternalListingId("");
+      setClientLabel("");
+      setListingLabel("");
+      setEventLabel("");
+      setExternalListingLabel("");
+
+      setClientSearch({ query: "", results: [], loading: false, open: false });
+      setListingSearch({ query: "", results: [], loading: false, open: false });
+      setEventSearch({ query: "", results: [], loading: false, open: false });
+      setExternalSearch({ query: "", results: [], loading: false, open: false });
 
       await load();
     } catch (e: any) {
@@ -289,29 +747,145 @@ export default function NotesView({ lang }: { lang: LangKey }) {
         <h3 className="text-sm font-extrabold text-white">Dodaj notatkę</h3>
 
         <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <input
-            value={clientId}
-            onChange={(e) => setClientId(e.target.value)}
-            placeholder="clientId"
-            className="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white placeholder:text-white/35 outline-none"
+          <SearchBox<ClientSearchRow>
+            label="Klient"
+            placeholder="Wyszukaj klienta po nazwie, telefonie lub emailu"
+            state={clientSearch}
+            setState={setClientSearch}
+            selectedId={clientId}
+            selectedLabel={clientLabel}
+            onPick={(item) => {
+              clearAllTargetsExcept("client");
+              setClientId(item.id);
+              setClientLabel(clientOptionLabel(item));
+              setClientSearch((prev) => ({
+                ...prev,
+                query: clientOptionLabel(item),
+                open: false,
+              }));
+            }}
+            onClear={() => {
+              setClientId("");
+              setClientLabel("");
+              setClientSearch({ query: "", results: [], loading: false, open: false });
+            }}
+            renderOption={(item) => (
+              <>
+                <div className="truncate text-sm font-semibold text-white">
+                  {item.full_name || item.company_name || "—"}
+                </div>
+                <div className="mt-1 text-[11px] text-white/55">
+                  {[item.phone, item.email].filter(Boolean).join(" • ") || "—"}
+                </div>
+              </>
+            )}
           />
-          <input
-            value={listingId}
-            onChange={(e) => setListingId(e.target.value)}
-            placeholder="listingId"
-            className="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white placeholder:text-white/35 outline-none"
+
+          <SearchBox<ListingSearchRow>
+            label="Oferta CRM"
+            placeholder="Wyszukaj ofertę CRM po tytule lub lokalizacji"
+            state={listingSearch}
+            setState={setListingSearch}
+            selectedId={listingId}
+            selectedLabel={listingLabel}
+            onPick={(item) => {
+              clearAllTargetsExcept("listing");
+              setListingId(item.id);
+              setListingLabel(listingOptionLabel(item));
+              setListingSearch((prev) => ({
+                ...prev,
+                query: listingOptionLabel(item),
+                open: false,
+              }));
+            }}
+            onClear={() => {
+              setListingId("");
+              setListingLabel("");
+              setListingSearch({ query: "", results: [], loading: false, open: false });
+            }}
+            renderOption={(item) => (
+              <>
+                <div className="truncate text-sm font-semibold text-white">
+                  {item.title || "—"}
+                </div>
+                <div className="mt-1 text-[11px] text-white/55">
+                  {[fmtMoney(item.price_amount, item.currency), item.location_text]
+                    .filter((x) => x && x !== "—")
+                    .join(" • ") || "—"}
+                </div>
+              </>
+            )}
           />
-          <input
-            value={eventId}
-            onChange={(e) => setEventId(e.target.value)}
-            placeholder="eventId"
-            className="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white placeholder:text-white/35 outline-none"
+
+          <SearchBox<EventSearchRow>
+            label="Event"
+            placeholder="Wyszukaj event po tytule, dacie lub lokalizacji"
+            state={eventSearch}
+            setState={setEventSearch}
+            selectedId={eventId}
+            selectedLabel={eventLabel}
+            onPick={(item) => {
+              clearAllTargetsExcept("event");
+              setEventId(item.id);
+              setEventLabel(eventOptionLabel(item));
+              setEventSearch((prev) => ({
+                ...prev,
+                query: eventOptionLabel(item),
+                open: false,
+              }));
+            }}
+            onClear={() => {
+              setEventId("");
+              setEventLabel("");
+              setEventSearch({ query: "", results: [], loading: false, open: false });
+            }}
+            renderOption={(item) => (
+              <>
+                <div className="truncate text-sm font-semibold text-white">
+                  {item.title || "—"}
+                </div>
+                <div className="mt-1 text-[11px] text-white/55">
+                  {fmtShortEvent(item.start_at)}
+                  {item.location_text ? ` • ${item.location_text}` : ""}
+                </div>
+              </>
+            )}
           />
-          <input
-            value={externalListingId}
-            onChange={(e) => setExternalListingId(e.target.value)}
-            placeholder="externalListingId"
-            className="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white placeholder:text-white/35 outline-none"
+
+          <SearchBox<ExternalListingSearchRow>
+            label="Oferta EveryBOT"
+            placeholder="Wyszukaj ofertę EveryBOT po tytule lub lokalizacji"
+            state={externalSearch}
+            setState={setExternalSearch}
+            selectedId={externalListingId}
+            selectedLabel={externalListingLabel}
+            onPick={(item) => {
+              clearAllTargetsExcept("external_listing");
+              setExternalListingId(item.id);
+              setExternalListingLabel(externalOptionLabel(item));
+              setExternalSearch((prev) => ({
+                ...prev,
+                query: externalOptionLabel(item),
+                open: false,
+              }));
+            }}
+            onClear={() => {
+              setExternalListingId("");
+              setExternalListingLabel("");
+              setExternalSearch({ query: "", results: [], loading: false, open: false });
+            }}
+            renderOption={(item) => (
+              <>
+                <div className="truncate text-sm font-semibold text-white">
+                  {item.title || item.source_url || "—"}
+                </div>
+                <div className="mt-1 text-[11px] text-white/55">
+                  {[item.source, fmtMoney(item.price_amount, item.currency), item.location_text]
+                    .filter((x) => x && x !== "—")
+                    .join(" • ") || "—"}
+                </div>
+              </>
+            )}
           />
         </div>
 
@@ -338,7 +912,7 @@ export default function NotesView({ lang }: { lang: LangKey }) {
         </div>
 
         <p className="mt-2 text-xs text-white/45">
-          Wpisz dokładnie jedno powiązanie: klient albo oferta CRM albo event albo oferta EveryBOT.
+          Wybierz dokładnie jedno powiązanie: klient albo oferta CRM albo event albo oferta EveryBOT.
         </p>
       </div>
 
