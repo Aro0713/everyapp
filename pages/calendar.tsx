@@ -84,11 +84,76 @@ type BootstrapResponse = {
 
 type CalView = "dayGridMonth" | "timeGridWeek" | "timeGridDay" | "listWeek";
 
+type IntegrationRow = {
+  id: string;
+  provider: string;
+  integration_type?: string;
+  name: string;
+  ics_url?: string | null;
+  is_enabled: boolean;
+  last_sync_at?: string | null;
+  last_error?: string | null;
+};
+
+type ConnectProvider =
+  | "google"
+  | "outlook"
+  | "apple"
+  | "wp"
+  | "onet"
+  | "o2"
+  | "other"
+  | null;
+
+type ConnectStep = "chooser" | "manual" | "providerHelp";
+
 function toLocalInput(dt: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(
     dt.getHours()
   )}:${pad(dt.getMinutes())}`;
+}
+
+function guessProviderFromEmail(email: string): ConnectProvider {
+  const v = email.trim().toLowerCase();
+  if (!v.includes("@")) return null;
+  const domain = v.split("@")[1] || "";
+  if (domain.includes("gmail")) return "google";
+  if (
+    domain.includes("outlook") ||
+    domain.includes("hotmail") ||
+    domain.includes("live") ||
+    domain.includes("msn")
+  ) {
+    return "outlook";
+  }
+  if (domain.includes("icloud") || domain.includes("me.com") || domain.includes("mac.com")) {
+    return "apple";
+  }
+  if (domain.includes("wp.pl")) return "wp";
+  if (domain.includes("onet.pl")) return "onet";
+  if (domain.includes("o2.pl") || domain.includes("tlen.pl")) return "o2";
+  return "other";
+}
+
+function suggestedNameForProvider(provider: ConnectProvider, email: string) {
+  const suffix = email.trim() ? ` (${email.trim()})` : "";
+  switch (provider) {
+    case "google":
+      return `Google Calendar${suffix}`;
+    case "outlook":
+      return `Outlook Calendar${suffix}`;
+    case "apple":
+      return `Apple / iCloud${suffix}`;
+    case "wp":
+      return `WP Kalendarz${suffix}`;
+    case "onet":
+      return `Onet Kalendarz${suffix}`;
+    case "o2":
+      return `o2 Kalendarz${suffix}`;
+    default:
+      return email.trim() ? `Kalendarz ${email.trim()}` : "Mój kalendarz";
+  }
 }
 
 export default function CalendarPage() {
@@ -122,21 +187,14 @@ export default function CalendarPage() {
   const [deleting, setDeleting] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
-  type IntegrationRow = {
-    id: string;
-    provider: "ics";
-    name: string;
-    ics_url: string;
-    is_enabled: boolean;
-    last_sync_at?: string | null;
-    last_error?: string | null;
-  };
-
   const [integrations, setIntegrations] = useState<IntegrationRow[]>([]);
   const [integrationsLoading, setIntegrationsLoading] = useState(false);
 
   const [isConnectOpen, setIsConnectOpen] = useState(false);
   const [connectSaving, setConnectSaving] = useState(false);
+  const [connectStep, setConnectStep] = useState<ConnectStep>("chooser");
+  const [connectProvider, setConnectProvider] = useState<ConnectProvider>(null);
+  const [connectEmail, setConnectEmail] = useState("");
   const [connectDraft, setConnectDraft] = useState<{ name: string; icsUrl: string }>({
     name: "",
     icsUrl: "",
@@ -469,7 +527,7 @@ export default function CalendarPage() {
 
     if (integrations.length === 0) {
       alert(
-        t(lang, "calSyncNoSources" as any) ?? "No connected calendars. Add an ICS source first."
+        t(lang, "calSyncNoSources" as any) ?? "No connected calendars. Add a source first."
       );
       return;
     }
@@ -481,6 +539,8 @@ export default function CalendarPage() {
         const err = await r.json().catch(() => null);
         throw new Error(err?.error || (t(lang, "calSyncError" as any) ?? "Sync failed"));
       }
+
+      await loadIntegrations();
 
       if (range.start && range.end) {
         await loadEvents(range.start, range.end);
@@ -512,7 +572,11 @@ export default function CalendarPage() {
   function isValidIcsUrl(url: string) {
     try {
       const u = new URL(url);
-      return u.protocol === "https:" || u.protocol === "http:";
+      return (
+        u.protocol === "https:" ||
+        u.protocol === "http:" ||
+        u.protocol === "webcal:"
+      );
     } catch {
       return false;
     }
@@ -549,9 +613,7 @@ export default function CalendarPage() {
         );
       }
 
-      setIsConnectOpen(false);
-      setConnectDraft({ name: "", icsUrl: "" });
-
+      closeConnectModal();
       await loadIntegrations();
 
       if (syncAfter) {
@@ -585,6 +647,68 @@ export default function CalendarPage() {
     }
   }
 
+  function closeConnectModal() {
+    setIsConnectOpen(false);
+    setConnectStep("chooser");
+    setConnectProvider(null);
+    setConnectEmail("");
+    setConnectDraft({ name: "", icsUrl: "" });
+  }
+
+  function openConnectModal() {
+    if (scope !== "user") {
+      alert(t(lang, "calConnectMineOnly" as any) ?? "Connect calendars in Mine.");
+      return;
+    }
+    setIsConnectOpen(true);
+    setConnectStep("chooser");
+    setConnectProvider(null);
+  }
+
+  function startGoogleConnect() {
+    window.location.href = "/api/calendar/oauth/google/start";
+  }
+
+  function startOutlookConnect() {
+    window.location.href = "/api/calendar/oauth/outlook/start";
+  }
+
+  function openManualConnect(provider: ConnectProvider) {
+    setConnectProvider(provider);
+    setConnectStep("manual");
+    setConnectDraft((prev) => ({
+      ...prev,
+      name: prev.name || suggestedNameForProvider(provider, connectEmail),
+    }));
+  }
+
+  function openProviderHelp(provider: ConnectProvider) {
+    setConnectProvider(provider);
+    setConnectStep("providerHelp");
+    setConnectEmail("");
+    setConnectDraft({ name: "", icsUrl: "" });
+  }
+
+  function continueFromProviderHelp() {
+    const guessed = guessProviderFromEmail(connectEmail) || connectProvider;
+
+    if (guessed === "google") {
+      startGoogleConnect();
+      return;
+    }
+    if (guessed === "outlook") {
+      startOutlookConnect();
+      return;
+    }
+
+    setConnectProvider(guessed || connectProvider);
+    setConnectDraft({
+      name: suggestedNameForProvider(guessed || connectProvider, connectEmail),
+      icsUrl: "",
+    });
+    setConnectStep("manual");
+  }
+
   return (
     <main className="w-full text-white">
       <style jsx global>{`
@@ -595,13 +719,11 @@ export default function CalendarPage() {
           --fc-neutral-bg-color: rgba(255, 255, 255, 0.04);
           --fc-page-bg-color: transparent;
         }
-
         .fc .fc-col-header-cell-cushion,
         .fc .fc-daygrid-day-number {
           color: rgba(255, 255, 255, 0.88);
           text-decoration: none;
         }
-
         .fc .fc-scrollgrid,
         .fc .fc-scrollgrid-section > td,
         .fc .fc-scrollgrid-section table {
@@ -613,17 +735,14 @@ export default function CalendarPage() {
         .fc .fc-timegrid-col-frame {
           background: transparent;
         }
-
         .fc .fc-timegrid-axis-cushion,
         .fc .fc-timegrid-slot-label-cushion {
           color: rgba(255, 255, 255, 0.55);
         }
-
         .fc-theme-standard td,
         .fc-theme-standard th {
           border-color: rgba(255, 255, 255, 0.1);
         }
-
         .fc .fc-event.fc-event--office {
           background: rgba(59, 130, 246, 0.78);
           border: 1px solid rgba(255, 255, 255, 0.18);
@@ -645,7 +764,6 @@ export default function CalendarPage() {
           transform: translateY(-1px);
           transition: 140ms ease;
         }
-
         .fc .fc-event-title,
         .fc .fc-event-time {
           font-weight: 700;
@@ -653,11 +771,9 @@ export default function CalendarPage() {
           line-height: 1.15;
           color: rgba(255, 255, 255, 0.95);
         }
-
         .fc .fc-timegrid-now-indicator-line {
           border-color: rgba(255, 255, 255, 0.35);
         }
-
         .fc .fc-list {
           border-color: rgba(255, 255, 255, 0.1);
         }
@@ -705,15 +821,9 @@ export default function CalendarPage() {
             <button
               type="button"
               className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-sm backdrop-blur-md transition hover:bg-white/15 disabled:opacity-60"
-              onClick={() => {
-                if (scope !== "user") {
-                  alert(t(lang, "calConnectMineOnly" as any) ?? "Connect calendars in Mine.");
-                  return;
-                }
-                setIsConnectOpen(true);
-              }}
+              onClick={openConnectModal}
             >
-              + {t(lang, "calConnectButton" as any) ?? "Connect calendar"}
+              + {t(lang, "calConnectButton" as any) ?? "Połącz kalendarz"}
             </button>
 
             <button
@@ -915,21 +1025,21 @@ export default function CalendarPage() {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-extrabold text-white">
-                  {t(lang, "calIntegrationsTitle" as any) ?? "Connected calendars"}
+                  {t(lang, "calIntegrationsTitle" as any) ?? "Połączone kalendarze"}
                 </div>
                 <div className="mt-1 text-xs text-white/60">
                   {t(lang, "calIntegrationsSub" as any) ??
-                    "ICS sources are read-only. External events cannot be edited."}
+                    "Google i Outlook łączą się automatycznie. Apple, WP, Onet, o2 i inne można dodać ręcznie."}
                 </div>
               </div>
 
               <button
                 type="button"
                 className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-sm backdrop-blur-md transition hover:bg-white/15 disabled:opacity-60"
-                onClick={() => setIsConnectOpen(true)}
+                onClick={openConnectModal}
                 disabled={connectSaving}
               >
-                + {t(lang, "calConnectButton" as any) ?? "Connect calendar"}
+                + {t(lang, "calConnectButton" as any) ?? "Połącz kalendarz"}
               </button>
             </div>
 
@@ -940,7 +1050,7 @@ export default function CalendarPage() {
             ) : integrations.length === 0 ? (
               <div className="mt-3 rounded-2xl border border-dashed border-white/15 bg-white/5 p-4 text-sm text-white/70">
                 {t(lang, "calIntegrationsEmpty" as any) ??
-                  "No connected calendars. Add an ICS source (Google/Outlook/Apple) to synchronize."}
+                  "Nie masz jeszcze podłączonych kalendarzy."}
               </div>
             ) : (
               <div className="mt-3 space-y-2">
@@ -952,13 +1062,18 @@ export default function CalendarPage() {
                       className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold text-white">{it.name}</div>
+                        <div className="truncate text-sm font-semibold text-white">
+                          {it.name}
+                        </div>
                         <div className="mt-1 truncate text-xs text-white/60">
                           {it.last_sync_at
                             ? `${t(lang, "calIntegrationLastSync" as any) ?? "Last sync"}: ${new Date(
                                 it.last_sync_at
                               ).toLocaleString()}`
                             : `${t(lang, "calIntegrationLastSync" as any) ?? "Last sync"}: —`}
+                        </div>
+                        <div className="mt-1 truncate text-xs text-white/50">
+                          {(it.integration_type || it.provider || "ics").toUpperCase()}
                         </div>
                         {it.last_error ? (
                           <div className="mt-1 text-xs text-red-300">
@@ -986,7 +1101,7 @@ export default function CalendarPage() {
                           className="rounded-2xl border border-white/10 bg-white/10 px-3 py-2 text-xs font-semibold text-white shadow-sm backdrop-blur-md transition hover:bg-white/15 disabled:opacity-60"
                           onClick={syncCalendars}
                           disabled={syncing}
-                          title={t(lang, "calSyncTitle" as any) ?? "Calendar sync (ICS)"}
+                          title={t(lang, "calSyncTitle" as any) ?? "Calendar sync"}
                         >
                           {t(lang, "calIntegrationRefresh" as any) ?? "Refresh"}
                         </button>
@@ -1025,7 +1140,6 @@ export default function CalendarPage() {
             dateClick={(info) => {
               const api = calendarRef.current?.getApi();
               if (!api) return;
-
               if (api.view.type === "dayGridMonth") {
                 api.changeView("timeGridWeek", info.date);
                 setView("timeGridWeek");
@@ -1122,90 +1236,210 @@ export default function CalendarPage() {
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
           onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setIsConnectOpen(false);
+            if (e.target === e.currentTarget) closeConnectModal();
           }}
         >
-          <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-slate-950/70 p-6 text-white shadow-2xl backdrop-blur-xl">
+          <div className="w-full max-w-2xl rounded-3xl border border-white/10 bg-slate-950/70 p-6 text-white shadow-2xl backdrop-blur-xl">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-lg font-extrabold tracking-tight text-white">
-                  {t(lang, "calConnectTitle" as any) ?? "Connect calendar (ICS)"}
+                  {t(lang, "calConnectTitle" as any) ?? "Połącz kalendarz"}
                 </h2>
                 <p className="mt-1 text-xs text-white/60">
-                  {t(lang, "calConnectHint" as any) ??
-                    "Paste a private ICS link (Google/Outlook/Apple). Imported events are read-only."}
+                  {connectStep === "chooser"
+                    ? "Wybierz dostawcę. Google i Outlook łączą się automatycznie."
+                    : connectStep === "providerHelp"
+                    ? "Podaj adres e-mail. System spróbuje rozpoznać najlepszy sposób połączenia."
+                    : "Jeżeli automat nie jest dostępny, wklej adres kalendarza ICS / webcal."}
                 </p>
               </div>
 
               <button
                 type="button"
                 className="rounded-2xl border border-white/10 bg-white/10 px-3 py-2 text-sm font-semibold text-white transition hover:bg-white/15"
-                onClick={() => setIsConnectOpen(false)}
+                onClick={closeConnectModal}
               >
                 ✕
               </button>
             </div>
 
-            <div className="mt-5 space-y-4">
-              <div>
-                <label className="text-xs font-semibold text-white/70">
-                  {t(lang, "calConnectNameLabel" as any) ?? "Name"}
-                </label>
-                <input
-                  value={connectDraft.name}
-                  onChange={(e) => setConnectDraft((d) => ({ ...d, name: e.target.value }))}
-                  className="mt-1 w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white placeholder:text-white/40 outline-none transition focus:border-white/40 focus:ring-2 focus:ring-white/20"
-                  placeholder={t(lang, "calConnectNamePh" as any) ?? "e.g. Google private"}
-                />
+            {connectStep === "chooser" ? (
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <button
+                  type="button"
+                  className="rounded-2xl border border-white/10 bg-white/10 p-4 text-left transition hover:bg-white/15"
+                  onClick={startGoogleConnect}
+                >
+                  <div className="text-sm font-bold">Google</div>
+                  <div className="mt-1 text-xs text-white/60">Połącz automatycznie</div>
+                </button>
+
+                <button
+                  type="button"
+                  className="rounded-2xl border border-white/10 bg-white/10 p-4 text-left transition hover:bg-white/15"
+                  onClick={startOutlookConnect}
+                >
+                  <div className="text-sm font-bold">Outlook</div>
+                  <div className="mt-1 text-xs text-white/60">Połącz automatycznie</div>
+                </button>
+
+                <button
+                  type="button"
+                  className="rounded-2xl border border-white/10 bg-white/10 p-4 text-left transition hover:bg-white/15"
+                  onClick={() => openProviderHelp("apple")}
+                >
+                  <div className="text-sm font-bold">Apple / iCloud</div>
+                  <div className="mt-1 text-xs text-white/60">Szybkie połączenie lub ręcznie</div>
+                </button>
+
+                <button
+                  type="button"
+                  className="rounded-2xl border border-white/10 bg-white/10 p-4 text-left transition hover:bg-white/15"
+                  onClick={() => openProviderHelp("wp")}
+                >
+                  <div className="text-sm font-bold">WP</div>
+                  <div className="mt-1 text-xs text-white/60">Pomożemy dodać kalendarz</div>
+                </button>
+
+                <button
+                  type="button"
+                  className="rounded-2xl border border-white/10 bg-white/10 p-4 text-left transition hover:bg-white/15"
+                  onClick={() => openProviderHelp("onet")}
+                >
+                  <div className="text-sm font-bold">Onet</div>
+                  <div className="mt-1 text-xs text-white/60">Pomożemy dodać kalendarz</div>
+                </button>
+
+                <button
+                  type="button"
+                  className="rounded-2xl border border-white/10 bg-white/10 p-4 text-left transition hover:bg-white/15"
+                  onClick={() => openProviderHelp("o2")}
+                >
+                  <div className="text-sm font-bold">o2</div>
+                  <div className="mt-1 text-xs text-white/60">Pomożemy dodać kalendarz</div>
+                </button>
+
+                <button
+                  type="button"
+                  className="rounded-2xl border border-white/10 bg-white/10 p-4 text-left transition hover:bg-white/15 sm:col-span-2 lg:col-span-3"
+                  onClick={() => openManualConnect("other")}
+                >
+                  <div className="text-sm font-bold">Inny kalendarz</div>
+                  <div className="mt-1 text-xs text-white/60">
+                    Dodaj ręcznie przez ICS / webcal
+                  </div>
+                </button>
               </div>
+            ) : null}
 
-              <div>
-                <label className="text-xs font-semibold text-white/70">
-                  {t(lang, "calConnectUrlLabel" as any) ?? "ICS URL"}
-                </label>
-                <input
-                  value={connectDraft.icsUrl}
-                  onChange={(e) => setConnectDraft((d) => ({ ...d, icsUrl: e.target.value }))}
-                  className="mt-1 w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white placeholder:text-white/40 outline-none transition focus:border-white/40 focus:ring-2 focus:ring-white/20"
-                  placeholder="https://..."
-                />
-                <p className="mt-2 text-xs text-white/60">
-                  {t(lang, "calConnectUrlHelp" as any) ??
-                    "Tip: in Google Calendar, use the private address in iCal format."}
-                </p>
+            {connectStep === "providerHelp" ? (
+              <div className="mt-5 space-y-4">
+                <div>
+                  <label className="text-xs font-semibold text-white/70">Adres e-mail</label>
+                  <input
+                    value={connectEmail}
+                    onChange={(e) => setConnectEmail(e.target.value)}
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white placeholder:text-white/40 outline-none transition focus:border-white/40 focus:ring-2 focus:ring-white/20"
+                    placeholder="np. imie@gmail.com"
+                  />
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-xs text-white/70">
+                  {connectProvider === "apple"
+                    ? "Dla Apple / iCloud możesz dodać kalendarz subskrybowany po adresie URL. Jeśli nie masz linku, przejdź do ręcznego dodania."
+                    : "Jeśli system nie wykryje automatycznego połączenia, przejdziesz do formularza ręcznego."}
+                </div>
+
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/15"
+                    onClick={() => {
+                      setConnectStep("chooser");
+                      setConnectProvider(null);
+                      setConnectEmail("");
+                    }}
+                  >
+                    Wstecz
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-2xl bg-white/15 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-white/20"
+                    onClick={continueFromProviderHelp}
+                  >
+                    Dalej
+                  </button>
+                </div>
               </div>
-            </div>
+            ) : null}
 
-            <div className="mt-6 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/15 disabled:opacity-60"
-                onClick={() => setIsConnectOpen(false)}
-                disabled={connectSaving}
-              >
-                {t(lang, "calCancel" as any) ?? "Cancel"}
-              </button>
+            {connectStep === "manual" ? (
+              <div className="mt-5 space-y-4">
+                <div>
+                  <label className="text-xs font-semibold text-white/70">
+                    {t(lang, "calConnectNameLabel" as any) ?? "Name"}
+                  </label>
+                  <input
+                    value={connectDraft.name}
+                    onChange={(e) => setConnectDraft((d) => ({ ...d, name: e.target.value }))}
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white placeholder:text-white/40 outline-none transition focus:border-white/40 focus:ring-2 focus:ring-white/20"
+                    placeholder="np. Apple prywatny"
+                  />
+                </div>
 
-              <button
-                type="button"
-                className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-white/15 disabled:opacity-60"
-                onClick={() => addIntegration(connectDraft, false)}
-                disabled={connectSaving}
-              >
-                {connectSaving
-                  ? t(lang, "calConnectSaving" as any) ?? "Saving…"
-                  : t(lang, "calConnectSave" as any) ?? "Save"}
-              </button>
+                <div>
+                  <label className="text-xs font-semibold text-white/70">
+                    {t(lang, "calConnectUrlLabel" as any) ?? "ICS URL"}
+                  </label>
+                  <input
+                    value={connectDraft.icsUrl}
+                    onChange={(e) => setConnectDraft((d) => ({ ...d, icsUrl: e.target.value }))}
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white placeholder:text-white/40 outline-none transition focus:border-white/40 focus:ring-2 focus:ring-white/20"
+                    placeholder="https://... lub webcal://..."
+                  />
+                  <p className="mt-2 text-xs text-white/60">
+                    Google/Outlook nie potrzebują tego pola przy połączeniu automatycznym. Tu używasz go dla Apple, WP, Onet, o2 i innych kalendarzy.
+                  </p>
+                </div>
 
-              <button
-                type="button"
-                className="rounded-2xl bg-white/15 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-white/20 disabled:opacity-60"
-                onClick={() => addIntegration(connectDraft, true)}
-                disabled={connectSaving}
-              >
-                {t(lang, "calConnectSaveAndSync" as any) ?? "Save & sync"}
-              </button>
-            </div>
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/15 disabled:opacity-60"
+                    onClick={() => {
+                      if (connectProvider) {
+                        setConnectStep("providerHelp");
+                      } else {
+                        setConnectStep("chooser");
+                      }
+                    }}
+                    disabled={connectSaving}
+                  >
+                    Wstecz
+                  </button>
+
+                  <button
+                    type="button"
+                    className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-white/15 disabled:opacity-60"
+                    onClick={() => addIntegration(connectDraft, false)}
+                    disabled={connectSaving}
+                  >
+                    {connectSaving
+                      ? t(lang, "calConnectSaving" as any) ?? "Saving…"
+                      : t(lang, "calConnectSave" as any) ?? "Save"}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="rounded-2xl bg-white/15 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-white/20 disabled:opacity-60"
+                    onClick={() => addIntegration(connectDraft, true)}
+                    disabled={connectSaving}
+                  >
+                    {t(lang, "calConnectSaveAndSync" as any) ?? "Save & sync"}
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}
