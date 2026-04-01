@@ -2,285 +2,255 @@ import { useEffect, useMemo, useState } from "react";
 import { t } from "@/utils/i18n";
 import type { LangKey } from "@/utils/translations";
 
-type DealParty = {
-  party_id: string;
-  full_name: string | null;
-  role: string | null;
-  is_primary: boolean | null;
-};
+type OfficeDealsViewProps = { lang: LangKey };
 
 type DealRow = {
   id: string;
-  title: string | null;
-  location_text: string | null;
-  transaction_type: string | null;
-  price_amount: number | null;
+  caseType: string | null;
+  status: string | null;
+  pipelineStage: string;
+  clientName: string | null;
+  agentUserId: string | null;
+  agentName: string | null;
+  priceAmount: number | null;
   currency: string | null;
-  archived_at: string | null;
-  created_at: string | null;
-  parties: DealParty[];
+  listingId: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
 };
 
-function clsx(...xs: Array<string | false | null | undefined>) {
-  return xs.filter(Boolean).join(" ");
+const STAGE_ORDER = [
+  "lead",
+  "qualified",
+  "contacted",
+  "meeting_scheduled",
+  "negotiation",
+  "closed_won",
+  "closed_lost",
+] as const;
+
+function money(v: number | null, c = "PLN") {
+  if (!v) return "—";
+  return `${v.toLocaleString()} ${c}`;
 }
 
-function fmtPrice(v: number | null, currency?: string | null) {
-  if (v === null || v === undefined) return "-";
-  return `${Number(v).toLocaleString()} ${currency ?? ""}`.trim();
+function getStageLabel(stage: string, lang: LangKey) {
+  const map: Record<string, string> = {
+    lead: "Lead",
+    qualified: "Zakwalifikowany",
+    contacted: "Kontakt",
+    meeting_scheduled: "Spotkanie",
+    negotiation: "Negocjacje",
+    closed_won: "Wygrane",
+    closed_lost: "Utracone",
+  };
+  return map[stage] || stage;
 }
 
-function fmtDate(v?: string | null) {
-  if (!v) return "-";
-  const ms = Date.parse(v);
-  if (!Number.isFinite(ms)) return "-";
-  return new Date(ms).toLocaleDateString();
-}
+const MOCK: DealRow[] = [
+  {
+    id: "1",
+    caseType: "sale",
+    status: "active",
+    pipelineStage: "lead",
+    clientName: "Jan Kowalski",
+    agentUserId: "a1",
+    agentName: "Michał",
+    priceAmount: 850000,
+    currency: "PLN",
+    listingId: "l1",
+    createdAt: "",
+    updatedAt: "",
+  },
+  {
+    id: "2",
+    caseType: "sale",
+    status: "active",
+    pipelineStage: "negotiation",
+    clientName: "Anna Nowak",
+    agentUserId: "a2",
+    agentName: "Karolina",
+    priceAmount: 1200000,
+    currency: "PLN",
+    listingId: "l2",
+    createdAt: "",
+    updatedAt: "",
+  },
+];
 
-export default function OfficeDealsView({ lang }: { lang: LangKey }) {
+export default function OfficeDealsView({ lang }: OfficeDealsViewProps) {
   const [rows, setRows] = useState<DealRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const [q, setQ] = useState("");
-  const [transactionType, setTransactionType] = useState("");
-
-  async function load(next?: { q?: string; transactionType?: string }) {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const qs = new URLSearchParams();
-
-      const qValue = (next?.q ?? q).trim();
-      const typeValue = (next?.transactionType ?? transactionType).trim();
-
-      if (qValue.length >= 2) qs.set("q", qValue);
-      if (typeValue) qs.set("transactionType", typeValue);
-
-      qs.set("limit", "100");
-
-      const r = await fetch(`/api/deals/list?${qs.toString()}`, {
-        method: "GET",
-        cache: "no-store",
-      });
-
-      const j = await r.json().catch(() => null);
-      if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
-
-      setRows(Array.isArray(j?.rows) ? j.rows : []);
-    } catch (e: any) {
-      setError(e?.message ?? "Failed to load deals");
-    } finally {
-      setLoading(false);
-    }
-  }
 
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    fetch("/api/transactions/list")
+      .then((r) => r.json())
+      .then(setRows)
+      .catch(console.error);
   }, []);
+  const [query, setQuery] = useState("");
+  const [stageFilter, setStageFilter] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const empty = !loading && rows.length === 0 && !error;
+  const filtered = useMemo(() => {
+    return rows.filter((r) => {
+      if (query && !r.clientName?.toLowerCase().includes(query.toLowerCase())) return false;
+      if (stageFilter && r.pipelineStage !== stageFilter) return false;
+      return true;
+    });
+  }, [rows, query, stageFilter]);
 
-  const summary = useMemo(() => {
-    const sale = rows.filter((r) => r.transaction_type === "sale").length;
-    const rent = rows.filter((r) => r.transaction_type === "rent").length;
+  const grouped = useMemo(() => {
+    const map: Record<string, DealRow[]> = {};
+    for (const s of STAGE_ORDER) map[s] = [];
+    for (const r of filtered) {
+      map[r.pipelineStage]?.push(r);
+    }
+    return map;
+  }, [filtered]);
 
+  const kpis = useMemo(() => {
     return {
-      total: rows.length,
-      sale,
-      rent,
+      total: filtered.length,
+      won: filtered.filter((r) => r.pipelineStage === "closed_won").length,
+      lost: filtered.filter((r) => r.pipelineStage === "closed_lost").length,
+      value: filtered.reduce((sum, r) => sum + (r.priceAmount || 0), 0),
     };
-  }, [rows]);
+  }, [filtered]);
+
+  const selected = rows.find((r) => r.id === selectedId);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
 
-      {/* HEADER */}
-      <div className="rounded-3xl border border-white/10 bg-slate-950/45 p-4 shadow-2xl backdrop-blur-xl">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-
-          <div>
-            <h2 className="text-base font-extrabold tracking-tight text-white">
-              {t(lang, "panelNavOfficeDeals" as any)}
-            </h2>
-
-            <p className="mt-0.5 text-xs text-white/50">
-              {t(lang, "panelOfficeDealsSub" as any)}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => load()}
-              className="rounded-xl border border-white/10 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/15"
-            >
-              {t(lang, "offersRefresh" as any)}
-            </button>
-          </div>
-
+      {/* KPI */}
+      <div className="grid grid-cols-4 gap-4">
+        <div className="bg-white/10 p-4 rounded-2xl">
+          {t(lang, "officeDealsKpiTotal")}: {kpis.total}
         </div>
-
-        {/* FILTERS */}
-        <div className="mt-3 grid gap-3 md:grid-cols-[1fr_200px_auto]">
-
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder={t(lang, "dealsSearchPlaceholder" as any) ?? "Szukaj po tytule, lokalizacji lub kliencie"}
-            className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white placeholder:text-white/40"
-          />
-
-          <select
-            value={transactionType}
-            onChange={(e) => setTransactionType(e.target.value)}
-            className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white"
-          >
-            <option value="">
-              {t(lang, "dealsAllTypes" as any) ?? "Wszystkie"}
-            </option>
-
-            <option value="sale">
-              {t(lang, "dealsSale" as any) ?? "Sprzedaż"}
-            </option>
-
-            <option value="rent">
-              {t(lang, "dealsRent" as any) ?? "Najem"}
-            </option>
-
-          </select>
-
-          <button
-            onClick={() => load({ q, transactionType })}
-            className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15"
-          >
-            {t(lang, "contactsSearch" as any) ?? "Szukaj"}
-          </button>
-
+        <div className="bg-white/10 p-4 rounded-2xl">
+          {t(lang, "officeDealsKpiWon")}: {kpis.won}
         </div>
-
-        {/* SUMMARY */}
-        <div className="mt-3 flex flex-wrap gap-2">
-
-          <span className="rounded-xl border border-white/10 bg-white/10 px-3 py-1 text-xs text-white">
-            {(t(lang, "dealsTotal" as any) ?? "Łącznie") + `: ${summary.total}`}
-          </span>
-
-          <span className="rounded-xl border border-white/10 bg-white/10 px-3 py-1 text-xs text-white">
-            {(t(lang, "dealsSale" as any) ?? "Sprzedaż") + `: ${summary.sale}`}
-          </span>
-
-          <span className="rounded-xl border border-white/10 bg-white/10 px-3 py-1 text-xs text-white">
-            {(t(lang, "dealsRent" as any) ?? "Najem") + `: ${summary.rent}`}
-          </span>
-
+        <div className="bg-white/10 p-4 rounded-2xl">
+          {t(lang, "officeDealsKpiLost")}: {kpis.lost}
         </div>
-
+        <div className="bg-white/10 p-4 rounded-2xl">
+          {t(lang, "officeDealsKpiValue")}: {money(kpis.value)}
+        </div>
       </div>
 
-      {/* LISTA TRANSAKCJI */}
-      <div className="rounded-3xl border border-white/10 bg-slate-950/45 p-4 shadow-2xl backdrop-blur-xl">
+      {/* FILTRY */}
+      <div className="flex gap-3">
+        <input
+          placeholder={t(lang, "officeDealsSearchPlaceholder")}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="px-4 py-2 rounded-xl bg-white/10"
+        />
 
-        {loading ? (
-          <div className="text-xs text-white/50">
-            {t(lang, "dealsLoading" as any) ?? "Ładowanie transakcji..."}
-          </div>
-        ) : error ? (
-          <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-xs text-red-200">
-            {error}
-          </div>
-        ) : empty ? (
-          <div className="flex h-40 items-center justify-center text-white/60 text-sm">
-            {t(lang, "dealsEmpty" as any) ?? "Brak transakcji"}
-          </div>
-        ) : (
-          <div className="divide-y divide-white/10">
+        <select
+          value={stageFilter}
+          onChange={(e) => setStageFilter(e.target.value)}
+          className="px-4 py-2 rounded-xl bg-white/10"
+        >
+          <option value="">{t(lang, "officeDealsAllStages")}</option>
+          {STAGE_ORDER.map((s) => (
+            <option key={s} value={s}>
+              {getStageLabel(s, lang)}
+            </option>
+          ))}
+        </select>
+      </div>
 
-            {rows.map((r) => {
+      {/* PIPELINE */}
+      <div className="flex gap-4 overflow-x-auto">
+        {STAGE_ORDER.map((stage) => (
+          <div key={stage} className="min-w-[250px] bg-white/5 rounded-2xl p-3">
+            <h3 className="font-bold mb-2">
+              {getStageLabel(stage, lang)}
+            </h3>
 
-              const price = fmtPrice(r.price_amount, r.currency);
-
-              return (
-                <div key={r.id} className="p-3 hover:bg-white/5 transition">
-
-                  <div className="grid grid-cols-1 gap-3 xl:grid-cols-[2fr_200px_200px_1fr_auto]">
-
-                    {/* TYTUŁ */}
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-white truncate">
-                        {r.title ?? "-"}
-                      </div>
-
-                      <div className="text-xs text-white/60 truncate">
-                        {r.location_text ?? "-"}
-                      </div>
-                    </div>
-
-                    {/* TYP */}
-                    <div className="text-xs text-white/70">
-                      <div className="text-white/45">
-                        {t(lang, "dealsType" as any) ?? "Typ"}
-                      </div>
-
-                      <div className="font-semibold text-white/85">
-                        {r.transaction_type ?? "-"}
-                      </div>
-                    </div>
-
-                    {/* CENA */}
-                    <div className="text-xs text-white/70">
-                      <div className="text-white/45">
-                        {t(lang, "dealsPrice" as any) ?? "Cena"}
-                      </div>
-
-                      <div className="font-semibold text-white">
-                        {price}
-                      </div>
-                    </div>
-
-                    {/* STRONY TRANSAKCJI */}
-                    <div className="text-xs text-white/70">
-
-                      <div className="text-white/45 mb-1">
-                        {t(lang, "dealsParties" as any) ?? "Strony"}
-                      </div>
-
-                      <div className="flex flex-wrap gap-1">
-
-                        {r.parties?.map((p) => (
-                          <span
-                            key={p.party_id}
-                            className="rounded bg-white/10 px-2 py-0.5 text-[10px]"
-                          >
-                            {p.full_name}
-                          </span>
-                        ))}
-
-                      </div>
-
-                    </div>
-
-                    {/* DATA */}
-                    <div className="text-right text-xs text-white/60">
-
-                      <div>
-                        {fmtDate(r.archived_at ?? r.created_at)}
-                      </div>
-
-                    </div>
-
+            <div className="space-y-2">
+              {grouped[stage]?.map((r) => (
+                <div
+                  key={r.id}
+                  onClick={() => setSelectedId(r.id)}
+                  className="bg-white/10 p-3 rounded-xl cursor-pointer hover:bg-white/20"
+                >
+                  <div className="font-semibold">{r.clientName}</div>
+                  <div className="text-xs opacity-70">
+                    {money(r.priceAmount)}
                   </div>
-
+                  <div className="text-xs opacity-50">
+                    {r.agentName}
+                  </div>
                 </div>
-              );
-            })}
-
+              ))}
+            </div>
           </div>
-        )}
-
+        ))}
       </div>
 
+      {/* TABELA */}
+      <div className="bg-white/5 rounded-2xl overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-white/10">
+            <tr>
+              <th className="p-2">{t(lang, "officeDealsTableClient")}</th>
+              <th>{t(lang, "officeDealsTableType")}</th>
+              <th>{t(lang, "officeDealsTableStage")}</th>
+              <th>{t(lang, "officeDealsTablePrice")}</th>
+              <th>{t(lang, "officeDealsTableAgent")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((r) => (
+              <tr
+                key={r.id}
+                onClick={() => setSelectedId(r.id)}
+                className="hover:bg-white/10 cursor-pointer"
+              >
+                <td className="p-2">{r.clientName}</td>
+                <td>{r.caseType}</td>
+                <td>{getStageLabel(r.pipelineStage, lang)}</td>
+                <td>{money(r.priceAmount)}</td>
+                <td>{r.agentName}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* DRAWER */}
+      {selected && (
+        <div className="fixed right-0 top-0 w-[350px] h-full bg-slate-900 p-6 shadow-2xl">
+          <button onClick={() => setSelectedId(null)}>✕</button>
+
+          <h2 className="text-lg font-bold mt-4">
+            {selected.clientName}
+          </h2>
+
+          <p>{t(lang, "officeDealsTableStage")}: {getStageLabel(selected.pipelineStage, lang)}</p>
+          <p>{t(lang, "officeDealsTablePrice")}: {money(selected.priceAmount)}</p>
+          <p>{t(lang, "officeDealsTableAgent")}: {selected.agentName}</p>
+
+          <div className="mt-6 space-y-2">
+            <button className="w-full bg-white/10 p-2 rounded">
+              📞 {t(lang, "officeDealsCall")}
+            </button>
+            <button className="w-full bg-white/10 p-2 rounded">
+              📅 {t(lang, "officeDealsMeeting")}
+            </button>
+            <button className="w-full bg-white/10 p-2 rounded">
+              📝 {t(lang, "officeDealsNote")}
+            </button>
+            {selected.listingId && (
+              <button className="w-full bg-white/10 p-2 rounded">
+                🏠 {t(lang, "officeDealsOpenOffer")}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
